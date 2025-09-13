@@ -1,0 +1,34 @@
+{
+  "name": "couch-poc",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "turbo run dev",
+    "deploy": "turbo run deploy --ui=stream",
+    "destroy": "turbo run destroy --ui=stream",
+    "prettier": "prettier --write \"**/*.{js,jsx,ts,tsx,json,css,md}\""
+  },
+  "workspaces": {
+    "packages": [
+      "apps/*"
+    ]
+  },
+  "dependencies": {
+    "turbo": "latest",
+    "prettier": "latest"
+  },
+  "packageManager": "bun@1.2.21",
+  "prettier": {
+    "semi": false,
+    "overrides": [
+      {
+        "files": [
+          "*.json"
+        ],
+        "options": {
+          "trailingComma": "none"
+        }
+      }
+    ]
+  }
+}
