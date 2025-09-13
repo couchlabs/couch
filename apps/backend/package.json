@@ -1,0 +1,25 @@
+{
+  "name": "backend",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "alchemy dev --adopt --app backend",
+    "deploy": "alchemy deploy --adopt --app backend",
+    "destroy": "alchemy destroy --app backend",
+    "check": "tsc --noEmit"
+  },
+  "exports": {
+    "./alchemy": {
+      "bun": "./alchemy.run.ts",
+      "import": "./alchemy.run.ts",
+      "types": "./alchemy.run.ts"
+    }
+  },
+  "devDependencies": {
+    "@types/node": "^24.3.3",
+    "@cloudflare/workers-types": "^4.20250913.0",
+    "alchemy": "^0.66.0",
+    "typescript": "^5.9.2"
+  },
+  "dependencies": {}
+}
