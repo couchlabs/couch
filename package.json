@@ -19,16 +19,6 @@
   },
   "packageManager": "bun@1.2.21",
   "prettier": {
-    "semi": false,
-    "overrides": [
-      {
-        "files": [
-          "*.json"
-        ],
-        "options": {
-          "trailingComma": "none"
-        }
-      }
-    ]
+    "semi": false
   }
 }
