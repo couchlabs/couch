@@ -2,9 +2,7 @@
   "exclude": ["node_modules", "lib", "test"],
   "include": ["types/**/*.ts", "vite/*ts", "src/**/*.ts", "alchemy.run.ts"],
   "compilerOptions": {
-    "outDir": "lib",
     "target": "es2021",
-    "lib": ["es2021"],
     "jsx": "react-jsx",
     "module": "es2022",
     "moduleResolution": "Bundler",
