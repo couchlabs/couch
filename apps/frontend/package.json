@@ -3,26 +3,24 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "build": "vite build",
-    "dev": "alchemy dev",
-    "clean": "rm -rf ./node_modules/.vite"
+    "dev": "alchemy dev --adopt --app frontend",
+    "deploy": "alchemy deploy --adopt --app frontend",
+    "destroy": "alchemy destroy --app frontend"
   },
   "dependencies": {
-    "react": "19.2.0-canary-3fb190f7-20250908",
-    "react-dom": "19.2.0-canary-3fb190f7-20250908",
-    "react-server-dom-webpack": "19.2.0-canary-3fb190f7-20250908",
-    "rwsdk": "1.0.0-alpha.1-test.20250911154541"
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1",
+    "backend": "workspace:*"
   },
   "devDependencies": {
-    "@cloudflare/vite-plugin": "^1.13.0",
-    "@cloudflare/workers-types": "4.20250913.0",
-    "@types/node": "24.3.3",
     "@types/react": "19.1.13",
     "@types/react-dom": "19.1.9",
-    "typescript": "5.9.2",
+    "@cloudflare/workers-types": "4.20250913.0",
+    "@cloudflare/vite-plugin": "^1.13.0",
+    "@vitejs/plugin-react": "^5.0.2",
     "vite": "7.1.5",
-    "wrangler": "4.36.0",
     "alchemy": "^0.66.0",
-    "miniflare": "^4.20250906.1"
+    "miniflare": "^4.20250906.1",
+    "typescript": "5.9.2"
   }
 }

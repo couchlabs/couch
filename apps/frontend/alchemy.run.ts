@@ -1,16 +1,13 @@
 import alchemy from "alchemy"
-import { Redwood, Website } from "alchemy/cloudflare"
-
-// import { backend } from "backend/alchemy"
+import { Vite } from "alchemy/cloudflare"
+import { backend } from "../backend/alchemy.run"
 
 const app = await alchemy("frontend")
 
-export const frontend = await Redwood("website", {
+export const frontend = await Vite("website", {
   name: `${app.name}-${app.stage}-website`,
-  adopt: true,
-  bindings: {},
-  dev: {
-    command: "vite dev --port 5004",
+  bindings: {
+    API_URL: backend.url!,
   },
 })
 
