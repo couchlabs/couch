@@ -1,0 +1,28 @@
+{
+  "name": "frontend",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "build": "vite build",
+    "dev": "alchemy dev",
+    "clean": "rm -rf ./node_modules/.vite"
+  },
+  "dependencies": {
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1",
+    "react-server-dom-webpack": "^19.1.1",
+    "rwsdk": "^0.3.9"
+  },
+  "devDependencies": {
+    "@cloudflare/vite-plugin": "^1.13.0",
+    "@cloudflare/workers-types": "4.20250913.0",
+    "@types/node": "24.3.3",
+    "@types/react": "19.1.13",
+    "@types/react-dom": "19.1.9",
+    "typescript": "5.9.2",
+    "vite": "7.1.5",
+    "wrangler": "4.36.0",
+    "alchemy": "^0.66.0",
+    "miniflare": "^4.20250906.1"
+  }
+}
