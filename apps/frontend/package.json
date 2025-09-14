@@ -8,10 +8,10 @@
     "clean": "rm -rf ./node_modules/.vite"
   },
   "dependencies": {
-    "react": "^19.1.1",
-    "react-dom": "^19.1.1",
-    "react-server-dom-webpack": "^19.1.1",
-    "rwsdk": "^0.3.9"
+    "react": "19.2.0-canary-3fb190f7-20250908",
+    "react-dom": "19.2.0-canary-3fb190f7-20250908",
+    "react-server-dom-webpack": "19.2.0-canary-3fb190f7-20250908",
+    "rwsdk": "1.0.0-alpha.1-test.20250911154541"
   },
   "devDependencies": {
     "@cloudflare/vite-plugin": "^1.13.0",
