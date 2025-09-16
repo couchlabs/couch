@@ -83,8 +83,7 @@ Retrieves detailed information about a subscription and current status.
 
 ```sql
 CREATE TABLE subscriptions (
-  subscription_id TEXT PRIMARY KEY,    -- On-chain subscription ID
-  workflow_id TEXT UNIQUE,             -- Cloudflare Workflow instance ID
+  subscription_id TEXT PRIMARY KEY,    -- On-chain subscription ID (also workflow ID)
   status TEXT NOT NULL,                -- On-chain status: active, revoked
   billing_status TEXT NOT NULL,        -- Billing status: pending, active, failed
   owner_address TEXT NOT NULL,         -- Address that receives payments
@@ -127,19 +126,19 @@ Handles the recurring billing cycle for each subscription.
 
 ### Workflow Management
 
-- **Starting**: Use subscription_id as workflow ID for easy lookup
-- **Stopping**: Store workflow_id in database to terminate when needed
+- **Workflow ID = Subscription ID**: Use subscription_id as the workflow ID for direct lookup
+- **No separate ID needed**: The subscription_id serves as both database key and workflow identifier
 - **Example**:
 
   ```javascript
-  // Start workflow (period_days already fetched from on-chain)
-  const workflowId = await env.WORKFLOW.create({
+  // Start workflow (using subscription_id as the workflow ID)
+  await env.WORKFLOW.create({
     id: subscription_id,
     params: { subscription_id },
   })
 
-  // Terminate workflow
-  await env.WORKFLOW.get(workflow_id).terminate()
+  // Terminate workflow (using subscription_id)
+  await env.WORKFLOW.get(subscription_id).terminate()
   ```
 
 ### Status Management
