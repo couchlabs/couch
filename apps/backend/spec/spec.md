@@ -4,9 +4,9 @@
 
 REST API service for managing on-chain subscriptions using Cloudflare Workers, D1 database, and Workflows for scheduling recurring charges.
 
-## API Endpoints
+## API Endpoint
 
-### 1. Create Subscription
+### Create Subscription
 
 **POST** `/api/subscriptions`
 
@@ -50,32 +50,6 @@ Creates a new subscription by validating an on-chain subscription ID and initiat
 #### Error Responses
 
 - `400 Bad Request` - Any error (invalid ID, already exists, revoked, etc.)
-
-### 2. Get Subscription Details
-
-**GET** `/api/subscriptions/:subscription_id`
-
-Retrieves detailed information about a subscription and current status.
-
-#### Response (200 OK)
-
-```json
-{
-  "subscription_id": "0x123...",
-  "status": "active", // On-chain status: active, revoked
-  "billing_status": "active", // Billing status: pending, active, failed
-  "owner_address": "0x456...",
-  "payer_address": "0x789...",
-  "recurring_charge": "9.99",
-  "period_days": 30,
-  "next_charge_at": "2024-02-15T10:00:00Z",
-  "created_at": "2024-01-15T10:00:00Z"
-}
-```
-
-#### Error Responses
-
-- `404 Not Found` - Subscription does not exist
 
 ## Database Schema (D1)
 
