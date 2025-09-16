@@ -24,6 +24,7 @@
   "dependencies": {
     "@coinbase/cdp-sdk": "^1.38.0",
     "@base-org/account": "^2.2.0",
-    "viem": "^2.37.6"
+    "viem": "^2.37.6",
+    "hono": "^4.9.7"
   }
 }
