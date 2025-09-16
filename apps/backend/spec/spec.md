@@ -20,7 +20,7 @@ Creates a new subscription by validating an on-chain subscription ID and initiat
 }
 ```
 
-#### Process Flow
+#### Process Flow (API Endpoint)
 
 1. Validate subscription exists on-chain and fetch details (amount, period_days, etc.)
 2. Store in database with billing_status "pending"
@@ -28,8 +28,10 @@ Creates a new subscription by validating an on-chain subscription ID and initiat
 4. If successful:
    - Update billing_status to "active"
    - Set next_charge_at to NOW() + period_days
-   - Start workflow with subscription_id as workflow ID
+   - Start workflow with subscription_id as workflow ID (for future charges)
 5. Return subscription details
+
+Note: The API handles initial setup and first charge. The workflow only handles recurring charges.
 
 #### Response (201 Created)
 
@@ -73,7 +75,7 @@ CREATE TABLE subscriptions (
 
 ### Subscription Workflow
 
-Handles the recurring billing cycle for each subscription.
+Handles the recurring billing cycle for each subscription (after the first charge is done by the API).
 
 #### How It Works
 
