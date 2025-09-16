@@ -1,5 +1,5 @@
 {
-  "include": ["alchemy.run.ts", "src/**/*.ts"],
+  "include": ["alchemy.run.ts", "src/**/*.ts", "types/**/*.ts"],
   "exclude": ["node_modules", "lib"],
   "compilerOptions": {
     "rootDir": ".",

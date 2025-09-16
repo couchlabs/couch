@@ -17,7 +17,7 @@
     "turbo": "latest",
     "prettier": "latest"
   },
-  "packageManager": "bun@1.2.21",
+  "packageManager": "bun@1.2.22",
   "prettier": {
     "semi": false
   }
