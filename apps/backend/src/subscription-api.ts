@@ -2,6 +2,8 @@ import { Hono } from "hono"
 
 import { CloudflareEnv } from "../types/env"
 
+export * from "./subscription-billing"
+
 const app = new Hono<{ Bindings: CloudflareEnv }>()
 
 app.post("/api/subscriptions", async (c) => {
@@ -16,7 +18,7 @@ app.post("/api/subscriptions", async (c) => {
 // Test endpoint to list all subscriptions (for debugging)
 app.get("/api/subscriptions", async (c) => {
   try {
-    const { results } = await c.env.DB.prepare(
+    const { results } = await c.env.SUBSCRIPTIONS.prepare(
       "SELECT * FROM subscriptions ORDER BY created_at DESC",
     ).all()
 
