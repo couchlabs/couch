@@ -2,6 +2,8 @@ import path from "node:path"
 
 import alchemy from "alchemy"
 import { Worker, D1Database, Workflow } from "alchemy/cloudflare"
+import type { SubscriptionParams } from "./src/subscription-billing"
+import type { SetupParams } from "./src/subscription-setup"
 
 const app = await alchemy("backend", {
   stage: "dev",
@@ -17,7 +19,7 @@ export const backend = await Worker("subscription-api", {
     CDP_API_KEY_SECRET: alchemy.secret.env.CDP_API_KEY_SECRET,
     CDP_WALLET_SECRET: alchemy.secret.env.CDP_WALLET_SECRET,
     CDP_ACCOUNT_OWNER_NAME: alchemy.env.CDP_ACCOUNT_OWNER_NAME,
-    CDP_SMART_ACCOUNT_NAME: alchemy.env.CDP_SMART_ACCOUNT_NAME,
+
     // RESOURCES:
     SUBSCRIPTIONS: await D1Database("subscriptions", {
       name: `${app.name}-${app.stage}-subscriptions`,
@@ -28,9 +30,13 @@ export const backend = await Worker("subscription-api", {
       },
       adopt: true,
     }),
-    SUBSCRIPTION_BILLING: Workflow("subscription-billing", {
+    SUBSCRIPTION_BILLING: Workflow<SubscriptionParams>("subscription-billing", {
       workflowName: "subscription-billing",
       className: "SubscriptionBilling",
+    }),
+    SUBSCRIPTION_SETUP: Workflow<SetupParams>("subscription-setup", {
+      workflowName: "subscription-setup",
+      className: "SubscriptionSetup",
     }),
   },
   compatibilityFlags: ["nodejs_compat"],

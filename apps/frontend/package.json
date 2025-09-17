@@ -23,7 +23,7 @@
     "@vitejs/plugin-react": "^5.0.2",
     "@tailwindcss/vite": "^4.1.13",
     "vite-tsconfig-paths": "^5.1.4",
-    "alchemy": "^0.66.0",
+    "alchemy": "^0.67.0",
     "miniflare": "^4.20250906.1",
     "typescript": "5.9.2"
   },

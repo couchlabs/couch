@@ -1,11 +1,13 @@
+import { NonRetryableError } from "cloudflare:workflows"
+
 import {
   WorkflowEntrypoint,
   type WorkflowEvent,
   type WorkflowStep,
 } from "cloudflare:workers"
-import { NonRetryableError } from "cloudflare:workflows"
+import { WorkerEnv } from "../types/api.env"
 
-interface SubscriptionParams {
+export interface SubscriptionParams {
   nextChargeAt: string
 }
 
@@ -26,7 +28,7 @@ const processPayment = async (
 }
 
 export class SubscriptionBilling extends WorkflowEntrypoint<
-  any,
+  WorkerEnv,
   SubscriptionParams
 > {
   async run(event: WorkflowEvent<SubscriptionParams>, step: WorkflowStep) {

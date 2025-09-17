@@ -3,10 +3,10 @@
 
 import type { frontend } from "../alchemy.run.ts"
 
-export type CloudflareEnv = typeof frontend.Env
+export type WorkerEnv = typeof frontend.Env
 
 declare module "cloudflare:workers" {
   namespace Cloudflare {
-    export interface Env extends CloudflareEnv {}
+    export interface Env extends WorkerEnv {}
   }
 }
