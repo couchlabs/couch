@@ -69,9 +69,9 @@ export function SubscriptionManager() {
 
     try {
       const subscription = await base.subscription.subscribe({
-        recurringCharge: "29.99", // Monthly charge in USDC
+        recurringCharge: "0.0099", // Monthly charge in USDC
         subscriptionOwner: accountAddress, // Our backend wallet address
-        periodInDays: 30, // 30-day billing period
+        periodInDays: 1, // 1-day billing period
         testnet: true, // Use testnet (Base Sepolia)
       })
 
@@ -140,59 +140,66 @@ export function SubscriptionManager() {
     setSuccess(null)
 
     try {
-      const response = await fetch(
-        `http://localhost:3000/api/charge-subscription`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            subscriptionId: id,
-          }),
+      const response = await fetch(`http://localhost:3000/api/subscriptions`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
         },
-      )
+        body: JSON.stringify({
+          subscription_id: id,
+        }),
+      })
 
       const data = await response.json<{
-        error: string
+        subscription_id: string
+        is_subscribed: number
+        billing_status: string
+        recurring_charge: string
+        period_days: number
+        next_charge_at: string
+        last_charge_at: string
+        created_at: string
+        updated_at: string
         message: string
-        details: string
-        success: boolean
-        amount: string
       }>()
-      console.log
+      console.log(data)
+      setSuccess(data.message)
+      // Refresh status after charge
+      setTimeout(async () => {
+        await handleGetStatus(data.subscription_id)
+      }, 1000)
 
-      if (!response.ok) {
-        // Handle structured error responses from the API
-        if (data.error === "Insufficient Gas") {
-          setError({
-            title: data.error,
-            message: data.message,
-            details: data.details,
-            type: "gas",
-          } as any)
-        } else if (data.error) {
-          setError({
-            title: data.error,
-            message: data.message || data.error,
-            details: data.details,
-            type: "error",
-          } as any)
-        } else {
-          throw new Error(data.error || "Failed to charge subscription")
-        }
-        return
-      }
+      // if (!response.ok) {
+      //   // Handle structured error responses from the API
+      //   if (data.error === "Insufficient Gas") {
+      //     setError({
+      //       title: data.error,
+      //       message: data.message,
+      //       details: data.details,
+      //       type: "gas",
+      //     } as any)
+      //   } else if (data.error) {
+      //     setError({
+      //       title: data.error,
+      //       message: data.message || data.error,
+      //       details: data.details,
+      //       type: "error",
+      //     } as any)
+      //   } else {
+      //     throw new Error(data.error || "Failed to charge subscription")
+      //   }
+      //   return
+      // }
 
-      if (data.success) {
-        setSuccess(data.message || `Successfully charged $${data.amount}`)
-        // Refresh status after charge
-        setTimeout(() => {
-          handleGetStatus()
-        }, 2000)
-      } else {
-        setError(data.message || "Failed to charge subscription")
-      }
+      // if (data.success) {
+      //   setSuccess(data.message || `Successfully charged $${data.amount}`)
+      //   // Refresh status after charge
+      //   setTimeout(() => {
+      //     handleGetStatus()
+      //   }, 2000)
+      // } else {
+      //   setError(data.message || "Failed to charge subscription")
+      // }
     } catch (err: any) {
       console.error("Charge failed:", err)
       setError(err.message || "Failed to charge subscription")
@@ -469,8 +476,10 @@ export function SubscriptionManager() {
 
               <div className="mb-8">
                 <div className="flex items-baseline">
-                  <span className="text-5xl font-bold text-white">$29.99</span>
-                  <span className="text-white/70 ml-2">/month</span>
+                  <span className="text-5xl font-bold text-white">
+                    $0.0099{" "}
+                  </span>
+                  <span className="text-white/70 ml-2">/day</span>
                 </div>
                 <p className="text-sm text-white/60 mt-2">
                   Billed monthly in USDC

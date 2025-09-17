@@ -13,7 +13,7 @@ export const backend = await Worker("subscription-api", {
   entrypoint: path.join(import.meta.dirname, "src", "subscription-api.ts"),
   bindings: {
     // ENV & SECRETS:
-    CDP_API_KEY_ID: alchemy.env.CDP_API_KEY_ID,
+    CDP_API_KEY_ID: alchemy.secret.env.CDP_API_KEY_ID,
     CDP_API_KEY_SECRET: alchemy.secret.env.CDP_API_KEY_SECRET,
     CDP_WALLET_SECRET: alchemy.secret.env.CDP_WALLET_SECRET,
     CDP_ACCOUNT_OWNER_NAME: alchemy.env.CDP_ACCOUNT_OWNER_NAME,

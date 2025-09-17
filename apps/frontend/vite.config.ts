@@ -9,4 +9,7 @@ export default defineConfig({
   plugins: [alchemy() as PluginOption, react(), tailwindcss(), tsconfigPaths()],
   root: "./src",
   envDir: "../",
+  server: {
+    open: "chrome",
+  },
 })
