@@ -1,5 +1,6 @@
 import { Hono } from "hono"
 import { cors } from "hono/cors"
+import { isHash } from "viem"
 
 import { WorkerEnv } from "../types/api.env"
 
@@ -21,8 +22,15 @@ app.post("/api/subscriptions", async (c) => {
       return c.json({ error: "subscription_id is required" }, 400)
     }
 
+    // Validate subscription_id format (must be 32-byte hash)
+    if (!isHash(subscriptionId)) {
+      return c.json(
+        { error: "Invalid subscription_id format. Must be a 32-byte hash" },
+        400,
+      )
+    }
+
     // 2. Check if subscription already exists in database
-    // TODO: add validation on hash format
     const existingSubscription = await c.env.SUBSCRIPTIONS.prepare(
       "SELECT * FROM subscriptions WHERE subscription_id = ?",
     )
