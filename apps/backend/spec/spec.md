@@ -117,6 +117,141 @@ Handles the recurring billing cycle for each subscription (after the first charg
 
 ### Status Management
 
-- **status**: On-chain state (active, revoked)
+- **is_subscribed**: On-chain subscription state (boolean)
 - **billing_status**: Billing operations (pending, active, failed)
-- Query billable: `WHERE status = 'active' AND billing_status = 'active'`
+- Query billable: `WHERE is_subscribed = true AND billing_status = 'active'`
+
+## Future Improvements
+
+### 1. Workflow-Based Subscription Setup
+
+Currently, the initial subscription setup (validation, first charge, activation) is handled in the API endpoint. This can lead to partial states if any step fails. A better approach would be to use a workflow for the entire setup process.
+
+#### Proposed Architecture
+
+**Two Workflow System:**
+
+1. **SubscriptionSetup Workflow** (new) - Handles initial subscription creation
+2. **SubscriptionBilling Workflow** (existing) - Handles recurring charges
+
+#### SubscriptionSetup Workflow Steps
+
+```typescript
+export class SubscriptionSetup extends WorkflowEntrypoint {
+  async run(event, step) {
+    const { subscriptionId } = event.payload
+
+    // Step 1: Validate on-chain subscription status
+    const status = await step.do("validate_onchain", async () => {
+      return await base.subscription.getStatus({
+        id: subscriptionId,
+        testnet: true,
+      })
+      // Automatic retries if blockchain is temporarily unavailable
+    })
+
+    // Step 2: Create database record
+    await step.do("create_db_record", async () => {
+      // Insert subscription with 'pending' status
+      // Idempotent - won't duplicate if retried
+    })
+
+    // Step 3: Process first charge
+    const chargeResult = await step.do("first_charge", async () => {
+      return await base.subscription.charge({
+        id: subscriptionId,
+        amount: status.remainingChargeInPeriod,
+        // ... payment credentials
+      })
+      // Automatic retries with exponential backoff
+    })
+
+    // Step 4: Activate subscription
+    if (chargeResult.success) {
+      await step.do("activate_subscription", async () => {
+        // Update DB status to 'active'
+        // Start recurring billing workflow
+        await env.SUBSCRIPTION_BILLING.create({
+          id: subscriptionId,
+          params: { nextChargeAt: status.nextPeriodStart },
+        })
+      })
+    } else {
+      await step.do("mark_failed", async () => {
+        // Update DB status to 'failed'
+      })
+    }
+  }
+}
+```
+
+#### Simplified API Endpoint
+
+```typescript
+app.post("/api/subscriptions", async (c) => {
+  const subscriptionId = body?.subscription_id
+
+  if (!subscriptionId) {
+    return c.json({ error: "subscription_id is required" }, 400)
+  }
+
+  // Check if already exists
+  const existing = await c.env.SUBSCRIPTIONS.prepare(
+    "SELECT * FROM subscriptions WHERE subscription_id = ?",
+  )
+    .bind(subscriptionId)
+    .first()
+
+  if (existing) {
+    return c.json(
+      {
+        error: "Subscription already exists",
+        subscription: existing,
+      },
+      409,
+    )
+  }
+
+  // Start setup workflow
+  await c.env.SUBSCRIPTION_SETUP.create({
+    id: `setup_${subscriptionId}`,
+    params: { subscriptionId },
+  })
+
+  return c.json(
+    {
+      message: "Subscription setup initiated",
+      subscription_id: subscriptionId,
+      status: "processing",
+    },
+    202,
+  ) // 202 Accepted
+})
+```
+
+#### Benefits
+
+1. **Automatic Retries**: Each step can be retried independently with configurable retry policies
+2. **State Persistence**: Workflow state is durable - if a step fails, it resumes from that exact point
+3. **No Partial States**: Eliminates issues like "charge succeeded but workflow creation failed"
+4. **Better Observability**: Each step is tracked in workflow history for debugging
+5. **Idempotency**: Steps are automatically idempotent, preventing duplicate charges
+6. **Error Recovery**: Failed workflows can be inspected and potentially resumed
+
+#### Migration Strategy
+
+1. Implement new `SubscriptionSetup` workflow alongside existing code
+2. Add feature flag to route traffic between implementations
+3. Test with small percentage of traffic
+4. Gradually increase traffic to new implementation
+5. Remove old implementation once stable
+
+### 2. Additional Improvements
+
+- **Webhook Support**: Add webhook endpoints for subscription status updates
+- **Batch Processing**: Process multiple subscription charges in parallel
+- **Monitoring Dashboard**: Real-time subscription status and billing metrics
+- **Retry Strategies**: Configurable retry policies per subscription tier
+- **Payment Method Fallbacks**: Try alternative payment methods on failure
+- **Subscription Pausing**: Allow temporary subscription holds
+- **Proration Support**: Handle mid-cycle subscription changes
