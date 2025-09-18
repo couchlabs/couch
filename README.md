@@ -13,7 +13,7 @@ bun install
 To run:
 
 ```bash
-bun run dev
+bun dev
 ```
 
 ## What's in this repo
