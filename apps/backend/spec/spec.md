@@ -169,8 +169,32 @@ await env.SUBSCRIPTION_BILLING.get(subscriptionId).terminate()
 - **billing_status**: Billing operations (pending, active, failed)
 - Query billable: `WHERE is_subscribed = true AND billing_status = 'active'`
 
+## Architecture Decisions for v0 POC
+
+### Initial Charge Handling
+
+For the v0 POC, the initial charge is processed in the SubscriptionSetup workflow. This approach was chosen for simplicity:
+
+**Current Approach (v0 POC):**
+
+- Initial charge happens in SubscriptionSetup workflow
+- Setup either fully succeeds (subscription activated) or fails
+- Failed setups require manual intervention
+- Clear separation: Setup handles onboarding, Billing handles recurring only
+
+**Future Enhancement (v1):**
+
+- Consider moving initial charge to SubscriptionBilling workflow
+- Would enable automatic retry of failed initial charges
+- Provides unified payment handling and better recovery options
+- Setup workflow would create subscription record and immediately start billing
+- Billing workflow would detect first charge vs recurring charge
+
+This architectural change is deferred to v1 to keep the POC simple and ship faster.
+
 ## Future Improvements
 
+- **Unified Charge Handling**: Move initial charge to billing workflow for better retry capabilities
 - **Webhook Support**: Add webhook endpoints for subscription status updates
 - **Batch Processing**: Process multiple subscription charges in parallel
 - **Monitoring Dashboard**: Real-time subscription status and billing metrics
@@ -182,3 +206,5 @@ await env.SUBSCRIPTION_BILLING.get(subscriptionId).terminate()
 - **Idempotency Keys**: Prevent duplicate subscription creation attempts
 - **Graceful Shutdown**: Handle subscription cancellations and refunds
 - **Audit Logging**: Track all subscription state changes for compliance
+- **Error Code System**: Centralized error codes and messages for better debugging
+- **Validation Service**: Extract validation logic into reusable, testable service

@@ -276,3 +276,7 @@ export class SubscriptionSetup extends WorkflowEntrypoint<
 // - Move validation wherever make sense into validation function with proper testing
 // - Deep dive into non-happy paths like
 // -- What happen if subscription active, but billing-failed, can it be restart? ie not enough fundings
+// - v1 Enhancement: Consider moving initial charge to billing workflow
+// -- This would allow automatic retry of failed initial charges
+// -- For POC, failed setups require manual intervention
+// -- Would provide unified payment handling and better recovery options
