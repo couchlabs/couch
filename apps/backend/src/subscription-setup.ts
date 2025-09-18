@@ -24,49 +24,81 @@ export class SubscriptionSetup extends WorkflowEntrypoint<
     )
 
     // Step 1: Validate onchain subscription status
-    // TODO: Configure retry policy for blockchain calls
-    // - Max retries: 3
-    // - Backoff: exponential (1s, 2s, 4s)
-    // - Only retry on network errors, not validation failures
-    const subscriptionStatus = await step.do("validate_onchain", async () => {
-      console.log(`🔍 Validating onchain subscription: ${subscriptionId}`)
+    const subscriptionStatus = await step.do(
+      "validate_onchain",
+      {
+        retries: {
+          limit: 3,
+          delay: "1 second",
+          backoff: "exponential",
+        },
+        timeout: "30 seconds",
+      },
+      async () => {
+        console.log(`🔍 Validating onchain subscription: ${subscriptionId}`)
 
-      let status: SubscriptionStatus
-      try {
-        status = await base.subscription.getStatus({
-          id: subscriptionId,
-          testnet: true,
-        })
-      } catch (error) {
-        console.error("Failed to fetch subscription status:", error)
-        throw new NonRetryableError(`Subscription not found: ${subscriptionId}`)
-      }
+        let status: SubscriptionStatus
+        try {
+          status = await base.subscription.getStatus({
+            id: subscriptionId,
+            testnet: true,
+          })
+        } catch (error) {
+          console.error("Failed to fetch subscription status:", error)
 
-      // Validation
-      // TODO: move into subscription validation helper function
-      if (!status.isSubscribed) {
-        throw new NonRetryableError(
-          `Subscription is not active: ${subscriptionId}`,
-        )
-      }
+          const errorMessage = error.message?.toLowerCase()
+          // Determine if this is a permanent error (don't retry) or transient (retry)
+          // These are configuration/setup errors - permanent, don't retry
+          if (
+            errorMessage.includes("testnet but is actually a mainnet") ||
+            errorMessage.includes("mainnet but is actually a testnet") ||
+            errorMessage.includes("not for usdc token") ||
+            errorMessage.includes("has not started yet")
+          ) {
+            throw new NonRetryableError(
+              `${errorMessage} - Subscription ID: ${subscriptionId}`,
+            )
+          }
 
-      if (!status.nextPeriodStart) {
-        throw new NonRetryableError(
-          `Invalid subscription: no next period for ${subscriptionId}`,
-        )
-      }
+          // Network/RPC errors - trigger retry based on workflow retry policy
+          console.log(
+            `⚠️ Network error for subscription ${subscriptionId}: ${error.message} - Will retry.`,
+          )
+          throw error
+        }
 
-      if (
-        !status.remainingChargeInPeriod ||
-        status.remainingChargeInPeriod == "0"
-      ) {
-        throw new NonRetryableError(
-          `Invalid subscription: no remaining charge amount for ${subscriptionId}`,
-        )
-      }
+        // Check if subscription exists and is valid
+        if (!status.isSubscribed) {
+          if (status.recurringCharge === "0") {
+            throw new NonRetryableError(
+              `Subscription ${subscriptionId} not found. Please verify the subscription ID is correct.`,
+            )
+          }
+          // If we have recurringCharge, subscription exists but is inactive
+          throw new NonRetryableError(
+            `Subscription ${subscriptionId} is not active. It may have expired or been cancelled.`,
+          )
+        }
 
-      return status
-    })
+        // Validation for subscription configuration
+        if (!status.nextPeriodStart) {
+          throw new NonRetryableError(
+            `Subscription ${subscriptionId} has invalid configuration: no next billing period defined.`,
+          )
+        }
+        if (
+          !status.remainingChargeInPeriod ||
+          status.remainingChargeInPeriod == "0"
+        ) {
+          throw new NonRetryableError(
+            `Subscription ${subscriptionId} has no remaining allowance for this period. The maximum charge amount may have been reached.`,
+          )
+        }
+        // TODO: validate for having the right ownership to process such subscription
+
+        return status
+      },
+    )
 
     // Step 2: Create database record
     // TODO: Configure retry policy for database operations

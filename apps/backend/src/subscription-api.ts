@@ -63,7 +63,7 @@ app.post("/api/subscriptions", async (c) => {
     )
   } catch (error) {
     console.error("Error creating subscription:", error)
-    return c.json({ error: "Failed to create subscription" }, 500)
+    return c.json({ error: "Failed to initiate subscription setup." }, 500)
   }
 })
 
