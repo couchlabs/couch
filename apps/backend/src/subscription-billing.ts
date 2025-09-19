@@ -119,7 +119,7 @@ export class SubscriptionBilling extends WorkflowEntrypoint<
               cdpApiKeyId: this.env.CDP_API_KEY_ID,
               cdpApiKeySecret: this.env.CDP_API_KEY_SECRET,
               cdpWalletSecret: this.env.CDP_WALLET_SECRET,
-              walletName: this.env.CDP_ACCOUNT_OWNER_NAME,
+              walletName: this.env.CDP_WALLET_NAME,
               testnet: true,
             })
 
@@ -161,7 +161,7 @@ export class SubscriptionBilling extends WorkflowEntrypoint<
               chargeResult.amount,
               1, // SQLite uses 1 for true
               chargeResult.id,
-              chargeResult.chargedBy,
+              chargeResult.subscriptionOwner,
               chargeResult.recipient || null,
             )
             .run()

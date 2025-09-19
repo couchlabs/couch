@@ -22,7 +22,7 @@
     "typescript": "^5.9.2"
   },
   "dependencies": {
-    "@base-org/account": "^2.3.0-canary.20250912225908",
+    "@base-org/account": "^2.3.1-canary.20250919194036",
     "viem": "^2.37.6",
     "hono": "^4.9.7"
   }

@@ -18,7 +18,7 @@ export const backend = await Worker("subscription-api", {
     CDP_API_KEY_ID: alchemy.secret.env.CDP_API_KEY_ID,
     CDP_API_KEY_SECRET: alchemy.secret.env.CDP_API_KEY_SECRET,
     CDP_WALLET_SECRET: alchemy.secret.env.CDP_WALLET_SECRET,
-    CDP_ACCOUNT_OWNER_NAME: alchemy.env.CDP_ACCOUNT_OWNER_NAME,
+    CDP_WALLET_NAME: alchemy.env.CDP_WALLET_NAME,
 
     // RESOURCES:
     SUBSCRIPTIONS: await D1Database("subscriptions", {

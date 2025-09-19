@@ -129,7 +129,7 @@ export class SubscriptionSetup extends WorkflowEntrypoint<
             cdpApiKeyId: this.env.CDP_API_KEY_ID,
             cdpApiKeySecret: this.env.CDP_API_KEY_SECRET,
             cdpWalletSecret: this.env.CDP_WALLET_SECRET,
-            walletName: this.env.CDP_ACCOUNT_OWNER_NAME,
+            walletName: this.env.CDP_WALLET_NAME,
             testnet: true,
           })
 
@@ -167,7 +167,7 @@ export class SubscriptionSetup extends WorkflowEntrypoint<
             chargeResult.amount,
             chargeResult.success ? 1 : 0,
             chargeResult.id || null,
-            chargeResult.chargedBy || null,
+            chargeResult.subscriptionOwner || null,
             chargeResult.recipient || null,
             chargeResult.error || null,
           )

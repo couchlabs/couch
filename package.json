@@ -3,6 +3,8 @@
   "type": "module",
   "private": true,
   "scripts": {
+    "cdp:init": "bun ./scripts/cdp-create-wallets && bun ./scripts/cdp-fund-wallets",
+    "cdp:faucet": "bun ./scripts/cdp-fund-wallets",
     "dev": "turbo run dev",
     "deploy": "turbo run deploy --ui=stream",
     "destroy": "turbo run destroy --ui=stream",
@@ -15,7 +17,8 @@
   },
   "dependencies": {
     "turbo": "latest",
-    "prettier": "latest"
+    "prettier": "latest",
+    "@coinbase/cdp-sdk": "latest"
   },
   "packageManager": "bun@1.2.22",
   "prettier": {
