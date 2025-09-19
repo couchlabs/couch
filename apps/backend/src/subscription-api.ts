@@ -12,25 +12,25 @@ const app = new Hono<{ Bindings: WorkerEnv }>()
 app.use(cors())
 
 app.post("/api/subscriptions", async (c) => {
+  // TODO: Consider API Key for protecting against abuses
+  const body = await c.req.json().catch(() => null)
+  const subscriptionId = body?.subscription_id
+
+  // Validate mandatory subscription_id
+  if (!subscriptionId) {
+    return c.json({ error: "subscription_id is required" }, 400)
+  }
+
+  // Validate subscription_id format (must be 32-byte hash)
+  if (!isHash(subscriptionId)) {
+    return c.json(
+      { error: "Invalid subscription_id format. Must be a 32-byte hash" },
+      400,
+    )
+  }
+
   try {
-    // TODO: Consider API Key for protecting against abuses
-    const body = await c.req.json().catch(() => null)
-    const subscriptionId = body?.subscription_id
-
-    // Validate mandatory subscription_id
-    if (!subscriptionId) {
-      return c.json({ error: "subscription_id is required" }, 400)
-    }
-
-    // Validate subscription_id format (must be 32-byte hash)
-    if (!isHash(subscriptionId)) {
-      return c.json(
-        { error: "Invalid subscription_id format. Must be a 32-byte hash" },
-        400,
-      )
-    }
-
-    // 2. Check if subscription already exists in database
+    // Check if subscription already exists in database
     const existingSubscription = await c.env.SUBSCRIPTIONS.prepare(
       "SELECT * FROM subscriptions WHERE subscription_id = ?",
     )
@@ -62,8 +62,10 @@ app.post("/api/subscriptions", async (c) => {
       202,
     )
   } catch (error) {
-    console.error("Error creating subscription:", error)
-    return c.json({ error: "Failed to initiate subscription setup." }, 500)
+    console.error(
+      `${subscriptionId} - ⚠️ Error creating subscription: ${error.message}`,
+    )
+    return c.json({ error: "Failed to initiate subscription setup" }, 500)
   }
 })
 
