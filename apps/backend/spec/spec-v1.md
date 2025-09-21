@@ -71,15 +71,17 @@ CREATE TABLE subscriptions (
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
--- Billing schedule and state
+-- Billing schedule and state (core of the system)
 CREATE TABLE billing_entries (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   subscription_id TEXT NOT NULL,
-  type TEXT NOT NULL,  -- 'first_charge', 'recurring'
+  type TEXT NOT NULL,  -- 'recurring', 'retry'
   due_at DATETIME NOT NULL,
   amount TEXT NOT NULL,
   status TEXT NOT NULL,  -- 'pending', 'processing', 'completed', 'failed'
   attempts INTEGER DEFAULT 0,
+  parent_billing_id INTEGER,  -- Links retry entries to original failed entry
+  failure_reason TEXT,  -- 'insufficient_funds', 'network_error', etc.
   processing_lock DATETIME,
   locked_by TEXT,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -143,7 +145,7 @@ Creates a new subscription with immediate first charge.
 2. Validate spend permission is active
 3. Execute first charge via CDP
 4. Create first transaction record
-5. Create next billing entry
+5. Create next billing entry (due_at = next period)
 6. Update subscription to `status='active'`
 7. On failure: delete subscription and revoke permission
 
@@ -152,7 +154,8 @@ Creates a new subscription with immediate first charge.
 ### subscription-charge-scheduler
 
 **Schedule:** Every 15 minutes
-**Purpose:** Process due billing entries
+**Purpose:** Find and enqueue due billing entries
+**Source:** ONLY reads from `billing_entries` table
 
 **Implementation:**
 
@@ -172,7 +175,12 @@ WHERE id IN (
 RETURNING *
 ```
 
-Enqueues claimed entries to subscription-charge-queue for processing.
+The scheduler is simple - it only finds due entries and enqueues them. It does NOT:
+- Calculate next billing dates
+- Check subscription states
+- Make business decisions
+
+All intelligence is in the consumer that creates new billing entries.
 
 ### subscription-reconciler-scheduler
 
@@ -181,10 +189,13 @@ Enqueues claimed entries to subscription-charge-queue for processing.
 
 **Actions:**
 
-1. Fetch active permissions from base
-2. Revoke orphaned permissions (onchain but not in DB)
-3. Clean stuck subscriptions (processing > 30 minutes)
-4. Mark inactive for missing permissions (in DB but not active onchain)
+1. Clean orphaned permissions (using KV cache for efficiency):
+   - Fetch permissions where we're the spender
+   - Check each against database
+   - Revoke if not in our system
+   - Track processed permissions in KV to avoid reprocessing
+2. Clean stuck subscriptions (processing > 30 minutes)
+3. Missing permissions detected on charge failure (not proactively checked)
 
 ## Queue Workers
 
@@ -199,8 +210,19 @@ Enqueues claimed entries to subscription-charge-queue for processing.
 1. Execute charge via CDP
 2. Create transaction record
 3. Mark billing entry complete
-4. Create next billing entry
-5. On failure: retry or mark inactive after max attempts
+4. Create next billing entry (perpetual cycle)
+5. On failure:
+   - Technical errors (network, timeout): Use queue retry (exponential backoff)
+   - Business errors (insufficient funds):
+     - Mark entry as 'failed'
+     - Create new retry billing entry with custom date (+1 day, +3 days, +7 days)
+     - After max retries: mark subscription inactive
+
+**Billing Entry Lifecycle:**
+- API creates first entry when subscription starts
+- Each successful charge creates the next entry
+- Failed charges create retry entries with custom schedules
+- The billing_entries table is the single source of truth for all charges
 
 ### subscription-revoke-consumer
 
@@ -248,9 +270,10 @@ database_name = "subscription-db"
 
 ### Failure Recovery
 
-- Failed charges retry 3 times with exponential backoff
-- Stuck subscriptions auto-cleaned after 5 minutes
-- Orphaned permissions revoked automatically
+- Technical failures: Queue retries (seconds/minutes, exponential backoff)
+- Business failures: New billing entries with custom retry schedule (days/weeks)
+- Stuck subscriptions auto-cleaned after 30 minutes
+- Orphaned permissions revoked via KV-cached reconciliation
 
 ### Monitoring
 
