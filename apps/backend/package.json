@@ -23,6 +23,7 @@
   },
   "dependencies": {
     "@base-org/account": "^2.3.1-canary.20250919194036",
+    "@coinbase/cdp-sdk": "^1.38.1",
     "viem": "^2.37.6",
     "hono": "^4.9.7"
   }

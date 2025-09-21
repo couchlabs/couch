@@ -6,7 +6,7 @@ import {
   type WorkflowEvent,
   type WorkflowStep,
 } from "cloudflare:workers"
-import { WorkerEnv } from "../types/api.env"
+import { WorkerEnv } from "../../types/api.env"
 
 export interface SetupParams {
   subscriptionId: string
