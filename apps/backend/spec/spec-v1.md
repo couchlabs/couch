@@ -7,34 +7,59 @@ A distributed billing system for managing crypto-native recurring payments using
 ### Architecture
 
 ```
-┌─────────────────┐     ┌───────────────┐      ┌────────────┐
-│   API Gateway   │────▶│  D1 Database  │◀─────│ Schedulers │
-└────────┬────────┘     └───────────────┘      └─────┬──────┘
-         │                                           │
-         ▼                                           ▼
-┌─────────────────┐                         ┌───────────────┐
-│  Charge Queue   │◀────────────────────────│  Revoke Queue │
-└────────┬────────┘                         └────────┬──────┘
-         │                                           │
-         ▼                                           ▼
-┌─────────────────┐                        ┌────────────────┐
-│ Charge Workers  │                        │ Revoke Workers │
-└─────────────────┘                        └────────────────┘
+  ┌─────────────────────────┐
+  │   subscription-api      │──────────► subscription-db
+  └─────────────────────────┘                   ▲
+                                                │
+  ┌─────────────────────────┐                   │
+  │ subscription-charge-    │───────────────────┤
+  │ scheduler               │                   │
+  └───────────┬─────────────┘                   │
+              ▼                                 │
+      subscription-charge-queue                 │
+              ▼                                 │
+  ┌─────────────────────────┐                   │
+  │ subscription-charge-    │───────────────────┤
+  │ consumer                │                   │
+  └─────────────────────────┘                   │
+                                                │
+  ┌─────────────────────────┐                   │
+  │ subscription-           │───────────────────┤
+  │ reconciler-scheduler    │                   │
+  └───────────┬─────────────┘                   │
+              ▼                                 │
+      subscription-revoke-queue                 │
+              ▼                                 │
+  ┌─────────────────────────┐                   │
+  │ subscription-revoke-    │───────────────────┘
+  │ consumer                │
+  └─────────────────────────┘
 ```
-
-1. API Gateway → D1 Database: Direct connection for subscription creation and queries
-2. Schedulers → D1 Database: Bidirectional for reading subscriptions and updating states
-3. Schedulers → Queues: One-way flow to enqueue work items to both Charge Queue and Revoke Queue
-4. Queues → Workers: One-way flow from each queue to its respective workers
-5. Workers → D1 Database: Implicit connection (workers need DB access to process charges/revocations)
 
 ### Core Components
 
-1. **API Gateway** - Handles subscription creation and execute/validates initial payment
-2. **Schedulers** - Two cron jobs managing charge processing and permission reconciliation
-3. **Queue System** - Distributed work queues for charge and revocation processing
-4. **Workers** - Stateless processors executing charges and revocations
-5. **Database** - Source of truth for subscriptions, billing entries, and transactions
+1. **API GATEWAY** - CF Worker with Hono
+
+- `subscription-api` # Main API service
+
+2. **SCHEDULERS** - CF Workers with CRON triggers
+
+- `subscription-charge-scheduler` # Schedules recurring charges (*/15)
+- `subscription-reconciler-scheduler` # Audits permission consistency (*/30)
+
+3. **QUEUE CONSUMERS** - CF Workers
+
+- `subscription-charge-consumer` # Processes subscription charges
+- `subscription-revoke-consumer` # Revokes cancelled subscriptions
+
+4. **QUEUES** - CF Queues
+
+- `subscription-charge-queue` # Queue for charge tasks
+- `subscription-revoke-queue` # Queue for revocation tasks
+
+5. **DATABASE** - CF D1
+
+- `subscription-db` # D1 database
 
 ## Database Schema
 
@@ -124,7 +149,7 @@ Creates a new subscription with immediate first charge.
 
 ## Schedulers
 
-### Charge Scheduler
+### subscription-charge-scheduler
 
 **Schedule:** Every 15 minutes
 **Purpose:** Process due billing entries
@@ -147,9 +172,9 @@ WHERE id IN (
 RETURNING *
 ```
 
-Enqueues claimed entries to charge queue for processing.
+Enqueues claimed entries to subscription-charge-queue for processing.
 
-### Permission Reconciler
+### subscription-reconciler-scheduler
 
 **Schedule:** Every 30 minutes
 **Purpose:** Maintain consistency between onchain permissions and database
@@ -163,9 +188,9 @@ Enqueues claimed entries to charge queue for processing.
 
 ## Queue Workers
 
-### Charge Worker
+### subscription-charge-consumer
 
-**Queue:** `charge-queue`
+**Queue:** `subscription-charge-queue`
 **Concurrency:** 10 workers
 **Retry:** 3 attempts with exponential backoff
 
@@ -177,9 +202,9 @@ Enqueues claimed entries to charge queue for processing.
 4. Create next billing entry
 5. On failure: retry or mark inactive after max attempts
 
-### Revoke Worker
+### subscription-revoke-consumer
 
-**Queue:** `revoke-queue`
+**Queue:** `subscription-revoke-queue`
 **Concurrency:** 5 workers
 **Retry:** 3 attempts
 
@@ -193,24 +218,24 @@ Enqueues claimed entries to charge queue for processing.
 
 ```toml
 # wrangler.toml
-name = "subscription-billing"
+name = "subscription-system"
 
 [triggers]
-crons = ["*/1 * * * *", "*/5 * * * *"]
+crons = ["*/15 * * * *", "*/30 * * * *"]
 
 [[queues.consumers]]
-queue = "charge-queue"
+queue = "subscription-charge-queue"
 max_batch_size = 10
 max_retries = 3
 
 [[queues.consumers]]
-queue = "revoke-queue"
+queue = "subscription-revoke-queue"
 max_batch_size = 5
 max_retries = 3
 
 [[d1_databases]]
 binding = "DB"
-database_name = "subscriptions"
+database_name = "subscription-db"
 ```
 
 ## Operational Considerations
