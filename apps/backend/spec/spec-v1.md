@@ -44,8 +44,8 @@ A distributed billing system for managing crypto-native recurring payments using
 
 2. **SCHEDULERS** - CF Workers with CRON triggers
 
-- `subscription-charge-scheduler` # Schedules recurring charges (*/15)
-- `subscription-reconciler-scheduler` # Audits permission consistency (*/30)
+- `subscription-charge-scheduler` # Schedules recurring charges (\*/15)
+- `subscription-reconciler-scheduler` # Audits permission consistency (\*/30)
 
 3. **QUEUE CONSUMERS** - CF Workers
 
@@ -176,6 +176,7 @@ RETURNING *
 ```
 
 The scheduler is simple - it only finds due entries and enqueues them. It does NOT:
+
 - Calculate next billing dates
 - Check subscription states
 - Make business decisions
@@ -219,6 +220,7 @@ All intelligence is in the consumer that creates new billing entries.
      - After max retries: mark subscription inactive
 
 **Billing Entry Lifecycle:**
+
 - API creates first entry when subscription starts
 - Each successful charge creates the next entry
 - Failed charges create retry entries with custom schedules

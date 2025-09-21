@@ -27,10 +27,10 @@ console.log(
 )
 
 // Read .env file and update VITE_COUCH_WALLET_ADDRESS
-const envContent = readFileSync('.env', 'utf-8')
+const envContent = readFileSync(".env", "utf-8")
 const updatedContent = envContent.replace(
   /^VITE_COUCH_WALLET_ADDRESS=.*$/m,
-  `VITE_COUCH_WALLET_ADDRESS=${cdp_smart_account.address}`
+  `VITE_COUCH_WALLET_ADDRESS=${cdp_smart_account.address}`,
 )
-writeFileSync('.env', updatedContent)
+writeFileSync(".env", updatedContent)
 console.log(`✏️ Updated VITE_COUCH_WALLET_ADDRESS in the .env file`)
