@@ -255,6 +255,12 @@ export class SubscriptionService {
           })
 
           // COMPENSATING ACTION: Mark subscription and billing as inactive/failed
+          log.info("Marking subscription as inactive due to payment failure", {
+            subscriptionId,
+            errorCode,
+            billingEntryId: billingEntryId!,
+          })
+
           await this.subscriptionRepository.markSubscriptionInactive({
             subscriptionId,
             billingEntryId: billingEntryId!,
