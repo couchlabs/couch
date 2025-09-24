@@ -2,7 +2,7 @@
 
 ## Overview
 
-REST API service for managing on-chain subscriptions using Cloudflare Workers, D1 database, and Workflows for scheduling recurring charges.
+REST API service for managing onchain subscriptions using Cloudflare Workers, D1 database, and Workflows for scheduling recurring charges.
 
 ## API Endpoint
 
@@ -16,7 +16,7 @@ Initiates the subscription setup process by starting a workflow that handles val
 
 ```json
 {
-  "subscription_id": "0x123..." // On-chain subscription ID (permission hash) - Required
+  "subscription_id": "0x123..." // Onchain subscription ID (permission hash) - Required
 }
 ```
 
@@ -48,8 +48,8 @@ Initiates the subscription setup process by starting a workflow that handles val
 
 ```sql
 CREATE TABLE subscriptions (
-  subscription_id TEXT PRIMARY KEY,    -- On-chain subscription ID (also workflow ID)
-  is_subscribed BOOLEAN NOT NULL,      -- Current on-chain subscription status
+  subscription_id TEXT PRIMARY KEY,    -- Onchain subscription ID (also workflow ID)
+  is_subscribed BOOLEAN NOT NULL,      -- Current onchain subscription status
   billing_status TEXT NOT NULL,        -- Billing status: pending, active, failed
   recurring_charge TEXT NOT NULL,      -- Amount in USD (e.g., "9.99")
   period_days INTEGER,                 -- Billing period in days (nullable if not provided)
@@ -74,7 +74,7 @@ Handles the initial subscription creation, validation, and first charge.
 
 #### Workflow Steps
 
-1. **validate_onchain**: Validates subscription status on-chain
+1. **validate_onchain**: Validates subscription status onchain
    - Fetches subscription details from blockchain
    - Validates subscription is active
    - Ensures next period and charge amounts are valid
@@ -110,7 +110,7 @@ Handles recurring charges after initial setup.
 1. **Sleep**: Wait until next charge time
    - Uses `step.sleep()` for durable pause
 
-2. **Validate**: Check subscription still active on-chain
+2. **Validate**: Check subscription still active onchain
    - Verifies subscription hasn't been revoked
 
 3. **Charge**: Process recurring payment
@@ -165,7 +165,7 @@ await env.SUBSCRIPTION_BILLING.get(subscriptionId).terminate()
 
 ### Status Management
 
-- **is_subscribed**: On-chain subscription state (boolean)
+- **is_subscribed**: Onchain subscription state (boolean)
 - **billing_status**: Billing operations (pending, active, failed)
 - Query billable: `WHERE is_subscribed = true AND billing_status = 'active'`
 

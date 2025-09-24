@@ -9,12 +9,14 @@ A distributed billing system for managing crypto-native recurring payments using
 The system maintains a clear separation between onchain data (source of truth) and offchain data (operational state):
 
 **Onchain Data (fetched when needed):**
+
 - Permission status (active/revoked)
 - Current period (start/end timestamps)
 - Remaining allowance
 - Permission parameters (amount, period, token)
 
 **Offchain Data (stored in database):**
+
 - Billing schedule (when to charge)
 - Retry attempts and failure reasons
 - Transaction history
