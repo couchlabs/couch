@@ -2,9 +2,10 @@ import path from "node:path"
 
 import alchemy from "alchemy"
 import { Worker, D1Database, Queue, KVNamespace } from "alchemy/cloudflare"
+import { Stage } from "./src/lib/constants"
 
 const app = await alchemy("backend", {
-  stage: "dev",
+  stage: Stage.DEV,
   password: process.env.ALCHEMY_PASSWORD,
 })
 
@@ -40,6 +41,7 @@ export const subscriptionAPI = await Worker(API_NAME, {
     CDP_API_KEY_SECRET: alchemy.secret.env.CDP_API_KEY_SECRET,
     CDP_WALLET_SECRET: alchemy.secret.env.CDP_WALLET_SECRET,
     CDP_WALLET_NAME: alchemy.env.CDP_WALLET_NAME,
+    CDP_PAYMASTER_URL: alchemy.env.CDP_PAYMASTER_URL,
     STAGE: app.stage,
     // RESOURCES:
     DB: subscriptionDB,
