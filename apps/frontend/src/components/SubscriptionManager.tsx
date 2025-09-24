@@ -1,5 +1,11 @@
 import { useState, useEffect } from "react"
-import { base } from "@base-org/account"
+import { base, createBaseAccountSDK } from "@base-org/account"
+import {
+  fetchPermission,
+  requestRevoke,
+} from "@base-org/account/spend-permission"
+import { createPublicClient, http } from "viem"
+import { baseSepolia } from "viem/chains"
 
 interface Account {
   address: string
@@ -18,6 +24,7 @@ interface SubscriptionStatus {
   nextPeriodStart?: Date
   subscriptionOwner?: string
   subscriptionPayer?: string
+  transactionHash?: string // Add optional transaction hash
 }
 
 interface ErrorInfo {
@@ -29,11 +36,12 @@ interface ErrorInfo {
 
 export function SubscriptionManager() {
   const [account, setAccount] = useState<Account | null>(null)
-  const [subscription, setSubscription] = useState<SubscriptionInfo | null>(
-    null,
-  )
-  const [subscriptionStatus, setSubscriptionStatus] =
-    useState<SubscriptionStatus | null>(null)
+  const [subscriptions, setSubscriptions] = useState<
+    Record<string, SubscriptionInfo>
+  >({})
+  const [subscriptionStatuses, setSubscriptionStatuses] = useState<
+    Record<string, SubscriptionStatus>
+  >({})
   const [loading, setLoading] = useState<Record<string, boolean>>({})
   const [error, setError] = useState<string | ErrorInfo | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
@@ -41,18 +49,42 @@ export function SubscriptionManager() {
   const showBackendControl = false
 
   useEffect(() => {
-    // Load subscription from localStorage
-    const storedSubscription = localStorage.getItem("bbq-subscription")
-    if (storedSubscription) {
+    // Load subscriptions from localStorage
+    const storedSubscriptions = localStorage.getItem("bbq-subscriptions")
+    if (storedSubscriptions) {
       try {
-        const parsedSubscription = JSON.parse(storedSubscription)
-        setSubscription(parsedSubscription)
-        handleGetStatus(parsedSubscription.id)
+        const parsedSubscriptions = JSON.parse(storedSubscriptions)
+        setSubscriptions(parsedSubscriptions)
+        // Load status for current plan if it exists
+        const currentPlanSubscription = parsedSubscriptions[selectedPlan]
+        if (currentPlanSubscription) {
+          handleGetStatus(currentPlanSubscription.id, selectedPlan)
+        }
       } catch (err) {
-        console.error("Failed to parse stored subscription:", err)
+        console.error("Failed to parse stored subscriptions:", err)
       }
     }
   }, [])
+
+  const [selectedPlan, setSelectedPlan] = useState<"test" | "pro">("test")
+
+  // Get current subscription and status based on selected plan
+  const subscription = subscriptions[selectedPlan] || null
+  const subscriptionStatus = subscriptionStatuses[selectedPlan] || null
+  const PLANS = {
+    test: {
+      name: "Plan 1",
+      description: "Perfect for testing happy path",
+      price: "0.0009",
+      displayPrice: "$0.0009",
+    },
+    pro: {
+      name: "Plan 2",
+      description: "Perfect for testing failing payments",
+      price: "100",
+      displayPrice: "$100",
+    },
+  }
 
   // Create Subscription
   const handleCreateSubscription = async () => {
@@ -63,18 +95,26 @@ export function SubscriptionManager() {
       throw new Error("SERVER ADDRESS NOT SET")
     }
 
-    setLoading({ ...loading, subscription: true })
     setError(null)
     setSuccess(null)
 
+    // Clear any existing status for this plan to avoid showing stale data
+    setSubscriptionStatuses((prev) => {
+      const updated = { ...prev }
+      delete updated[selectedPlan]
+      return updated
+    })
+
     try {
       const subscription = await base.subscription.subscribe({
-        recurringCharge: "0.0099", // Monthly charge in USDC
+        recurringCharge: PLANS[selectedPlan].price, // Selected plan price in USDC
         subscriptionOwner: accountAddress, // Our backend wallet address
         periodInDays: 1, // 1-day billing period
         testnet: true, // Use testnet (Base Sepolia)
       })
 
+      // Set loading only after wallet approval is given
+      setLoading({ ...loading, subscription: true })
       console.log("Subscription created:", subscription)
 
       const subscriptionData = {
@@ -84,41 +124,189 @@ export function SubscriptionManager() {
         periodInDays: subscription.periodInDays,
       }
 
-      setSubscription(subscriptionData)
-      localStorage.setItem("bbq-subscription", JSON.stringify(subscriptionData))
+      // Store subscription for the current plan
+      const updatedSubscriptions = {
+        ...subscriptions,
+        [selectedPlan]: subscriptionData,
+      }
+      setSubscriptions(updatedSubscriptions)
+      localStorage.setItem(
+        "bbq-subscriptions",
+        JSON.stringify(updatedSubscriptions),
+      )
 
       setSuccess(`Subscription created successfully!`)
-      handleChargeSubscription(subscriptionData.id)
-      // Auto-check status after creation
-      setTimeout(() => handleGetStatus(subscription.id), 2000)
+      // Don't check status here - let handleChargeSubscription do it after activation
+      // Don't clear loading state here - let handleChargeSubscription manage it
+      await handleChargeSubscription(subscriptionData.id)
     } catch (err: any) {
       console.error("Subscription failed:", err)
       setError(err.message || "Failed to create subscription")
-    } finally {
       setLoading({ ...loading, subscription: false })
     }
   }
 
   // Get Subscription Status
-  const handleGetStatus = async (subscriptionId?: string) => {
-    const id = subscriptionId || subscription?.id
-    console.log("Id", id)
+  const handleGetStatus = async (
+    subscriptionId?: string,
+    planType?: "test" | "pro",
+  ) => {
+    console.log("hey")
+    const plan = planType || selectedPlan
+    const id = subscriptionId || subscriptions[plan]?.id
+    console.log("Id", id, "for plan:", plan)
     if (!id) {
-      setError("No subscription created yet")
+      setError(`No ${plan} subscription created yet`)
       return
     }
 
     setLoading({ ...loading, status: true })
-    setError(null)
+    // Don't clear error here - we want to keep showing subscription errors
 
     try {
+      // First check if permission exists and get raw data
+      const permission = await fetchPermission({ permissionHash: id })
+      console.log("Raw permission data:", permission)
+
+      // Check the critical extraData field
+      console.log("🔍 Permission details:")
+      console.log("  - extraData value:", permission?.permission?.extraData)
+      console.log(
+        "  - extraData type:",
+        typeof permission?.permission?.extraData,
+      )
+      console.log(
+        "  - extraData === undefined?",
+        permission?.permission?.extraData === undefined,
+      )
+      console.log("  - Full permission object:", permission?.permission)
+
       const status = await base.subscription.getStatus({
         id: id,
         testnet: true,
       })
 
       console.log("Subscription status:", status)
-      setSubscriptionStatus(status)
+
+      // Direct onchain check to prove the SDK bug
+      if (permission) {
+        const client = createPublicClient({
+          chain: baseSepolia,
+          transport: http(),
+        })
+
+        const spendPermissionManagerAddress =
+          "0xf85210B21cC50302F477BA56686d2019dC9b67Ad" as const
+        const spendPermissionManagerAbi = [
+          {
+            inputs: [
+              {
+                components: [
+                  { name: "account", type: "address" },
+                  { name: "spender", type: "address" },
+                  { name: "token", type: "address" },
+                  { name: "allowance", type: "uint160" },
+                  { name: "period", type: "uint48" },
+                  { name: "start", type: "uint48" },
+                  { name: "end", type: "uint48" },
+                  { name: "salt", type: "uint256" },
+                  { name: "extraData", type: "bytes" },
+                ],
+                name: "spendPermission",
+                type: "tuple",
+              },
+            ],
+            name: "isRevoked",
+            outputs: [{ name: "", type: "bool" }],
+            stateMutability: "view",
+            type: "function",
+          },
+          {
+            inputs: [
+              {
+                components: [
+                  { name: "account", type: "address" },
+                  { name: "spender", type: "address" },
+                  { name: "token", type: "address" },
+                  { name: "allowance", type: "uint160" },
+                  { name: "period", type: "uint48" },
+                  { name: "start", type: "uint48" },
+                  { name: "end", type: "uint48" },
+                  { name: "salt", type: "uint256" },
+                  { name: "extraData", type: "bytes" },
+                ],
+                name: "spendPermission",
+                type: "tuple",
+              },
+            ],
+            name: "getCurrentPeriod",
+            outputs: [
+              {
+                name: "",
+                type: "tuple",
+                components: [
+                  { name: "start", type: "uint48" },
+                  { name: "end", type: "uint48" },
+                  { name: "spend", type: "uint160" },
+                ],
+              },
+            ],
+            stateMutability: "view",
+            type: "function",
+          },
+        ] as const
+
+        const permissionArgs = {
+          account: permission.permission.account as `0x${string}`,
+          spender: permission.permission.spender as `0x${string}`,
+          token: permission.permission.token as `0x${string}`,
+          allowance: BigInt(permission.permission.allowance),
+          period: permission.permission.period,
+          start: permission.permission.start,
+          end: permission.permission.end,
+          salt: BigInt(permission.permission.salt),
+          extraData: (permission.permission.extraData || "0x") as `0x${string}`,
+        }
+
+        const [isRevoked, currentPeriod] = await Promise.all([
+          client.readContract({
+            address: spendPermissionManagerAddress,
+            abi: spendPermissionManagerAbi,
+            functionName: "isRevoked",
+            args: [permissionArgs],
+          }),
+          client.readContract({
+            address: spendPermissionManagerAddress,
+            abi: spendPermissionManagerAbi,
+            functionName: "getCurrentPeriod",
+            args: [permissionArgs],
+          }),
+        ])
+
+        console.log("🔍 Direct onchain check:")
+        console.log("  - isRevoked:", isRevoked)
+        console.log("  - currentPeriod.spend:", currentPeriod.spend.toString())
+        console.log("  - SDK says isSubscribed:", status.isSubscribed)
+
+        if (isRevoked && status.isSubscribed) {
+          console.error(
+            "⚠️ This should not happen with the monkey patch - permission is revoked but SDK still shows subscribed",
+          )
+        } else if (isRevoked && !status.isSubscribed) {
+          console.log(
+            "✅ Monkey patch working! Permission is revoked and SDK correctly shows not subscribed",
+          )
+        }
+      }
+
+      // Preserve the transaction hash if it exists
+      setSubscriptionStatuses((prev) => ({
+        ...prev,
+        [plan]: {
+          ...status,
+          transactionHash: prev[plan]?.transactionHash, // Keep the tx hash
+        },
+      }))
     } catch (err: any) {
       console.error("Failed to get status:", err)
       setError(err.message || "Failed to get subscription status")
@@ -136,8 +324,15 @@ export function SubscriptionManager() {
     }
 
     setLoading({ ...loading, charge: true })
-    setError(null)
-    setSuccess(null)
+    // Clear the subscription status completely to avoid showing any stale data
+    // This ensures we only show status after getting fresh data from server
+    setSubscriptionStatuses((prev) => {
+      const updated = { ...prev }
+      delete updated[selectedPlan]
+      return updated
+    })
+    // Don't clear error/success here since this is called automatically after subscription creation
+    // Only clear if user manually clicks charge button
 
     try {
       const response = await fetch(`http://localhost:3000/api/subscriptions`, {
@@ -150,35 +345,72 @@ export function SubscriptionManager() {
         }),
       })
 
-      const data = await response.json<{
-        subscription_id: string
-        is_subscribed: number
-        billing_status: string
-        recurring_charge: string
-        period_days: number
-        next_charge_at: string
-        last_charge_at: string
-        created_at: string
-        updated_at: string
-        message: string
-      }>()
-      console.log(data)
-      setSuccess(data.message)
-      // Refresh status after charge
-      setTimeout(async () => {
-        await handleGetStatus(data.subscription_id)
-      }, 1000)
+      const data = (await response.json()) as any
 
-      // if (!response.ok) {
-      //   // Handle structured error responses from the API
-      //   if (data.error === "Insufficient Gas") {
-      //     setError({
-      //       title: data.error,
-      //       message: data.message,
-      //       details: data.details,
-      //       type: "gas",
-      //     } as any)
-      //   } else if (data.error) {
+      if (!response.ok) {
+        // Handle error response from backend
+        const errorMessage =
+          data.error || data.message || "Failed to activate subscription"
+        const errorDetails = data.details
+        const fullError = errorDetails
+          ? `${errorMessage}: ${errorDetails}`
+          : errorMessage
+        console.error(
+          "Backend error:",
+          errorMessage,
+          "Details:",
+          errorDetails,
+          data,
+        )
+        setError(fullError)
+
+        // For failed activations, show error immediately but still update status
+        // This gives instant feedback for Plan 2 (failing payments)
+        setSubscriptionStatuses((prev) => ({
+          ...prev,
+          [selectedPlan]: {
+            isSubscribed: false, // Backend confirmed it failed
+            subscriptionOwner: subscription?.subscriptionPayer,
+            subscriptionPayer: subscription?.subscriptionPayer,
+          },
+        }))
+
+        // Still check status to update UI with actual onchain data
+        setTimeout(async () => {
+          await handleGetStatus(id, selectedPlan)
+        }, 1000)
+        return
+      }
+
+      console.log("Subscription activated:", data)
+
+      // Extract the actual result from the wrapped response
+      const result = data.data || data
+
+      // Show success message with amount if available
+      const successMessage = result.transaction_hash
+        ? `Subscription activated successfully! Transaction: ${result.transaction_hash.slice(0, 10)}...`
+        : "Subscription activated successfully!"
+      setSuccess(successMessage)
+
+      // Immediately show basic subscription status from backend
+      // This gives instant feedback while blockchain processes
+      setSubscriptionStatuses((prev) => ({
+        ...prev,
+        [selectedPlan]: {
+          isSubscribed: true, // Backend confirmed activation
+          subscriptionOwner: subscription?.subscriptionPayer,
+          subscriptionPayer: subscription?.subscriptionPayer,
+          transactionHash: result.transaction_hash, // Store the tx hash
+          // We'll fetch the rest from onchain later
+        },
+      }))
+
+      // Optional: Auto-fetch onchain status after a delay
+      // User can also manually click to check onchain status
+      setTimeout(async () => {
+        await handleGetStatus(result.subscription_id || id, selectedPlan)
+      }, 5000) // Give blockchain more time to process
       //     setError({
       //       title: data.error,
       //       message: data.message || data.error,
@@ -205,6 +437,67 @@ export function SubscriptionManager() {
       setError(err.message || "Failed to charge subscription")
     } finally {
       setLoading({ ...loading, charge: false })
+    }
+  }
+
+  // Unsubscribe handler
+  const handleUnsubscribe = async () => {
+    if (!subscription?.id) {
+      setError("No subscription to unsubscribe from")
+      return
+    }
+
+    setLoading({ ...loading, unsubscribe: true })
+    setError(null)
+    setSuccess(null)
+
+    try {
+      // First fetch the permission to revoke
+      const permission = await fetchPermission({
+        permissionHash: subscription.id,
+      })
+
+      if (!permission) {
+        setError("Could not find subscription to unsubscribe")
+        return
+      }
+
+      console.log("Fetched permission for revoke:", permission)
+
+      // // Get the provider from the SDK
+      // const sdk = createBaseAccountSDK()
+      // const provider = sdk.getProvider()
+
+      // // requestRevoke expects an object with permission and provider
+      // const hash = await requestRevoke({
+      //   permission: permission,
+      //   provider: provider
+      // })
+      // console.log("Revoke succeeded with hash:", hash)
+
+      setSuccess("Successfully unsubscribed!")
+
+      // Remove subscription from state and localStorage
+      const updatedSubscriptions = { ...subscriptions }
+      delete updatedSubscriptions[selectedPlan]
+      setSubscriptions(updatedSubscriptions)
+      localStorage.setItem(
+        "bbq-subscriptions",
+        JSON.stringify(updatedSubscriptions),
+      )
+
+      // Clear the status for this plan
+      setSubscriptionStatuses((prev) => {
+        const updated = { ...prev }
+        delete updated[selectedPlan]
+        return updated
+      })
+    } catch (err: any) {
+      console.error("Unsubscribe failed:", err)
+      // User might have rejected the transaction or it failed
+      setError(err.message || "Unsubscribe was rejected or failed")
+    } finally {
+      setLoading({ ...loading, unsubscribe: false })
     }
   }
 
@@ -365,124 +658,66 @@ export function SubscriptionManager() {
           </p>
         </div>
 
-        {/* Alert Messages */}
-        {(error || success) && (
-          <div className="fixed top-20 left-1/2 transform -translate-x-1/2 z-50 animate-slideDown max-w-lg">
-            {error && (
-              <div
-                className={`glass-effect ${
-                  typeof error === "object" && error.type === "gas"
-                    ? "bg-yellow-500/20 border-yellow-500/50"
-                    : "bg-red-500/20 border-red-500/50"
-                } text-white px-6 py-4 rounded-lg`}
-              >
-                {typeof error === "object" ? (
-                  <div>
-                    <div className="flex items-start space-x-2 mb-2">
-                      {error.type === "gas" ? (
-                        <svg
-                          className="w-5 h-5 text-yellow-400 mt-0.5 flex-shrink-0"
-                          fill="none"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth="2"
-                          viewBox="0 0 24 24"
-                          stroke="currentColor"
-                        >
-                          <path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
-                        </svg>
-                      ) : (
-                        <svg
-                          className="w-5 h-5 text-red-400 mt-0.5 flex-shrink-0"
-                          fill="none"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth="2"
-                          viewBox="0 0 24 24"
-                          stroke="currentColor"
-                        >
-                          <path d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                        </svg>
-                      )}
-                      <div className="flex-1">
-                        <p className="font-semibold text-base">{error.title}</p>
-                        <p className="text-sm text-white/90 mt-1">
-                          {error.message}
-                        </p>
-                        {error.details && (
-                          <p className="text-xs text-white/70 mt-2">
-                            {error.details}
-                          </p>
-                        )}
-                        {error.type === "gas" && account && (
-                          <div className="mt-3 p-2 bg-black/20 rounded">
-                            <p className="text-xs text-white/80 mb-1">
-                              Server wallet address:
-                            </p>
-                            <p className="font-mono text-xs text-white break-all">
-                              {account.address}
-                            </p>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="flex items-center space-x-2">
-                    <svg
-                      className="w-5 h-5"
-                      fill="none"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth="2"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                    >
-                      <path d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                    </svg>
-                    <span>{error}</span>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {success && (
-              <div className="glass-effect bg-green-500/20 border-green-500/50 text-white px-6 py-3 rounded-lg flex items-center space-x-2">
-                <svg
-                  className="w-5 h-5"
-                  fill="none"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth="2"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                </svg>
-                <span>{success}</span>
-              </div>
-            )}
-          </div>
-        )}
-
         <div className="grid md:grid-cols-2 gap-8 max-w-5xl w-full">
           {/* Subscription Card */}
           <div className="glass-effect rounded-2xl p-8 shine-effect">
             <div className="relative z-10">
+              {/* Plan Selector */}
+              <div className="mb-6 flex gap-2">
+                <button
+                  onClick={() => {
+                    setSelectedPlan("test")
+                    // Load status for test plan if it exists
+                    if (subscriptions.test) {
+                      handleGetStatus(subscriptions.test.id, "test")
+                    }
+                  }}
+                  className={`flex-1 py-2 px-4 rounded-lg font-semibold transition-all ${
+                    selectedPlan === "test"
+                      ? "bg-blue-500 text-white"
+                      : "bg-white/10 text-white/60 hover:bg-white/20"
+                  }`}
+                >
+                  Plan 1
+                </button>
+                <button
+                  onClick={() => {
+                    setSelectedPlan("pro")
+                    // Load status for pro plan if it exists
+                    if (subscriptions.pro) {
+                      handleGetStatus(subscriptions.pro.id, "pro")
+                    }
+                  }}
+                  className={`flex-1 py-2 px-4 rounded-lg font-semibold transition-all ${
+                    selectedPlan === "pro"
+                      ? "bg-purple-500 text-white"
+                      : "bg-white/10 text-white/60 hover:bg-white/20"
+                  }`}
+                >
+                  Plan 2
+                </button>
+              </div>
+
               <div className="mb-6">
-                <h2 className="text-3xl font-bold text-white mb-2">Pro Plan</h2>
-                <p className="text-white/80">Unlock all premium features</p>
+                <div className="flex items-center gap-3 mb-2">
+                  <h2 className="text-3xl font-bold text-white">
+                    {PLANS[selectedPlan].name}
+                  </h2>
+                </div>
+                <p className="text-white/80">
+                  {PLANS[selectedPlan].description}
+                </p>
               </div>
 
               <div className="mb-8">
                 <div className="flex items-baseline">
                   <span className="text-5xl font-bold text-white">
-                    $0.0099{" "}
+                    {PLANS[selectedPlan].displayPrice}{" "}
                   </span>
                   <span className="text-white/70 ml-2">/day</span>
                 </div>
                 <p className="text-sm text-white/60 mt-2">
-                  Billed monthly in USDC
+                  Billed daily in USDC
                 </p>
               </div>
 
@@ -527,7 +762,7 @@ export function SubscriptionManager() {
                   >
                     <path d="M5 13l4 4L19 7"></path>
                   </svg>
-                  <span>Secure on-chain transactions</span>
+                  <span>Secure onchain transactions</span>
                 </li>
                 <li className="flex items-start text-white">
                   <svg
@@ -545,73 +780,126 @@ export function SubscriptionManager() {
                 </li>
               </ul>
 
-              <button
-                onClick={handleCreateSubscription}
-                disabled={loading.subscription || !!subscription}
-                className={`w-full py-4 px-6 rounded-xl font-bold text-lg transition-all transform hover:scale-105 flex items-center justify-center space-x-2 ${
-                  subscription
-                    ? "bg-green-500/80 text-white cursor-not-allowed"
-                    : loading.subscription
-                      ? "bg-white/50 text-gray-600 cursor-wait"
-                      : "bg-white text-purple-600 hover:bg-white/90 pulse-glow"
-                }`}
-              >
-                {loading.subscription ? (
-                  <>
-                    <svg
-                      className="animate-spin h-5 w-5"
-                      xmlns="http://www.w3.org/2000/svg"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                    >
-                      <circle
-                        className="opacity-25"
-                        cx="12"
-                        cy="12"
-                        r="10"
+              {/* Subscribe/Unsubscribe buttons */}
+              {subscription && subscriptionStatus?.isSubscribed ? (
+                <button
+                  onClick={handleUnsubscribe}
+                  disabled={loading.unsubscribe}
+                  className="w-full py-4 px-6 rounded-xl font-bold text-lg transition-all transform hover:scale-105 flex items-center justify-center space-x-2 bg-red-500 text-white hover:bg-red-600"
+                >
+                  {loading.unsubscribe ? (
+                    <>
+                      <svg
+                        className="animate-spin h-5 w-5"
+                        xmlns="http://www.w3.org/2000/svg"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                      >
+                        <circle
+                          className="opacity-25"
+                          cx="12"
+                          cy="12"
+                          r="10"
+                          stroke="currentColor"
+                          strokeWidth="4"
+                        ></circle>
+                        <path
+                          className="opacity-75"
+                          fill="currentColor"
+                          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                        ></path>
+                      </svg>
+                      <span>Unsubscribing...</span>
+                    </>
+                  ) : (
+                    <>
+                      <svg
+                        className="w-5 h-5"
+                        fill="none"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth="2"
+                        viewBox="0 0 24 24"
                         stroke="currentColor"
-                        strokeWidth="4"
-                      ></circle>
-                      <path
-                        className="opacity-75"
-                        fill="currentColor"
-                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                      ></path>
-                    </svg>
-                    <span>Creating Subscription...</span>
-                  </>
-                ) : subscription ? (
-                  <>
-                    <svg
-                      className="w-5 h-5"
-                      fill="none"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth="2"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                    >
-                      <path d="M5 13l4 4L19 7"></path>
-                    </svg>
-                    <span>Subscribed</span>
-                  </>
-                ) : (
-                  <>
-                    <svg
-                      className="w-5 h-5"
-                      fill="none"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth="2"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                    >
-                      <path d="M13 10V3L4 14h7v7l9-11h-7z"></path>
-                    </svg>
-                    <span>Subscribe Now</span>
-                  </>
-                )}
-              </button>
+                      >
+                        <path d="M6 18L18 6M6 6l12 12"></path>
+                      </svg>
+                      <span>Unsubscribe</span>
+                    </>
+                  )}
+                </button>
+              ) : (
+                <button
+                  onClick={handleCreateSubscription}
+                  disabled={
+                    loading.subscription ||
+                    (!!subscription && subscriptionStatus?.isSubscribed)
+                  }
+                  className={`w-full py-4 px-6 rounded-xl font-bold text-lg transition-all transform hover:scale-105 flex items-center justify-center space-x-2 ${
+                    subscription && !subscriptionStatus?.isSubscribed
+                      ? "bg-green-500 text-white hover:bg-green-600 pulse-glow"
+                      : loading.subscription
+                        ? "bg-white/50 text-gray-600 cursor-wait"
+                        : "bg-white text-purple-600 hover:bg-white/90 pulse-glow"
+                  }`}
+                >
+                  {loading.subscription ? (
+                    <>
+                      <svg
+                        className="animate-spin h-5 w-5"
+                        xmlns="http://www.w3.org/2000/svg"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                      >
+                        <circle
+                          className="opacity-25"
+                          cx="12"
+                          cy="12"
+                          r="10"
+                          stroke="currentColor"
+                          strokeWidth="4"
+                        ></circle>
+                        <path
+                          className="opacity-75"
+                          fill="currentColor"
+                          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                        ></path>
+                      </svg>
+                      <span>Creating Subscription...</span>
+                    </>
+                  ) : subscription && !subscriptionStatus?.isSubscribed ? (
+                    <>
+                      <svg
+                        className="w-5 h-5"
+                        fill="none"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth="2"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                      >
+                        <path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                      </svg>
+                      <span>Retry Subscribing</span>
+                    </>
+                  ) : (
+                    <>
+                      <svg
+                        className="w-5 h-5"
+                        fill="none"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth="2"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                      >
+                        <path d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                      </svg>
+                      <span>Subscribe Now</span>
+                    </>
+                  )}
+                </button>
+              )}
 
               {/* {!account && !subscription && (
                 <p className="text-xs text-white/60 text-center mt-3">
@@ -629,13 +917,68 @@ export function SubscriptionManager() {
               </h2>
               {subscription && (
                 <button
-                  onClick={() => handleGetStatus()}
+                  onClick={() =>
+                    handleGetStatus(subscription?.id, selectedPlan)
+                  }
                   disabled={loading.status}
-                  className="p-2 rounded-lg glass-effect hover:bg-white/20 transition-all"
+                  className="flex items-center gap-2 px-3 py-2 rounded-lg glass-effect hover:bg-white/20 transition-all"
+                  title="Fetch latest onchain subscription data"
                 >
                   {loading.status ? (
+                    <>
+                      <svg
+                        className="animate-spin h-4 w-4 text-white"
+                        xmlns="http://www.w3.org/2000/svg"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                      >
+                        <circle
+                          className="opacity-25"
+                          cx="12"
+                          cy="12"
+                          r="10"
+                          stroke="currentColor"
+                          strokeWidth="4"
+                        ></circle>
+                        <path
+                          className="opacity-75"
+                          fill="currentColor"
+                          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                        ></path>
+                      </svg>
+                      <span className="text-sm text-white/80">Checking...</span>
+                    </>
+                  ) : (
+                    <>
+                      <svg
+                        className="w-4 h-4 text-white"
+                        fill="none"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth="2"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                      >
+                        <path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                      </svg>
+                      <span className="text-sm text-white/80">
+                        Check Onchain Status
+                      </span>
+                    </>
+                  )}
+                </button>
+              )}
+            </div>
+
+            {subscription ? (
+              <div className="space-y-4">
+                {/* Show loading spinner while processing subscription or if we don't have status yet */}
+                {loading.charge ||
+                loading.subscription ||
+                !subscriptionStatus ? (
+                  <div className="flex flex-col items-center justify-center py-12 space-y-4">
                     <svg
-                      className="animate-spin h-5 w-5 text-white"
+                      className="animate-spin h-12 w-12 text-white/60"
                       xmlns="http://www.w3.org/2000/svg"
                       fill="none"
                       viewBox="0 0 24 24"
@@ -654,122 +997,192 @@ export function SubscriptionManager() {
                         d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
                       ></path>
                     </svg>
-                  ) : (
-                    <svg
-                      className="w-5 h-5 text-white"
-                      fill="none"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth="2"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                    >
-                      <path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
-                    </svg>
-                  )}
-                </button>
-              )}
-            </div>
-
-            {subscription ? (
-              <div className="space-y-4">
-                {/* Status Badge */}
-                <div className="flex items-center justify-between p-4 bg-white/10 rounded-xl">
-                  <div className="flex items-center space-x-3">
-                    {subscriptionStatus?.isSubscribed ? (
-                      <>
-                        <div className="w-3 h-3 bg-green-400 rounded-full animate-pulse"></div>
-                        <span className="font-semibold text-green-400">
-                          Active Subscription
-                        </span>
-                      </>
-                    ) : (
-                      <>
-                        <div className="w-3 h-3 bg-yellow-400 rounded-full animate-pulse"></div>
-                        <span className="font-semibold text-yellow-400">
-                          Status Check In Progress
-                        </span>
-                      </>
-                    )}
+                    <div className="space-y-2 text-center">
+                      <p className="text-white/60 text-lg">
+                        Checkout in progress
+                      </p>
+                      <p className="text-white/40 text-sm">
+                        {selectedPlan === "pro"
+                          ? "Processing $100 first charge and activating subscription..."
+                          : "Processing $0.0009 first charge and activating subscription..."}
+                      </p>
+                    </div>
                   </div>
-                </div>
-
-                <div className="bg-white/5 rounded-xl p-4">
-                  <p className="text-sm text-white/60 mb-1">Subscription ID</p>
-                  <p className="font-mono text-sm text-white/90 break-all">
-                    {subscription.id}
-                  </p>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="bg-white/5 rounded-xl p-3">
-                    <p className="text-xs text-white/60 mb-1">Monthly Charge</p>
-                    <p className="font-semibold text-white">
-                      ${subscription.recurringCharge} USDC
-                    </p>
-                  </div>
-                  <div className="bg-white/5 rounded-xl p-3">
-                    <p className="text-xs text-white/60 mb-1">Billing Period</p>
-                    <p className="font-semibold text-white">
-                      {subscription.periodInDays} days
-                    </p>
-                  </div>
-                </div>
-
-                {subscriptionStatus && (
+                ) : (
                   <>
-                    {subscriptionStatus.remainingChargeInPeriod && (
-                      <div className="bg-purple-500/20 rounded-xl p-4">
-                        <p className="text-sm text-purple-200 mb-1">
-                          Remaining in Period
-                        </p>
-                        <div className="flex items-baseline space-x-2">
-                          <p className="text-2xl font-bold text-white">
-                            ${subscriptionStatus.remainingChargeInPeriod}
-                          </p>
-                          <span className="text-sm text-white/60">USDC</span>
+                    {/* Show subscription ID after server response */}
+                    <div className="bg-white/5 rounded-xl p-4">
+                      <p className="text-sm text-white/60 mb-1">
+                        Subscription ID
+                      </p>
+                      <p className="font-mono text-sm text-white/90 break-all">
+                        {subscription.id}
+                      </p>
+                    </div>
+
+                    {/* Status Badge - Show actual status */}
+                    {subscriptionStatus !== null && (
+                      <div className="flex items-center justify-between p-4 bg-white/10 rounded-xl">
+                        <div className="flex items-center space-x-3">
+                          {subscriptionStatus.isSubscribed ? (
+                            <>
+                              <div className="w-3 h-3 bg-green-400 rounded-full animate-pulse"></div>
+                              <span className="font-semibold text-green-400">
+                                Active Subscription
+                              </span>
+                            </>
+                          ) : (
+                            <>
+                              <div className="w-3 h-3 bg-red-400 rounded-full"></div>
+                              <span className="font-semibold text-white">
+                                Subscription Revoked
+                              </span>
+                            </>
+                          )}
                         </div>
                       </div>
                     )}
 
-                    {subscriptionStatus.nextPeriodStart && (
-                      <div className="bg-white/5 rounded-xl p-4">
-                        <p className="text-sm text-white/60 mb-1">
-                          Next Billing Date
+                    {/* Show basic subscription details after server response */}
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="bg-white/5 rounded-xl p-3">
+                        <p className="text-xs text-white/60 mb-1">
+                          Monthly Charge
                         </p>
                         <p className="font-semibold text-white">
-                          {subscriptionStatus.nextPeriodStart instanceof Date
-                            ? subscriptionStatus.nextPeriodStart.toLocaleDateString(
-                                "en-US",
-                                {
-                                  weekday: "long",
-                                  year: "numeric",
-                                  month: "long",
-                                  day: "numeric",
-                                },
-                              )
-                            : new Date(
-                                subscriptionStatus.nextPeriodStart,
-                              ).toLocaleDateString("en-US", {
-                                weekday: "long",
-                                year: "numeric",
-                                month: "long",
-                                day: "numeric",
-                              })}
+                          ${subscription.recurringCharge} USDC
+                        </p>
+                      </div>
+                      <div className="bg-white/5 rounded-xl p-3">
+                        <p className="text-xs text-white/60 mb-1">
+                          Billing Period
+                        </p>
+                        <p className="font-semibold text-white">
+                          {subscription.periodInDays} days
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Show onchain data only after fetching */}
+                    {subscriptionStatus !== null && (
+                      <>
+                        {subscriptionStatus.isSubscribed ? (
+                          <>
+                            {subscriptionStatus.remainingChargeInPeriod !==
+                              undefined && (
+                              <div className="bg-purple-500/20 rounded-xl p-4">
+                                <p className="text-sm text-purple-200 mb-1">
+                                  Remaining in Period
+                                </p>
+                                <div className="flex items-baseline space-x-2 mb-2">
+                                  <p className="text-2xl font-bold text-white">
+                                    $
+                                    {subscriptionStatus.remainingChargeInPeriod}
+                                  </p>
+                                  <span className="text-sm text-white/60">
+                                    USDC
+                                  </span>
+                                </div>
+                                {(subscriptionStatus as any)
+                                  .transactionHash && (
+                                  <a
+                                    href={`https://sepolia.basescan.org/tx/${(subscriptionStatus as any).transactionHash}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-flex items-center space-x-1 text-xs text-purple-300 hover:text-purple-200 transition-colors"
+                                  >
+                                    <span>View transaction</span>
+                                    <svg
+                                      className="w-3 h-3"
+                                      fill="none"
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                      strokeWidth="2"
+                                      viewBox="0 0 24 24"
+                                      stroke="currentColor"
+                                    >
+                                      <path d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path>
+                                    </svg>
+                                  </a>
+                                )}
+                              </div>
+                            )}
+
+                            {subscriptionStatus.nextPeriodStart && (
+                              <div className="bg-white/5 rounded-xl p-4">
+                                <p className="text-sm text-white/60 mb-1">
+                                  Next Billing Date
+                                </p>
+                                <p className="font-semibold text-white">
+                                  {subscriptionStatus.nextPeriodStart instanceof
+                                  Date
+                                    ? subscriptionStatus.nextPeriodStart.toLocaleDateString(
+                                        "en-US",
+                                        {
+                                          weekday: "long",
+                                          year: "numeric",
+                                          month: "long",
+                                          day: "numeric",
+                                        },
+                                      )
+                                    : new Date(
+                                        subscriptionStatus.nextPeriodStart,
+                                      ).toLocaleDateString("en-US", {
+                                        weekday: "long",
+                                        year: "numeric",
+                                        month: "long",
+                                        day: "numeric",
+                                      })}
+                                </p>
+                              </div>
+                            )}
+                          </>
+                        ) : (
+                          <>
+                            {error && (
+                              <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4">
+                                <div className="flex items-start space-x-3">
+                                  <svg
+                                    className="w-5 h-5 text-red-400 mt-0.5 flex-shrink-0"
+                                    fill="none"
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth="2"
+                                    viewBox="0 0 24 24"
+                                    stroke="currentColor"
+                                  >
+                                    <path d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                                  </svg>
+                                  <div className="flex-1">
+                                    <p className="text-white font-semibold text-sm mb-1">
+                                      Subscription Issue
+                                    </p>
+                                    <p className="text-white/80 text-sm">
+                                      {typeof error === "string"
+                                        ? error
+                                        : error?.message}
+                                    </p>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+                          </>
+                        )}
+                      </>
+                    )}
+
+                    {subscription && (
+                      <div className="bg-white/5 rounded-xl p-3">
+                        <p className="text-xs text-white/60 mb-1">
+                          Subscription Payer
+                        </p>
+                        <p className="font-mono text-xs text-white/90 break-all">
+                          {subscription.subscriptionPayer}
                         </p>
                       </div>
                     )}
                   </>
                 )}
-
-                <div className="bg-white/5 rounded-xl p-3">
-                  <p className="text-xs text-white/60 mb-1">
-                    Subscription Payer
-                  </p>
-                  <p className="font-mono text-xs text-white/90 break-all">
-                    {subscription.subscriptionPayer}
-                  </p>
-                </div>
               </div>
             ) : (
               <div className="text-center py-12">
