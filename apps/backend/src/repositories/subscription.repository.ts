@@ -1,4 +1,5 @@
 import { D1Database } from "@cloudflare/workers-types"
+import type { Hash, Address } from "viem"
 import {
   SubscriptionStatus,
   BillingType,
@@ -30,10 +31,9 @@ export interface BillingEntry {
 }
 
 export interface Transaction {
-  id?: number
+  transaction_hash: string
   billing_entry_id: number
   subscription_id: string
-  tx_hash: string
   amount: string
   status: TransactionStatus
   failure_reason?: string
@@ -43,36 +43,48 @@ export interface Transaction {
 
 // Method parameter interfaces
 export interface CreateSubscriptionParams {
-  subscriptionId: string
-  accountAddress: string
+  subscriptionId: Hash
+  accountAddress: Address
 }
 
 export interface SubscriptionExistsParams {
-  subscriptionId: string
+  subscriptionId: Hash
 }
 
 export interface GetSuccessfulTransactionParams {
-  subscriptionId: string
+  subscriptionId: Hash
   billingEntryId: number
 }
 
+export interface TransactionResult {
+  transaction_hash: Hash
+  billing_entry_id: number
+  subscription_id: Hash
+  amount: string
+  status: TransactionStatus
+  failure_reason?: string
+  gas_used?: string
+  created_at?: string
+}
+
 export interface DeleteSubscriptionDataParams {
-  subscriptionId: string
+  subscriptionId: Hash
 }
 
 export interface CreateSubscriptionWithBillingParams {
-  subscriptionId: string
-  accountAddress: string
+  subscriptionId: Hash
+  accountAddress: Address
   billingEntry: BillingEntry
 }
 
 export interface ExecuteSubscriptionActivationParams {
-  subscriptionId: string
-  billingEntryId: number
+  subscriptionId: Hash
+  billingEntry: {
+    id: number
+  }
   transaction: {
-    id: string
+    hash: Hash
     amount: string
-    subscriptionId: string
   }
   nextBilling: {
     dueAt: string
@@ -80,8 +92,8 @@ export interface ExecuteSubscriptionActivationParams {
   }
 }
 
-export interface MarkSubscriptionFailedParams {
-  subscriptionId: string
+export interface MarkSubscriptionInactiveParams {
+  subscriptionId: Hash
   billingEntryId: number
   reason: string
 }
@@ -126,17 +138,7 @@ export class SubscriptionRepository {
     return result !== null
   }
 
-  async activateSubscription(subscriptionId: string): Promise<void> {
-    await this.db
-      .prepare(
-        `UPDATE subscriptions SET status = ?, modified_at = CURRENT_TIMESTAMP
-         WHERE subscription_id = ?`,
-      )
-      .bind(SubscriptionStatus.ACTIVE, subscriptionId)
-      .run()
-  }
-
-  async getSubscription(subscriptionId: string): Promise<Subscription | null> {
+  async getSubscription(subscriptionId: Hash): Promise<Subscription | null> {
     return await this.db
       .prepare("SELECT * FROM subscriptions WHERE subscription_id = ?")
       .bind(subscriptionId)
@@ -185,13 +187,13 @@ export class SubscriptionRepository {
     await this.db
       .prepare(
         `INSERT INTO transactions (
-          billing_entry_id, subscription_id, tx_hash, amount, status
+          transaction_hash, billing_entry_id, subscription_id, amount, status
         ) VALUES (?, ?, ?, ?, ?)`,
       )
       .bind(
+        transaction.transaction_hash, // transaction_hash first as it's the PK
         transaction.billing_entry_id,
         transaction.subscription_id,
-        transaction.tx_hash,
         transaction.amount,
         transaction.status,
       )
@@ -203,9 +205,9 @@ export class SubscriptionRepository {
    */
   async getSuccessfulTransaction(
     params: GetSuccessfulTransactionParams,
-  ): Promise<Transaction | null> {
+  ): Promise<TransactionResult | null> {
     const { subscriptionId, billingEntryId } = params
-    return await this.db
+    const transaction = await this.db
       .prepare(
         `SELECT * FROM transactions
          WHERE subscription_id = ?
@@ -214,7 +216,15 @@ export class SubscriptionRepository {
          LIMIT 1`,
       )
       .bind(subscriptionId, billingEntryId, TransactionStatus.CONFIRMED)
-      .first()
+      .first<Transaction>()
+
+    return transaction
+      ? {
+          ...transaction,
+          subscription_id: transaction.subscription_id as Hash,
+          transaction_hash: transaction.transaction_hash as Hash,
+        }
+      : null
   }
 
   async deleteSubscriptionData(
@@ -296,26 +306,26 @@ export class SubscriptionRepository {
   async executeSubscriptionActivation(
     params: ExecuteSubscriptionActivationParams,
   ): Promise<void> {
-    const { subscriptionId, billingEntryId, transaction, nextBilling } = params
+    const { subscriptionId, billingEntry, transaction, nextBilling } = params
     await this.db.batch([
       // Create transaction record
       this.db
         .prepare(
           `INSERT INTO transactions (
-            billing_entry_id, subscription_id, tx_hash, amount, status
+            transaction_hash, billing_entry_id, subscription_id, amount, status
           ) VALUES (?, ?, ?, ?, ?)`,
         )
         .bind(
-          billingEntryId,
-          transaction.subscriptionId,
-          transaction.id,
+          transaction.hash, // transaction_hash column (PK)
+          billingEntry.id,
+          subscriptionId,
           transaction.amount,
           TransactionStatus.CONFIRMED,
         ),
       // Mark billing entry as completed
       this.db
         .prepare(`UPDATE billing_entries SET status = ? WHERE id = ?`)
-        .bind(BillingStatus.COMPLETED, billingEntryId),
+        .bind(BillingStatus.COMPLETED, billingEntry.id),
       // Create next billing entry
       this.db
         .prepare(
@@ -341,11 +351,11 @@ export class SubscriptionRepository {
   }
 
   /**
-   * COMPENSATING ACTION: Mark subscription as failed
+   * COMPENSATING ACTION: Mark subscription as inactive
    * Used when charge fails after subscription creation
    */
-  async markSubscriptionFailed(
-    params: MarkSubscriptionFailedParams,
+  async markSubscriptionInactive(
+    params: MarkSubscriptionInactiveParams,
   ): Promise<void> {
     const { subscriptionId, billingEntryId, reason } = params
     await this.db.batch([

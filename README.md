@@ -1,6 +1,6 @@
 # Couch POC
 
-[Subscriptions for the digital age](https://cou.ch).
+[Subscriptions for a new era of payments](https://cou.ch).
 
 ## Getting started
 

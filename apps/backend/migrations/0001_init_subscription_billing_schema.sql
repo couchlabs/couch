@@ -30,10 +30,9 @@ CREATE TABLE IF NOT EXISTS billing_entries (
 
 -- Transaction log (actual onchain transactions)
 CREATE TABLE IF NOT EXISTS transactions (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  transaction_hash TEXT PRIMARY KEY,  -- Use blockchain transaction hash as PK
   billing_entry_id INTEGER NOT NULL,
   subscription_id TEXT NOT NULL,
-  tx_hash TEXT UNIQUE,
   amount TEXT NOT NULL,  -- In USDC base units
   status TEXT NOT NULL CHECK(status IN ('pending', 'confirmed', 'failed')),
   failure_reason TEXT,

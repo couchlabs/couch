@@ -3,6 +3,7 @@ import path from "node:path"
 import alchemy from "alchemy"
 import { Worker, D1Database, Queue, KVNamespace } from "alchemy/cloudflare"
 import { Stage } from "./src/lib/constants"
+import type { Address } from "viem"
 
 const app = await alchemy("backend", {
   stage: Stage.DEV,
@@ -42,7 +43,8 @@ export const subscriptionAPI = await Worker(API_NAME, {
     CDP_WALLET_SECRET: alchemy.secret.env.CDP_WALLET_SECRET,
     CDP_WALLET_NAME: alchemy.env.CDP_WALLET_NAME,
     CDP_PAYMASTER_URL: alchemy.env.CDP_PAYMASTER_URL,
-    STAGE: app.stage,
+    CDP_SMART_ACCOUNT_ADDRESS: alchemy.env.CDP_SMART_ACCOUNT_ADDRESS as Address,
+    STAGE: app.stage as Stage,
     // RESOURCES:
     DB: subscriptionDB,
   },

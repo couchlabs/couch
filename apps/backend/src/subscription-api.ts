@@ -37,27 +37,36 @@ app.onError((error, ctx) => {
 
 app.post("/api/subscriptions", async (ctx) => {
   const { subscription_id } = await ctx.req.json().catch(() => ({}))
-  if (!subscription_id || typeof subscription_id !== "string") {
+  if (!subscription_id) {
     throw APIErrors.invalidRequest("subscription_id is required")
   }
 
-  const service = await SubscriptionService.getInstance()
+  const subscriptionService = await SubscriptionService.getInstance()
 
   // Activate the subscription (validates and charges)
-  const { subscription, context } = await service.activateSubscription({
+  const result = await subscriptionService.activate({
     subscriptionId: subscription_id,
   })
 
   // Complete database operations in the background
-  ctx.executionCtx.waitUntil(service.completeSubscriptionSetup(context))
+  ctx.executionCtx.waitUntil(subscriptionService.completeActivation(result))
 
   // Return as soon as the first charge succeeds
-  return new Response(JSON.stringify({ data: subscription }), {
-    status: 202,
-    headers: {
-      "Content-Type": "application/json",
+  return new Response(
+    JSON.stringify({
+      data: {
+        subscription_id: result.subscriptionId,
+        transaction_hash: result.transaction.hash,
+        next_billing_date: result.nextBilling.date,
+      },
+    }),
+    {
+      status: 202,
+      headers: {
+        "Content-Type": "application/json",
+      },
     },
-  })
+  )
 })
 
 app.get("/health", (ctx) => {
