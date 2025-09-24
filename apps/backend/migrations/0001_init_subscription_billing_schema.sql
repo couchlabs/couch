@@ -21,8 +21,6 @@ CREATE TABLE IF NOT EXISTS billing_entries (
   attempts INTEGER DEFAULT 0,
   parent_billing_id INTEGER,  -- Links retry entries to original failed entry
   failure_reason TEXT,  -- 'insufficient_funds', 'permission_expired', 'network_error', etc.
-  processing_lock DATETIME,
-  locked_by TEXT,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 
   FOREIGN KEY (subscription_id) REFERENCES subscriptions(subscription_id)
@@ -51,7 +49,6 @@ CREATE INDEX idx_transactions_created ON transactions(created_at);
 
 -- Scheduler and processing
 CREATE INDEX idx_billing_due_status ON billing_entries(due_at, status);
-CREATE INDEX idx_billing_processing ON billing_entries(processing_lock, status);
 
 -- Foreign key relationships
 CREATE INDEX idx_billing_subscription ON billing_entries(subscription_id);
