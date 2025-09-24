@@ -1,9 +1,9 @@
 // This file infers types for the cloudflare:workers environment from your Alchemy Worker.
 // @see https://alchemy.run/concepts/bindings/#type-safe-bindings
 
-import type { backend } from "../alchemy.run.js"
+import type { subscriptionAPI } from "../alchemy.run.js"
 
-export type WorkerEnv = typeof backend.Env
+export type WorkerEnv = typeof subscriptionAPI.Env
 
 declare module "cloudflare:workers" {
   namespace Cloudflare {

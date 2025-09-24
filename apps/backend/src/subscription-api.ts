@@ -1,88 +1,76 @@
 import { Hono } from "hono"
 import { cors } from "hono/cors"
-import { isHash } from "viem"
-
+import { HTTPException } from "hono/http-exception"
 import { WorkerEnv } from "../types/api.env"
-
-export * from "./subscription-billing"
-export * from "./subscription-setup"
+import { SubscriptionService } from "./services/subscription.service"
+import { APIException, APIErrors } from "./subscription-api.errors"
+import { logger } from "./lib/logger"
 
 const app = new Hono<{ Bindings: WorkerEnv }>()
-
 app.use(cors())
 
-app.post("/api/subscriptions", async (c) => {
-  // TODO: Consider API Key for protecting against abuses
-  const body = await c.req.json().catch(() => null)
-  const subscriptionId = body?.subscription_id
-
-  // Validate mandatory subscription_id
-  if (!subscriptionId) {
-    return c.json({ error: "subscription_id is required" }, 400)
-  }
-
-  // Validate subscription_id format (must be 32-byte hash)
-  if (!isHash(subscriptionId)) {
-    return c.json(
-      { error: "Invalid subscription_id format. Must be a 32-byte hash" },
-      400,
-    )
-  }
-
-  try {
-    // Check if subscription already exists in database
-    const existingSubscription = await c.env.SUBSCRIPTIONS.prepare(
-      "SELECT * FROM subscriptions WHERE subscription_id = ?",
-    )
-      .bind(subscriptionId)
-      .first()
-
-    if (existingSubscription) {
-      return c.json(
-        {
-          error: "Subscription already exists",
-          subscription: existingSubscription,
-        },
-        409,
-      )
+// Error handler middleware
+app.onError((error, ctx) => {
+  if (error instanceof HTTPException) {
+    if (error instanceof APIException) {
+      logger.error(`API Error: ${error.code}`, error)
+    } else {
+      logger.error("HTTP Exception", error)
     }
-
-    // Start setup workflow
-    await c.env.SUBSCRIPTION_SETUP.create({
-      id: `setup-${subscriptionId}`,
-      params: { subscriptionId },
-    })
-
-    return c.json(
-      {
-        message: "Subscription setup initiated",
-        subscription_id: subscriptionId,
-        status: "processing",
-      },
-      202,
-    )
-  } catch (error) {
-    console.error(
-      `${subscriptionId} - ⚠️ Error creating subscription: ${error.message}`,
-    )
-    return c.json({ error: "Failed to initiate subscription setup" }, 500)
+    return error.getResponse()
   }
+
+  logger.error("Unexpected error", error)
+  return new Response(
+    JSON.stringify({
+      error: "Internal server error",
+      code: "INTERNAL_ERROR",
+    }),
+    {
+      status: 500,
+      headers: {
+        "Content-Type": "application/json",
+      },
+    },
+  )
 })
 
-// Test endpoint to list all subscriptions (for debugging)
-app.get("/api/subscriptions", async (c) => {
-  try {
-    const { results } = await c.env.SUBSCRIPTIONS.prepare(
-      "SELECT * FROM subscriptions ORDER BY created_at DESC",
-    ).all()
-
-    return c.json({
-      count: results.length,
-      subscriptions: results,
-    })
-  } catch (error) {
-    return c.json({ error: "Failed to fetch subscriptions" }, 500)
+app.post("/api/subscriptions", async (ctx) => {
+  const { subscription_id } = await ctx.req.json().catch(() => ({}))
+  if (!subscription_id) {
+    throw APIErrors.invalidRequest("subscription_id is required")
   }
+
+  const subscriptionService = await SubscriptionService.getInstance()
+
+  // Activate the subscription (validates and charges)
+  const result = await subscriptionService.activate({
+    subscriptionId: subscription_id,
+  })
+
+  // Complete database operations in the background
+  ctx.executionCtx.waitUntil(subscriptionService.completeActivation(result))
+
+  // Return as soon as the first charge succeeds
+  return new Response(
+    JSON.stringify({
+      data: {
+        subscription_id: result.subscriptionId,
+        transaction_hash: result.transaction.hash,
+        next_billing_date: result.nextBilling.date,
+      },
+    }),
+    {
+      status: 202,
+      headers: {
+        "Content-Type": "application/json",
+      },
+    },
+  )
+})
+
+app.get("/health", (ctx) => {
+  return ctx.json({ status: "healthy", timestamp: new Date().toISOString() })
 })
 
 export default app

@@ -14,7 +14,7 @@ const cdp_account = await cdp.evm.getOrCreateAccount({
 })
 
 console.log(
-  `👛 Created CDP EVM EOA. Address: ${cdp_account.address}, Name: ${cdp_account.name}`,
+  `👛 CDP EVM EOA. Address: ${cdp_account.address}, Name: ${cdp_account.name}`,
 )
 
 const cdp_smart_account = await cdp.evm.getOrCreateSmartAccount({
@@ -23,14 +23,46 @@ const cdp_smart_account = await cdp.evm.getOrCreateSmartAccount({
 })
 
 console.log(
-  `👛 Created CDP EVM Smart Account. Address: ${cdp_smart_account.address}, Name: ${cdp_smart_account.name}`,
+  `👛 CDP EVM Smart Account. Address: ${cdp_smart_account.address}, Name: ${cdp_smart_account.name}`,
 )
 
-// Read .env file and update VITE_COUCH_WALLET_ADDRESS
-const envContent = readFileSync('.env', 'utf-8')
-const updatedContent = envContent.replace(
-  /^VITE_COUCH_WALLET_ADDRESS=.*$/m,
-  `VITE_COUCH_WALLET_ADDRESS=${cdp_smart_account.address}`
+// Read .env file and update both smart account addresses
+const envContent = readFileSync(".env", "utf-8")
+
+let updatedContent = updateOrInsertEnv(
+  envContent,
+  "VITE_COUCH_WALLET_ADDRESS",
+  cdp_smart_account.address,
 )
-writeFileSync('.env', updatedContent)
-console.log(`✏️ Updated VITE_COUCH_WALLET_ADDRESS in the .env file`)
+updatedContent = updateOrInsertEnv(
+  updatedContent,
+  "CDP_SMART_ACCOUNT_ADDRESS",
+  cdp_smart_account.address,
+  "CDP_WALLET_NAME",
+)
+
+writeFileSync(".env", updatedContent)
+console.log(
+  `✏️ Updated VITE_COUCH_WALLET_ADDRESS and CDP_SMART_ACCOUNT_ADDRESS in the .env file`,
+)
+
+// Helper to update or insert env variable
+function updateOrInsertEnv(
+  content: string,
+  key: string,
+  value: string,
+  afterKey?: string,
+): string {
+  const regex = new RegExp(`^${key}=.*$`, "m")
+  if (content.match(regex)) {
+    return content.replace(regex, `${key}=${value}`)
+  }
+  // Insert after specified key or at the end
+  if (afterKey) {
+    return content.replace(
+      new RegExp(`^(${afterKey}=.*)$`, "m"),
+      `$1\n${key}=${value}`,
+    )
+  }
+  return content + `\n${key}=${value}`
+}

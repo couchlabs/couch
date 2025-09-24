@@ -2,6 +2,8 @@
 .turbo/
 .env
 .DS_Store
+*.tsbuildinfo
 
 node_modules/
 dist/
+TODO
