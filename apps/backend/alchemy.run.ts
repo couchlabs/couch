@@ -6,6 +6,12 @@ import { Worker, D1Database, Queue, KVNamespace } from "alchemy/cloudflare"
 import { Stage } from "@/lib/constants"
 import type { Hash, Address } from "viem"
 
+// Dev Ports conventions:
+// API Services: 3000-3099
+// Schedulers/Background: 3100-3199
+// Consumers/Workers: 3200-3299
+// External services: 5000+
+
 const app = await alchemy("backend", {
   stage: Stage.DEV,
   password: process.env.ALCHEMY_PASSWORD,
@@ -55,9 +61,7 @@ export const subscriptionAPI = await Worker(API_NAME, {
     DB: subscriptionDB,
   },
   compatibilityFlags: ["nodejs_compat"],
-  dev: {
-    port: 3000,
-  },
+  dev: { port: 3000 },
 })
 
 // ################
@@ -107,8 +111,8 @@ export const subscriptionChargeScheduler = await Worker(CHARGE_SCHEDULER_NAME, {
   bindings: {
     DB: subscriptionDB,
     CHARGE_QUEUE: subscriptionChargeQueue,
-    STAGE: app.stage as Stage,
   },
+  dev: { port: 3100 },
 })
 
 // subscription-reconciler-scheduler:  Audits permission consistency
@@ -173,6 +177,7 @@ export const subscriptionChargeConsumer = await Worker(CHARGE_CONSUMER_NAME, {
     ...subscriptionAPI.bindings,
   },
   compatibilityFlags: ["nodejs_compat"],
+  dev: { port: 3200 },
 })
 
 // subscription-revoke-consumer:  Revokes cancelled subscriptions

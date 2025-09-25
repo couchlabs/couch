@@ -17,7 +17,7 @@ export default {
   async queue(
     batch: typeof subscriptionChargeQueue.Batch,
     env: typeof subscriptionChargeConsumer.Env,
-    ctx: ExecutionContext,
+    _ctx: ExecutionContext,
   ): Promise<void> {
     const log = logger.with({
       batchSize: batch.messages.length,
@@ -41,25 +41,21 @@ export default {
         try {
           op.start()
 
-          // Create service instances
-          const subscriptionRepository = new SubscriptionRepository({
-            db: env.DB,
-          })
-          const onchainRepository = new OnchainRepository({
-            cdp: {
-              apiKeyId: env.CDP_API_KEY_ID,
-              apiKeySecret: env.CDP_API_KEY_SECRET,
-              walletSecret: env.CDP_WALLET_SECRET,
-              walletName: env.CDP_WALLET_NAME,
-              paymasterUrl: env.CDP_PAYMASTER_URL,
-              smartAccountAddress: env.CDP_SMART_ACCOUNT_ADDRESS,
-            },
-            testnet: isTestnetEnvironment(env.STAGE),
-          })
-
           const billingService = new BillingService({
-            subscriptionRepository,
-            onchainRepository,
+            subscriptionRepository: new SubscriptionRepository({
+              db: env.DB,
+            }),
+            onchainRepository: new OnchainRepository({
+              cdp: {
+                apiKeyId: env.CDP_API_KEY_ID,
+                apiKeySecret: env.CDP_API_KEY_SECRET,
+                walletSecret: env.CDP_WALLET_SECRET,
+                walletName: env.CDP_WALLET_NAME,
+                paymasterUrl: env.CDP_PAYMASTER_URL,
+                smartAccountAddress: env.CDP_SMART_ACCOUNT_ADDRESS,
+              },
+              testnet: isTestnetEnvironment(env.STAGE),
+            }),
           })
 
           // Process the recurring payment

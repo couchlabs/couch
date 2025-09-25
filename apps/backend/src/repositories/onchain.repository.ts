@@ -85,6 +85,7 @@ export class OnchainRepository {
         testnet: this.testnet,
       })
 
+      // subscription.charge rely on `waitForUserOperation()`, should be definitive
       log.info("Onchain charge successful", {
         transactionHash: transaction.id,
         amount: transaction.amount,
