@@ -5,30 +5,6 @@ import type { subscriptionChargeScheduler } from "@alchemy.run"
 
 export default {
   /**
-   * Fetch handler for manual triggering
-   * dev: curl http://localhost${port_defined_in_alchemy}/trigger
-   * Cloudflare: CF dashboard's "Quick Edit" → "Send Request"
-   */
-  async fetch(
-    request: Request,
-    env: typeof subscriptionChargeScheduler.Env,
-    ctx: ExecutionContext,
-  ): Promise<Response> {
-    if (new URL(request.url).pathname === "/trigger") {
-      await this.scheduled(
-        {
-          scheduledTime: Date.now(),
-          cron: "*/15 * * * *",
-        } as ScheduledEvent,
-        env,
-        ctx,
-      )
-      return new Response("Scheduler triggered successfully", { status: 200 })
-    }
-    return new Response("Not found", { status: 404 })
-  },
-
-  /**
    * Scheduled handler - runs every 15 minutes via cron
    * Claims due billing entries and sends them to the charge queue
    */
