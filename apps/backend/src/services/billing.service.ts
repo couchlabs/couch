@@ -124,12 +124,14 @@ export class BillingService {
       log.error("Recurring payment failed", error)
 
       const errorCode = getPaymentErrorCode(error)
+      const rawError = error instanceof Error ? error.message : String(error)
 
-      // Mark billing entry as failed
+      // Mark billing entry as failed with both mapped code and raw error
       await this.subscriptionRepository.updateBillingEntry({
         id: billingEntryId,
         status: BillingStatus.FAILED,
         failureReason: errorCode,
+        rawError: rawError,
       })
 
       // Mark subscription as inactive (v1: no retries)

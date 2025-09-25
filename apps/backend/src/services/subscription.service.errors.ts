@@ -8,6 +8,7 @@
  */
 export enum PaymentErrorCode {
   INSUFFICIENT_USDC_BALANCE = "INSUFFICIENT_USDC_BALANCE",
+  INSUFFICIENT_SPENDING_ALLOWANCE = "INSUFFICIENT_SPENDING_ALLOWANCE",
   PERMISSION_REVOKED = "PERMISSION_REVOKED",
   PERMISSION_EXPIRED = "PERMISSION_EXPIRED",
   INSUFFICIENT_GAS = "INSUFFICIENT_GAS",
@@ -109,6 +110,11 @@ export const SubscriptionErrors = {
  */
 export function getPaymentErrorCode(error: Error): PaymentErrorCode {
   const message = error.message.toLowerCase()
+
+  // Check for spending allowance issues
+  if (message.includes("remaining spend amount is insufficient")) {
+    return PaymentErrorCode.INSUFFICIENT_SPENDING_ALLOWANCE
+  }
 
   // Check for balance issues
   if (
