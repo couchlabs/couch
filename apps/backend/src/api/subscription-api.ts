@@ -1,10 +1,13 @@
 import { Hono } from "hono"
 import { cors } from "hono/cors"
 import { HTTPException } from "hono/http-exception"
-import { WorkerEnv } from "../types/api.env"
-import { SubscriptionService } from "./services/subscription.service"
+import { WorkerEnv } from "../../types/api.env"
+import { SubscriptionService } from "../services/subscription.service"
+import { SubscriptionRepository } from "../repositories/subscription.repository"
+import { OnchainRepository } from "../repositories/onchain.repository"
+import { isTestnetEnvironment } from "../lib/constants"
 import { APIException, APIErrors } from "./subscription-api.errors"
-import { logger } from "./lib/logger"
+import { logger } from "../lib/logger"
 
 const app = new Hono<{ Bindings: WorkerEnv }>()
 app.use(cors())
@@ -13,7 +16,7 @@ app.use(cors())
 app.onError((error, ctx) => {
   if (error instanceof HTTPException) {
     if (error instanceof APIException) {
-      logger.error(`API Error: ${error.code}`, error)
+      logger.error(`API Error: ${(error as APIException).code}`, error)
     } else {
       logger.error("HTTP Exception", error)
     }
@@ -41,7 +44,20 @@ app.post("/api/subscriptions", async (ctx) => {
     throw APIErrors.invalidRequest("subscription_id is required")
   }
 
-  const subscriptionService = await SubscriptionService.getInstance()
+  const subscriptionService = new SubscriptionService({
+    subscriptionRepository: new SubscriptionRepository({ db: ctx.env.DB }),
+    onchainRepository: new OnchainRepository({
+      cdp: {
+        apiKeyId: ctx.env.CDP_API_KEY_ID,
+        apiKeySecret: ctx.env.CDP_API_KEY_SECRET,
+        walletSecret: ctx.env.CDP_WALLET_SECRET,
+        walletName: ctx.env.CDP_WALLET_NAME,
+        paymasterUrl: ctx.env.CDP_PAYMASTER_URL,
+        smartAccountAddress: ctx.env.CDP_SMART_ACCOUNT_ADDRESS,
+      },
+      testnet: isTestnetEnvironment(ctx.env.STAGE),
+    }),
+  })
 
   // Activate the subscription (validates and charges)
   const result = await subscriptionService.activate({

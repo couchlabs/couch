@@ -67,6 +67,33 @@ export interface TransactionResult {
   created_at?: string
 }
 
+export interface DueBillingEntry {
+  id: number
+  subscription_id: Hash
+  amount: string
+  due_at: string
+  attempts: number
+}
+
+export interface RecordTransactionParams {
+  transactionHash: Hash
+  billingEntryId: number
+  subscriptionId: Hash
+  amount: string
+  status: string
+}
+
+export interface UpdateBillingEntryParams {
+  id: number
+  status: BillingStatus
+  failureReason?: string
+}
+
+export interface UpdateSubscriptionParams {
+  subscriptionId: Hash
+  status: string
+}
+
 export interface DeleteSubscriptionDataParams {
   subscriptionId: Hash
 }
@@ -376,5 +403,100 @@ export class SubscriptionRepository {
         )
         .bind(BillingStatus.FAILED, reason, billingEntryId),
     ])
+  }
+
+  /**
+   * Atomically claim due billing entries for processing
+   * This prevents race conditions between multiple schedulers
+   */
+  async claimDueBillingEntries(
+    limit: number = 100,
+  ): Promise<DueBillingEntry[]> {
+    const result = await this.db
+      .prepare(
+        `UPDATE billing_entries
+         SET status = ?
+         WHERE id IN (
+           SELECT be.id
+           FROM billing_entries be
+           JOIN subscriptions s ON be.subscription_id = s.subscription_id
+           WHERE be.status = ?
+             AND be.due_at <= datetime('now')
+             AND s.status = ?
+           ORDER BY be.due_at
+           LIMIT ?
+         )
+         RETURNING id, subscription_id, amount, due_at, attempts`,
+      )
+      .bind(BillingStatus.PROCESSING, BillingStatus.PENDING, "active", limit)
+      .all<DueBillingEntry>()
+
+    return (result.results || []).map((entry) => ({
+      id: entry.id,
+      subscription_id: entry.subscription_id as Hash,
+      amount: entry.amount,
+      due_at: entry.due_at,
+      attempts: entry.attempts,
+    }))
+  }
+
+  /**
+   * Record a transaction for a billing entry
+   */
+  async recordTransaction(params: RecordTransactionParams): Promise<void> {
+    const { transactionHash, billingEntryId, subscriptionId, amount, status } =
+      params
+
+    await this.db
+      .prepare(
+        `INSERT INTO transactions (
+          transaction_hash, billing_entry_id, subscription_id, amount, status
+        ) VALUES (?, ?, ?, ?, ?)`,
+      )
+      .bind(transactionHash, billingEntryId, subscriptionId, amount, status)
+      .run()
+  }
+
+  /**
+   * Update billing entry status
+   */
+  async updateBillingEntry(params: UpdateBillingEntryParams): Promise<void> {
+    const { id, status, failureReason } = params
+
+    if (failureReason) {
+      await this.db
+        .prepare(
+          `UPDATE billing_entries
+           SET status = ?, failure_reason = ?
+           WHERE id = ?`,
+        )
+        .bind(status, failureReason, id)
+        .run()
+    } else {
+      await this.db
+        .prepare(
+          `UPDATE billing_entries
+           SET status = ?
+           WHERE id = ?`,
+        )
+        .bind(status, id)
+        .run()
+    }
+  }
+
+  /**
+   * Update subscription status
+   */
+  async updateSubscription(params: UpdateSubscriptionParams): Promise<void> {
+    const { subscriptionId, status } = params
+
+    await this.db
+      .prepare(
+        `UPDATE subscriptions
+         SET status = ?, modified_at = CURRENT_TIMESTAMP
+         WHERE subscription_id = ?`,
+      )
+      .bind(status, subscriptionId)
+      .run()
   }
 }

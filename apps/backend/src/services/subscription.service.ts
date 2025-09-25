@@ -6,7 +6,7 @@ import {
   type ChargeTransactionResult,
 } from "../repositories/onchain.repository"
 import { logger } from "../lib/logger"
-import { APIErrors } from "../subscription-api.errors"
+import { APIErrors } from "../api/subscription-api.errors"
 import {
   SubscriptionErrors,
   getPaymentErrorCode,
@@ -15,8 +15,6 @@ import {
   BillingType,
   BillingStatus,
 } from "../repositories/subscription.repository.constants"
-import { isTestnetEnvironment } from "../lib/constants"
-import { env } from "cloudflare:workers"
 
 export interface ActivateSubscriptionParams {
   subscriptionId: Hash
@@ -42,40 +40,15 @@ export interface ActivationResult {
 }
 
 export class SubscriptionService {
-  private static instance: SubscriptionService | null = null
   private subscriptionRepository: SubscriptionRepository
   private onchainRepository: OnchainRepository
 
-  private constructor(config: {
+  constructor(deps: {
     subscriptionRepository: SubscriptionRepository
     onchainRepository: OnchainRepository
   }) {
-    this.subscriptionRepository = config.subscriptionRepository
-    this.onchainRepository = config.onchainRepository
-  }
-
-  static async getInstance() {
-    if (!this.instance) {
-      const subscriptionRepository = new SubscriptionRepository({ db: env.DB })
-
-      const onchainRepository = new OnchainRepository({
-        cdp: {
-          apiKeyId: env.CDP_API_KEY_ID,
-          apiKeySecret: env.CDP_API_KEY_SECRET,
-          walletSecret: env.CDP_WALLET_SECRET,
-          walletName: env.CDP_WALLET_NAME,
-          paymasterUrl: env.CDP_PAYMASTER_URL,
-          smartAccountAddress: env.CDP_SMART_ACCOUNT_ADDRESS,
-        },
-        testnet: isTestnetEnvironment(env.STAGE),
-      })
-
-      this.instance = new SubscriptionService({
-        subscriptionRepository,
-        onchainRepository,
-      })
-    }
-    return this.instance
+    this.subscriptionRepository = deps.subscriptionRepository
+    this.onchainRepository = deps.onchainRepository
   }
 
   /**
