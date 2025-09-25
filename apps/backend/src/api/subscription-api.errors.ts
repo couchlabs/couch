@@ -1,6 +1,7 @@
 import { HTTPException } from "hono/http-exception"
 import type { ContentfulStatusCode } from "hono/utils/http-status"
-import type { PaymentErrorCode } from "./services/subscription.service.errors"
+
+import type { PaymentErrorCode } from "@/services/subscription.service.errors"
 
 export enum ErrorCode {
   // Client errors (4xx)

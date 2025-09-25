@@ -20,7 +20,8 @@ CREATE TABLE IF NOT EXISTS billing_entries (
   status TEXT NOT NULL CHECK(status IN ('pending', 'processing', 'completed', 'failed')),
   attempts INTEGER DEFAULT 0,
   parent_billing_id INTEGER,  -- Links retry entries to original failed entry
-  failure_reason TEXT,  -- 'insufficient_funds', 'permission_expired', 'network_error', etc.
+  failure_reason TEXT,  -- Mapped error code: 'INSUFFICIENT_SPENDING_ALLOWANCE', 'PERMISSION_EXPIRED', etc.
+  raw_error TEXT,  -- Original error message from the blockchain/service for debugging
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 
   FOREIGN KEY (subscription_id) REFERENCES subscriptions(subscription_id)
@@ -32,8 +33,7 @@ CREATE TABLE IF NOT EXISTS transactions (
   billing_entry_id INTEGER NOT NULL,
   subscription_id TEXT NOT NULL,
   amount TEXT NOT NULL,  -- In USDC base units
-  status TEXT NOT NULL CHECK(status IN ('pending', 'confirmed', 'failed')),
-  failure_reason TEXT,
+  status TEXT NOT NULL CHECK(status IN ('pending', 'confirmed')),  -- Only successful transactions are recorded
   gas_used TEXT,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
 

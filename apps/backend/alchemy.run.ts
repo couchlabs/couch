@@ -2,8 +2,18 @@ import path from "node:path"
 
 import alchemy from "alchemy"
 import { Worker, D1Database, Queue, KVNamespace } from "alchemy/cloudflare"
-import { Stage } from "./src/lib/constants"
-import type { Address } from "viem"
+
+import { Stage } from "@/lib/constants"
+import type { Hash, Address } from "viem"
+
+// Dev Ports conventions:
+// API Services: 3000-3099
+// Schedulers/Background: 3100-3199
+// Consumers/Workers: 3200-3299
+// External services: 5000+
+
+// Default compatibility flags if we required nodejs compatibility
+const compatibilityFlags = ["nodejs_compat", "disallow_importable_env"]
 
 const app = await alchemy("backend", {
   stage: Stage.DEV,
@@ -34,7 +44,12 @@ const subscriptionDB = await D1Database(DB_NAME, {
 const API_NAME = "subscription-api"
 export const subscriptionAPI = await Worker(API_NAME, {
   name: `${app.name}-${app.stage}-${API_NAME}`,
-  entrypoint: path.join(import.meta.dirname, "src", "subscription-api.ts"),
+  entrypoint: path.join(
+    import.meta.dirname,
+    "src",
+    "api",
+    "subscription-api.ts",
+  ),
   adopt: true,
   bindings: {
     // ENV & SECRETS:
@@ -48,10 +63,8 @@ export const subscriptionAPI = await Worker(API_NAME, {
     // RESOURCES:
     DB: subscriptionDB,
   },
-  compatibilityFlags: ["nodejs_compat"],
-  dev: {
-    port: 3000,
-  },
+  compatibilityFlags,
+  dev: { port: 3000 },
 })
 
 // ################
@@ -59,11 +72,21 @@ export const subscriptionAPI = await Worker(API_NAME, {
 // ################
 
 // subscription-charge-queue: Queue for charge tasks
-// const CHARGE_QUEUE_NAME = "subscription-charge-queue"
-// export const subscriptionChargeQueue = await Queue(CHARGE_QUEUE_NAME, {
-//   name: `${app.name}-${app.stage}-${CHARGE_QUEUE_NAME}`,
-//   adopt: true,
-// })
+const CHARGE_QUEUE_NAME = "subscription-charge-queue"
+export interface ChargeQueueMessage {
+  billingEntryId: number
+  subscriptionId: Hash
+  amount: string
+  dueAt: string
+  attemptNumber: number
+}
+export const subscriptionChargeQueue = await Queue<ChargeQueueMessage>(
+  CHARGE_QUEUE_NAME,
+  {
+    name: `${app.name}-${app.stage}-${CHARGE_QUEUE_NAME}`,
+    adopt: true,
+  },
+)
 
 // subscription-revoke-queue: Queue for revocation tasks
 // const REVOKE_QUEUE_NAME = "subscription-revoke-queue"
@@ -77,21 +100,23 @@ export const subscriptionAPI = await Worker(API_NAME, {
 // ################
 
 // subscription-charge-scheduler: Schedules recurring charges
-// const CHARGE_SCHEDULER_NAME = "subscription-charge-scheduler"
-// export const subscriptionChargeScheduler = await Worker(CHARGE_SCHEDULER_NAME, {
-//   name: `${app.name}-${app.stage}-${CHARGE_SCHEDULER_NAME}`,
-//   entrypoint: path.join(
-//     import.meta.dirname,
-//     "src",
-//     "subscription-charge-scheduler.ts",
-//   ),
-//   adopt: true,
-//   crons: ["*/15 * * * *"], // Run every 15 minutes
-//   bindings: {
-//     DB: subscriptionDB,
-//     CHARGE_QUEUE: subscriptionChargeQueue,
-//   },
-// })
+const CHARGE_SCHEDULER_NAME = "subscription-charge-scheduler"
+export const subscriptionChargeScheduler = await Worker(CHARGE_SCHEDULER_NAME, {
+  name: `${app.name}-${app.stage}-${CHARGE_SCHEDULER_NAME}`,
+  entrypoint: path.join(
+    import.meta.dirname,
+    "src",
+    "schedulers",
+    "subscription-charge-scheduler.ts",
+  ),
+  adopt: true,
+  crons: ["*/15 * * * *"], // Run every 15 minutes
+  bindings: {
+    DB: subscriptionDB,
+    CHARGE_QUEUE: subscriptionChargeQueue,
+  },
+  dev: { port: 3100 },
+})
 
 // subscription-reconciler-scheduler:  Audits permission consistency
 // const RECONCILER_SCHEDULER_NAME = "subscription-reconciler-scheduler"
@@ -127,37 +152,36 @@ export const subscriptionAPI = await Worker(API_NAME, {
 // ################
 
 // subscription-charge-consumer:  Processes subscription charges
-// const CHARGE_CONSUMER_NAME = "subscription-charge-consumer"
-// export const subscriptionChargeConsumer = await Worker(CHARGE_CONSUMER_NAME, {
-//   name: `${app.name}-${app.stage}-${CHARGE_CONSUMER_NAME}`,
-//   entrypoint: path.join(
-//     import.meta.dirname,
-//     "src",
-//     "subscription-charge-consumer.ts",
-//   ),
-//   adopt: true,
-//   eventSources: [
-//     {
-//       queue: subscriptionChargeQueue,
-//       settings: {
-//         batchSize: 10,
-//         maxConcurrency: 10,
-//         maxRetries: 3,
-//         maxWaitTimeMs: 5000,
-//         retryDelay: 60,
-//       },
-//     },
-//   ],
-//   bindings: {
-//     // ENV & SECRETS:
-//     CDP_API_KEY_ID: alchemy.secret.env.CDP_API_KEY_ID,
-//     CDP_API_KEY_SECRET: alchemy.secret.env.CDP_API_KEY_SECRET,
-//     CDP_WALLET_SECRET: alchemy.secret.env.CDP_WALLET_SECRET,
-//     CDP_WALLET_NAME: alchemy.env.CDP_WALLET_NAME,
-//     // RESOURCES:
-//     DB: subscriptionDB,
-//   },
-// })
+const CHARGE_CONSUMER_NAME = "subscription-charge-consumer"
+export const subscriptionChargeConsumer = await Worker(CHARGE_CONSUMER_NAME, {
+  name: `${app.name}-${app.stage}-${CHARGE_CONSUMER_NAME}`,
+  entrypoint: path.join(
+    import.meta.dirname,
+    "src",
+    "consumers",
+    "subscription-charge-consumer.ts",
+  ),
+  adopt: true,
+  eventSources: [
+    {
+      queue: subscriptionChargeQueue,
+      settings: {
+        batchSize: 10,
+        maxConcurrency: 10,
+        maxRetries: 3,
+        // maxWaitTimeMs: 500, Error in miniflare
+        retryDelay: 60,
+      },
+    },
+  ],
+  bindings: {
+    // Consumer requires same bindings as API.
+    // Both instantiate repositories and services to process payments (API via HTTP, consumer via queue messages)
+    ...subscriptionAPI.bindings,
+  },
+  compatibilityFlags,
+  dev: { port: 3200 },
+})
 
 // subscription-revoke-consumer:  Revokes cancelled subscriptions
 // const REVOKE_CONSUMER_NAME = "subscription-revoke-consumer"
@@ -195,11 +219,11 @@ export const subscriptionAPI = await Worker(API_NAME, {
 console.log({
   [API_NAME]: subscriptionAPI,
   [DB_NAME]: subscriptionDB,
-  // [CHARGE_SCHEDULER_NAME]: subscriptionChargeScheduler,
+  [CHARGE_SCHEDULER_NAME]: subscriptionChargeScheduler,
+  [CHARGE_QUEUE_NAME]: subscriptionChargeQueue,
+  [CHARGE_CONSUMER_NAME]: subscriptionChargeConsumer,
   // [RECONCILER_SCHEDULER_NAME]: subscriptionReconcilerScheduler,
-  // [CHARGE_QUEUE_NAME]: subscriptionChargeQueue,
   // [REVOKE_QUEUE_NAME]: subscriptionRevokeQueue,
-  // [CHARGE_CONSUMER_NAME]: subscriptionChargeConsumer,
   // [REVOKE_CONSUMER_NAME]: subscriptionRevokeConsumer,
 })
 

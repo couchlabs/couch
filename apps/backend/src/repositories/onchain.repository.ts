@@ -1,8 +1,9 @@
-import { base, ChargeResult } from "@base-org/account"
-import type { Address, Hash } from "viem"
+import { base } from "@base-org/account"
 
-import { logger } from "../lib/logger"
-import { Network, getNetwork } from "../lib/constants"
+import { logger } from "@/lib/logger"
+import { Network, getNetwork } from "@/lib/constants"
+
+import type { Address, Hash } from "viem"
 
 export interface CdpConfig {
   apiKeyId: string
@@ -84,6 +85,7 @@ export class OnchainRepository {
         testnet: this.testnet,
       })
 
+      // subscription.charge rely on `waitForUserOperation()`, should be definitive
       log.info("Onchain charge successful", {
         transactionHash: transaction.id,
         amount: transaction.amount,
