@@ -88,7 +88,8 @@ export interface RecordTransactionParams {
 export interface UpdateBillingEntryParams {
   id: number
   status: BillingStatus
-  failureReason?: string
+  failureReason?: string // Mapped error code (e.g., 'INSUFFICIENT_SPENDING_ALLOWANCE')
+  rawError?: string // Original error message for debugging
 }
 
 export interface UpdateSubscriptionParams {
@@ -423,7 +424,7 @@ export class SubscriptionRepository {
            FROM billing_entries be
            JOIN subscriptions s ON be.subscription_id = s.subscription_id
            WHERE be.status = ?
-             AND be.due_at <= datetime('now')
+             AND datetime(substr(be.due_at, 1, 19)) <= datetime('now', 'utc')
              AND s.status = ?
            ORDER BY be.due_at
            LIMIT ?
@@ -463,16 +464,16 @@ export class SubscriptionRepository {
    * Update billing entry status
    */
   async updateBillingEntry(params: UpdateBillingEntryParams): Promise<void> {
-    const { id, status, failureReason } = params
+    const { id, status, failureReason, rawError } = params
 
-    if (failureReason) {
+    if (failureReason || rawError) {
       await this.db
         .prepare(
           `UPDATE billing_entries
-           SET status = ?, failure_reason = ?
+           SET status = ?, failure_reason = ?, raw_error = ?
            WHERE id = ?`,
         )
-        .bind(status, failureReason, id)
+        .bind(status, failureReason || null, rawError || null, id)
         .run()
     } else {
       await this.db
