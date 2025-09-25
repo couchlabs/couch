@@ -110,6 +110,7 @@ export function SubscriptionManager() {
         recurringCharge: PLANS[selectedPlan].price, // Selected plan price in USDC
         subscriptionOwner: accountAddress, // Our backend wallet address
         periodInDays: 1, // 1-day billing period
+        overridePeriodInSecondsForTestnet: 60,
         testnet: true, // Use testnet (Base Sepolia)
       })
 
