@@ -162,7 +162,7 @@ export const subscriptionChargeConsumer = await Worker(CHARGE_CONSUMER_NAME, {
         batchSize: 10,
         maxConcurrency: 10,
         maxRetries: 3,
-        maxWaitTimeMs: 5000,
+        // maxWaitTimeMs: 500, Error in miniflare
         retryDelay: 60,
       },
     },
@@ -172,6 +172,7 @@ export const subscriptionChargeConsumer = await Worker(CHARGE_CONSUMER_NAME, {
     // Both instantiate repositories and services to process payments (API via HTTP, consumer via queue messages)
     ...subscriptionAPI.bindings,
   },
+  compatibilityFlags: ["nodejs_compat"],
 })
 
 // subscription-revoke-consumer:  Revokes cancelled subscriptions
