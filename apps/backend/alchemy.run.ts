@@ -12,6 +12,9 @@ import type { Hash, Address } from "viem"
 // Consumers/Workers: 3200-3299
 // External services: 5000+
 
+// Default compatibility flags if we required nodejs compatibility
+const compatibilityFlags = ["nodejs_compat", "disallow_importable_env"]
+
 const app = await alchemy("backend", {
   stage: Stage.DEV,
   password: process.env.ALCHEMY_PASSWORD,
@@ -60,7 +63,7 @@ export const subscriptionAPI = await Worker(API_NAME, {
     // RESOURCES:
     DB: subscriptionDB,
   },
-  compatibilityFlags: ["nodejs_compat"],
+  compatibilityFlags,
   dev: { port: 3000 },
 })
 
@@ -176,7 +179,7 @@ export const subscriptionChargeConsumer = await Worker(CHARGE_CONSUMER_NAME, {
     // Both instantiate repositories and services to process payments (API via HTTP, consumer via queue messages)
     ...subscriptionAPI.bindings,
   },
-  compatibilityFlags: ["nodejs_compat"],
+  compatibilityFlags,
   dev: { port: 3200 },
 })
 
