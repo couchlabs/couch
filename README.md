@@ -46,3 +46,9 @@ If you need to add funds to your wallets (on base sepolia), run the faucet scrip
 ```bash
 bun cdp:faucet
 ```
+
+## Stack
+
+- Offchain: [Cloudflare](https://www.cloudflare.com/developer-platform/products/)
+- Onchain: [Coinbase](https://www.coinbase.com/developer-platform)
+- IAC: [Alchemy](https://alchemy.run/)
