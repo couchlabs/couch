@@ -1,13 +1,15 @@
 import { Hono } from "hono"
 import { cors } from "hono/cors"
 import { HTTPException } from "hono/http-exception"
-import { WorkerEnv } from "../../types/api.env"
-import { SubscriptionService } from "../services/subscription.service"
-import { SubscriptionRepository } from "../repositories/subscription.repository"
-import { OnchainRepository } from "../repositories/onchain.repository"
-import { isTestnetEnvironment } from "../lib/constants"
-import { APIException, APIErrors } from "./subscription-api.errors"
-import { logger } from "../lib/logger"
+
+import { APIException, APIErrors } from "@/api/subscription-api.errors"
+import { SubscriptionService } from "@/services/subscription.service"
+import { SubscriptionRepository } from "@/repositories/subscription.repository"
+import { OnchainRepository } from "@/repositories/onchain.repository"
+import { isTestnetEnvironment } from "@/lib/constants"
+import { logger } from "@/lib/logger"
+
+import type { WorkerEnv } from "@/types/api.env"
 
 const app = new Hono<{ Bindings: WorkerEnv }>()
 app.use(cors())

@@ -1,8 +1,9 @@
-import { base, ChargeResult } from "@base-org/account"
-import type { Address, Hash } from "viem"
+import { base } from "@base-org/account"
 
-import { logger } from "../lib/logger"
-import { Network, getNetwork } from "../lib/constants"
+import { logger } from "@/lib/logger"
+import { Network, getNetwork } from "@/lib/constants"
+
+import type { Address, Hash } from "viem"
 
 export interface CdpConfig {
   apiKeyId: string

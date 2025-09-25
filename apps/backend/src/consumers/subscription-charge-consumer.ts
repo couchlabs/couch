@@ -1,12 +1,13 @@
-import type { Hash } from "viem"
-import { SubscriptionRepository } from "../repositories/subscription.repository"
-import { OnchainRepository } from "../repositories/onchain.repository"
-import { BillingService } from "../services/billing.service"
-import { logger } from "../lib/logger"
-import { isTestnetEnvironment } from "../lib/constants"
-import type { WorkerEnv } from "../../types/api.env"
-import type { MessageBatch, Queue } from "@cloudflare/workers-types"
-import type { ChargeQueueMessage } from "../schedulers/subscription-charge-scheduler"
+import { SubscriptionRepository } from "@/repositories/subscription.repository"
+import { OnchainRepository } from "@/repositories/onchain.repository"
+import { BillingService } from "@/services/billing.service"
+import { logger } from "@/lib/logger"
+import { isTestnetEnvironment } from "@/lib/constants"
+
+import type {
+  subscriptionChargeConsumer,
+  subscriptionChargeQueue,
+} from "@alchemy.run"
 
 export default {
   /**
@@ -14,8 +15,8 @@ export default {
    * Each message represents a billing entry that needs to be charged
    */
   async queue(
-    batch: MessageBatch<ChargeQueueMessage>,
-    env: WorkerEnv,
+    batch: typeof subscriptionChargeQueue.Batch,
+    env: typeof subscriptionChargeConsumer.Env,
     ctx: ExecutionContext,
   ): Promise<void> {
     const log = logger.with({

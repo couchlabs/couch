@@ -2,9 +2,9 @@ import path from "node:path"
 
 import alchemy from "alchemy"
 import { Worker, D1Database, Queue, KVNamespace } from "alchemy/cloudflare"
-import type { ChargeQueueMessage } from "./src/schedulers/subscription-charge-scheduler"
-import { Stage } from "./src/lib/constants"
-import type { Address } from "viem"
+
+import { Stage } from "@/lib/constants"
+import type { Hash, Address } from "viem"
 
 const app = await alchemy("backend", {
   stage: Stage.DEV,
@@ -66,6 +66,13 @@ export const subscriptionAPI = await Worker(API_NAME, {
 
 // subscription-charge-queue: Queue for charge tasks
 const CHARGE_QUEUE_NAME = "subscription-charge-queue"
+export interface ChargeQueueMessage {
+  billingEntryId: number
+  subscriptionId: Hash
+  amount: string
+  dueAt: string
+  attemptNumber: number
+}
 export const subscriptionChargeQueue = await Queue<ChargeQueueMessage>(
   CHARGE_QUEUE_NAME,
   {
@@ -161,16 +168,9 @@ export const subscriptionChargeConsumer = await Worker(CHARGE_CONSUMER_NAME, {
     },
   ],
   bindings: {
-    // ENV & SECRETS:
-    CDP_API_KEY_ID: alchemy.secret.env.CDP_API_KEY_ID,
-    CDP_API_KEY_SECRET: alchemy.secret.env.CDP_API_KEY_SECRET,
-    CDP_WALLET_SECRET: alchemy.secret.env.CDP_WALLET_SECRET,
-    CDP_WALLET_NAME: alchemy.env.CDP_WALLET_NAME,
-    CDP_PAYMASTER_URL: alchemy.env.CDP_PAYMASTER_URL,
-    CDP_SMART_ACCOUNT_ADDRESS: alchemy.env.CDP_SMART_ACCOUNT_ADDRESS as Address,
-    STAGE: app.stage as Stage,
-    // RESOURCES:
-    DB: subscriptionDB,
+    // Consumer requires same bindings as API.
+    // Both instantiate repositories and services to process payments (API via HTTP, consumer via queue messages)
+    ...subscriptionAPI.bindings,
   },
 })
 

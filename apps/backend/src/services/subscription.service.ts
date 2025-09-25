@@ -1,20 +1,21 @@
-import { isHash, isAddressEqual, type Hash } from "viem"
-
-import { SubscriptionRepository } from "../repositories/subscription.repository"
-import {
-  OnchainRepository,
-  type ChargeTransactionResult,
-} from "../repositories/onchain.repository"
-import { logger } from "../lib/logger"
-import { APIErrors } from "../api/subscription-api.errors"
-import {
-  SubscriptionErrors,
-  getPaymentErrorCode,
-} from "./subscription.service.errors"
+import { logger } from "@/lib/logger"
 import {
   BillingType,
   BillingStatus,
-} from "../repositories/subscription.repository.constants"
+} from "@/repositories/subscription.repository.constants"
+import { SubscriptionRepository } from "@/repositories/subscription.repository"
+import {
+  OnchainRepository,
+  type ChargeTransactionResult,
+} from "@/repositories/onchain.repository"
+
+import { APIErrors } from "@/api/subscription-api.errors"
+import {
+  SubscriptionErrors,
+  getPaymentErrorCode,
+} from "@/services/subscription.service.errors"
+
+import { isHash, isAddressEqual, type Hash } from "viem"
 
 export interface ActivateSubscriptionParams {
   subscriptionId: Hash

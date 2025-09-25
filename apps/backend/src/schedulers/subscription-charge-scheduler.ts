@@ -1,16 +1,7 @@
-import type { Hash } from "viem"
-import { SubscriptionRepository } from "../repositories/subscription.repository"
-import { logger } from "../lib/logger"
-import type { WorkerEnv } from "../../types/api.env"
-import type { Queue } from "@cloudflare/workers-types"
+import { SubscriptionRepository } from "@/repositories/subscription.repository"
+import { logger } from "@/lib/logger"
 
-export interface ChargeQueueMessage {
-  billingEntryId: number
-  subscriptionId: Hash
-  amount: string
-  dueAt: string
-  attemptNumber: number
-}
+import type { subscriptionChargeScheduler } from "@alchemy.run"
 
 export default {
   /**
@@ -19,7 +10,7 @@ export default {
    */
   async scheduled(
     event: ScheduledEvent,
-    env: WorkerEnv & { CHARGE_QUEUE: Queue<ChargeQueueMessage> },
+    env: typeof subscriptionChargeScheduler.Env,
     ctx: ExecutionContext,
   ): Promise<void> {
     const log = logger.with({
@@ -47,26 +38,26 @@ export default {
 
       log.info(`Found ${dueBillingEntries.length} due billing entries`)
 
-      // Send each entry to the charge queue
-      const queuePromises = dueBillingEntries.map(async (entry) => {
-        const message: ChargeQueueMessage = {
-          billingEntryId: entry.id,
-          subscriptionId: entry.subscription_id,
-          amount: entry.amount,
-          dueAt: entry.due_at,
-          attemptNumber: entry.attempts + 1,
-        }
-
-        log.info("Sending billing entry to queue", {
-          billingEntryId: entry.id,
-          subscriptionId: entry.subscription_id,
-        })
-
-        await env.CHARGE_QUEUE.send(message)
-      })
-
+      // Send each entry to the charge queue and
       // Wait for all queue sends to complete
-      await Promise.all(queuePromises)
+      await Promise.all(
+        dueBillingEntries.map(async (entry) => {
+          const message = {
+            billingEntryId: entry.id,
+            subscriptionId: entry.subscription_id,
+            amount: entry.amount,
+            dueAt: entry.due_at,
+            attemptNumber: entry.attempts + 1,
+          }
+
+          log.info("Sending billing entry to queue", {
+            billingEntryId: entry.id,
+            subscriptionId: entry.subscription_id,
+          })
+
+          return env.CHARGE_QUEUE.send(message)
+        }),
+      )
 
       op.success({
         entriesProcessed: dueBillingEntries.length,

@@ -1,12 +1,13 @@
 import type { Hash } from "viem"
-import { SubscriptionRepository } from "../repositories/subscription.repository"
-import { OnchainRepository } from "../repositories/onchain.repository"
-import { logger } from "../lib/logger"
-import { getPaymentErrorCode } from "./subscription.service.errors"
+
+import { getPaymentErrorCode } from "@/services/subscription.service.errors"
+import { SubscriptionRepository } from "@/repositories/subscription.repository"
+import { OnchainRepository } from "@/repositories/onchain.repository"
 import {
   BillingStatus,
   BillingType,
-} from "../repositories/subscription.repository.constants"
+} from "@/repositories/subscription.repository.constants"
+import { logger } from "@/lib/logger"
 
 export interface ProcessRecurringPaymentParams {
   billingEntryId: number
