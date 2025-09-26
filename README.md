@@ -1,4 +1,4 @@
-# Couch POC
+# Couch
 
 [Subscriptions for a new era of payments](https://cou.ch).
 
