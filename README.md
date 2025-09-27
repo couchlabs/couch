@@ -16,16 +16,10 @@ bun install
 cp .env.example .env
 ```
 
-3. Run init script to initialize & fund CDP Wallets
+3. Run local dev: (wll also initialize and fund CDP spender waller)
 
 ```bash
-bun cdp:init
-```
-
-4. Run dev:
-
-```bash
-bun dev
+bun local:dev
 ```
 
 ## What's in this repo
@@ -35,16 +29,15 @@ couch-poc/
 ├── apps/
 │ ├── backend/      Offchain infra handling stablecoins subscriptions
 │ └── frontend/     Web application accepting subscriptions
-├── scripts/        Setup scripts
 └── ...             Monorepo configuration files
 ```
 
 ## Scripts
 
-If you need to add funds to your wallets (on base sepolia), run the faucet script:
+If you need to add funds to your CDP spender account (on base sepolia), run the faucet script:
 
 ```bash
-bun cdp:faucet
+bun faucet
 ```
 
 ## Stack
