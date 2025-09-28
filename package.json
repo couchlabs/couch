@@ -12,13 +12,25 @@
   "workspaces": {
     "packages": [
       "apps/*"
-    ]
+    ],
+    "catalog": {
+      "alchemy": "https://pkg.pr.new/sam-goodwin/alchemy@f3e84a9",
+      "typescript": "5.9.2"
+    },
+    "catalogs": {
+      "cloudflare": {
+        "miniflare": "^4.20250917.0",
+        "@cloudflare/workers-types": "4.20250922.0"
+      },
+      "coinbase": {
+        "@base-org/account": "^2.3.1",
+        "@coinbase/cdp-sdk": "^1.38.1"
+      }
+    }
   },
-  "dependencies": {
+  "devDependencies": {
     "turbo": "latest",
-    "prettier": "latest",
-    "@coinbase/cdp-sdk": "latest",
-    "alchemy": "https://pkg.pr.new/sam-goodwin/alchemy@f3e84a9"
+    "prettier": "latest"
   },
   "packageManager": "bun@1.2.22",
   "prettier": {

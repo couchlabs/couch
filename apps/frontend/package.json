@@ -9,23 +9,24 @@
   },
   "dependencies": {
     "backend": "workspace:*",
+    "@base-org/account": "catalog:coinbase",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
-    "tailwindcss": "^4.1.13",
-    "@base-org/account": "^2.3.1"
+    "tailwindcss": "^4.1.13"
   },
   "devDependencies": {
-    "@types/react": "19.1.13",
-    "@types/react-dom": "19.1.9",
-    "@cloudflare/workers-types": "4.20250922.0",
+    "alchemy": "catalog:",
+    "typescript": "catalog:",
+    "miniflare": "catalog:cloudflare",
+    "@cloudflare/workers-types": "catalog:cloudflare",
     "vite": "7.1.7",
     "@cloudflare/vite-plugin": "^1.13.3",
     "@vitejs/plugin-react": "^5.0.3",
     "@tailwindcss/vite": "^4.1.13",
     "vite-tsconfig-paths": "^5.1.4",
     "vite-plugin-node-polyfills": "^0.24.0",
-    "miniflare": "^4.20250917.0",
-    "typescript": "5.9.2"
+    "@types/react": "19.1.13",
+    "@types/react-dom": "19.1.9"
   },
   "paths": {
     "@/*": [
