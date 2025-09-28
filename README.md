@@ -4,7 +4,7 @@
 
 ## Getting started
 
-1. Install dependencies:
+1. Install dependencies
 
 ```bash
 bun install
@@ -16,10 +16,10 @@ bun install
 cp .env.example .env
 ```
 
-3. Run local dev: (wll also initialize and fund CDP spender waller)
+3. Run dev
 
 ```bash
-bun local:dev
+bun dev
 ```
 
 ## What's in this repo
