@@ -55,8 +55,8 @@ const NAME_PREFIX = `${app.name}-${scope.name}-${scope.stage}`
 /**
  * Server-side smart account for processing subscription charges.
  * Base Account SDK requires EOA and smart account to share the same CDP wallet identifier.
- * The smart account inherits this from the EOA owner's 'name' field when name is omitted.
  * @see https://github.com/base-org/account-sdk/blob/main/packages/account-sdk/src/interface/payment/charge.ts#L114-120
+ * EvmSmartAccount inherits its name from the owner account when the name property is omitted.
  */
 const SPENDER_ACCOUNT_NAME = "spender-evm"
 export const spenderSmartAccount = await EvmSmartAccount(SPENDER_ACCOUNT_NAME, {
