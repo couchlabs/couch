@@ -98,12 +98,7 @@ const subscriptionDB = await D1Database(DB_NAME, {
 const API_NAME = "subscription-api"
 export const subscriptionAPI = await Worker(API_NAME, {
   name: `${NAME_PREFIX}-${API_NAME}`,
-  entrypoint: path.join(
-    import.meta.dirname,
-    "src",
-    "api",
-    "subscription-api.ts",
-  ),
+  entrypoint: path.join(import.meta.dirname, "src", "api", "main.ts"),
   bindings: {
     // ENV & SECRETS:
     CDP_API_KEY_ID: alchemy.secret.env.CDP_API_KEY_ID,
@@ -206,7 +201,7 @@ export const orderProcessor = await Worker(ORDER_PROCESSOR_NAME, {
   entrypoint: path.join(
     import.meta.dirname,
     "src",
-    "processors",
+    "consumers",
     "order-processor.ts",
   ),
   eventSources: [

@@ -1,46 +1,16 @@
 import { Hono } from "hono"
-import { cors } from "hono/cors"
-import { HTTPException } from "hono/http-exception"
 
-import { APIException, APIErrors } from "@/api/subscription-api.errors"
+import { APIErrors } from "@/api/errors"
 import { SubscriptionService } from "@/services/subscription.service"
 import { SubscriptionRepository } from "@/repositories/subscription.repository"
 import { OnchainRepository } from "@/repositories/onchain.repository"
 import { isTestnetEnvironment } from "@/lib/constants"
-import { logger } from "@/lib/logger"
 
 import type { WorkerEnv } from "@/types/api.env"
 
-const app = new Hono<{ Bindings: WorkerEnv }>()
-app.use(cors())
+const subscription = new Hono<{ Bindings: WorkerEnv }>()
 
-// Error handler middleware
-app.onError((error, ctx) => {
-  if (error instanceof HTTPException) {
-    if (error instanceof APIException) {
-      logger.error(`API Error: ${(error as APIException).code}`, error)
-    } else {
-      logger.error("HTTP Exception", error)
-    }
-    return error.getResponse()
-  }
-
-  logger.error("Unexpected error", error)
-  return new Response(
-    JSON.stringify({
-      error: "Internal server error",
-      code: "INTERNAL_ERROR",
-    }),
-    {
-      status: 500,
-      headers: {
-        "Content-Type": "application/json",
-      },
-    },
-  )
-})
-
-app.post("/api/subscriptions", async (ctx) => {
+subscription.post("/", async (ctx) => {
   const { subscription_id } = await ctx.req.json().catch(() => ({}))
   if (!subscription_id) {
     throw APIErrors.invalidRequest("subscription_id is required")
@@ -87,8 +57,4 @@ app.post("/api/subscriptions", async (ctx) => {
   )
 })
 
-app.get("/health", (ctx) => {
-  return ctx.json({ status: "healthy", timestamp: new Date().toISOString() })
-})
-
-export default app
+export default subscription

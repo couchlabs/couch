@@ -9,7 +9,7 @@ import {
   type ChargeTransactionResult,
 } from "@/repositories/onchain.repository"
 
-import { APIErrors } from "@/api/subscription-api.errors"
+import { APIErrors } from "@/api/errors"
 import {
   SubscriptionErrors,
   getPaymentErrorCode,
