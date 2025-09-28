@@ -13,6 +13,9 @@
       "bun": "./alchemy.run.ts",
       "import": "./alchemy.run.js",
       "types": "./alchemy.run.ts"
+    },
+    "./constants": {
+      "import": "./src/lib/constants.ts"
     }
   },
   "dependencies": {

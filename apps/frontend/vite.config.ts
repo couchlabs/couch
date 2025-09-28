@@ -23,6 +23,7 @@ export default defineConfig({
   root: "./src",
   envDir: "../",
   server: {
+    port: 8000,
     open: "chrome",
   },
 })

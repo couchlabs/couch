@@ -24,10 +24,13 @@ import type { Hash } from "viem"
 
 /**
  * Port Allocation Convention (Development):
+ *   3xxx = All backend infrastructure together
+ *   8xxx = All user-facing web apps together
+ *   9xxx = Third-party/external tools separate
+ *
  *   3000-3099: API Services
  *   3100-3199: Schedulers/Background Workers
  *   3200-3299: Queue Consumers/Workers
- *   5000+:     External Services
  */
 
 // =============================================================================

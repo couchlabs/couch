@@ -51,11 +51,11 @@
   },
   "catalog": {
     "alchemy": "https://pkg.pr.new/sam-goodwin/alchemy@f3e84a9",
-    "typescript": "5.9.2",
+    "typescript": "^5.9.2",
   },
   "catalogs": {
     "cloudflare": {
-      "@cloudflare/workers-types": "4.20250922.0",
+      "@cloudflare/workers-types": "^4.20250922.0",
       "miniflare": "^4.20250917.0",
     },
     "coinbase": {
