@@ -1,8 +1,8 @@
-# Subscription Billing System Specification
+# Subscription Payment System Specification
 
 ## System Overview
 
-A distributed billing system for managing crypto-native recurring payments using Base Account spend permissions. The system handles subscription lifecycle from initial charge through recurring billing, with automatic reconciliation and failure recovery.
+A distributed payment system for managing crypto-native recurring payments using Base Account spend permissions. The system handles subscription lifecycle from initial charge through recurring orders, with automatic reconciliation and failure recovery.
 
 ### Design Principle: Onchain as Source of Truth
 
@@ -17,7 +17,7 @@ The system maintains a clear separation between onchain data (source of truth) a
 
 **Offchain Data (stored in database):**
 
-- Billing schedule (when to charge)
+- Order schedule (when to charge)
 - Retry attempts and failure reasons
 - Transaction history
 - Processing locks and operational state
@@ -32,15 +32,15 @@ This design prevents dual sources of truth - we never store period dates or perm
   └─────────────────────────┘                   ▲
                                                 │
   ┌─────────────────────────┐                   │
-  │ subscription-charge-    │───────────────────┤
-  │ scheduler               │                   │
+  │     order-scheduler     │───────────────────┤
+  │                         │                   │
   └───────────┬─────────────┘                   │
               ▼                                 │
-      subscription-charge-queue                 │
+          order-queue                           │
               ▼                                 │
   ┌─────────────────────────┐                   │
-  │ subscription-charge-    │───────────────────┤
-  │ consumer                │                   │
+  │     order-processor     │───────────────────┤
+  │                         │                   │
   └─────────────────────────┘                   │
                                                 │
   ┌─────────────────────────┐                   │
@@ -64,17 +64,17 @@ This design prevents dual sources of truth - we never store period dates or perm
 
 2. **SCHEDULERS** - CF Workers with CRON triggers
 
-- `subscription-charge-scheduler` # Schedules recurring charges (\*/15)
+- `order-scheduler` # Schedules order processing (\*/15)
 - `subscription-reconciler-scheduler` # Audits permission consistency (\*/30)
 
-3. **QUEUE CONSUMERS** - CF Workers
+3. **QUEUE PROCESSORS** - CF Workers
 
-- `subscription-charge-consumer` # Processes subscription charges
-- `subscription-revoke-consumer` # Revokes cancelled subscriptions
+- `order-processor` # Processes orders
+- `subscription-revoke-processor` # Revokes cancelled subscriptions
 
 4. **QUEUES** - CF Queues
 
-- `subscription-charge-queue` # Queue for charge tasks
+- `order-queue` # Queue for order processing
 - `subscription-revoke-queue` # Queue for revocation tasks
 
 5. **DATABASE** - CF D1
@@ -93,16 +93,16 @@ CREATE TABLE subscriptions (
   modified_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
 
--- Billing schedule and state (drives all charging logic)
-CREATE TABLE billing_entries (
+-- Orders (individual charges for subscriptions)
+CREATE TABLE orders (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   subscription_id TEXT NOT NULL,
-  type TEXT NOT NULL,  -- 'recurring', 'retry'
+  type TEXT NOT NULL,  -- 'initial', 'recurring', 'retry'
   due_at DATETIME NOT NULL,
   amount TEXT NOT NULL,  -- In USDC base units
-  status TEXT NOT NULL,  -- 'pending', 'processing', 'completed', 'failed'
+  status TEXT NOT NULL,  -- 'pending', 'processing', 'paid', 'failed'
   attempts INTEGER DEFAULT 0,
-  parent_billing_id INTEGER,  -- Links retry entries to original failed entry
+  parent_order_id INTEGER,  -- Links retry orders to original failed order
   failure_reason TEXT,  -- 'insufficient_funds', 'permission_expired', 'network_error', etc.
   processing_lock DATETIME,
   locked_by TEXT,
@@ -113,7 +113,7 @@ CREATE TABLE billing_entries (
 -- Transaction log (actual onchain transactions)
 CREATE TABLE transactions (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
-  billing_entry_id INTEGER NOT NULL,
+  order_id INTEGER NOT NULL,
   subscription_id TEXT NOT NULL,
   tx_hash TEXT UNIQUE,
   amount TEXT NOT NULL,  -- In USDC base units
@@ -121,16 +121,16 @@ CREATE TABLE transactions (
   failure_reason TEXT,
   gas_used TEXT,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (billing_entry_id) REFERENCES billing_entries(id),
+  FOREIGN KEY (order_id) REFERENCES orders(id),
   FOREIGN KEY (subscription_id) REFERENCES subscriptions(subscription_id)
 );
 
 -- Indexes for performance
-CREATE INDEX idx_billing_due_status ON billing_entries(due_at, status);
-CREATE INDEX idx_billing_processing ON billing_entries(processing_lock, status);
-CREATE INDEX idx_billing_subscription ON billing_entries(subscription_id);
+CREATE INDEX idx_orders_due_status ON orders(due_at, status);
+CREATE INDEX idx_orders_processing ON orders(processing_lock, status);
+CREATE INDEX idx_orders_subscription ON orders(subscription_id);
 CREATE INDEX idx_transactions_subscription ON transactions(subscription_id);
-CREATE INDEX idx_transactions_billing_entry ON transactions(billing_entry_id);
+CREATE INDEX idx_transactions_order ON transactions(order_id);
 CREATE INDEX idx_subscriptions_status ON subscriptions(status);
 CREATE INDEX idx_subscriptions_account ON subscriptions(account_address);
 ```
@@ -158,7 +158,7 @@ Creates a new subscription with immediate first charge.
   "data": {
     "subscription_id": "0x123...",
     "transaction_hash": "0xabc...",
-    "next_billing_date": "2024-02-01T00:00:00Z"
+    "next_order_date": "2024-02-01T00:00:00Z"
   }
 }
 ```
@@ -177,28 +177,28 @@ Creates a new subscription with immediate first charge.
 3. Fetch permission from onchain to validate it's active
 4. Execute first charge via CDP
 5. Create first transaction record
-6. Create next billing entry (due_at calculated from onchain period)
+6. Create next order (due_at calculated from onchain period)
 7. Update subscription to `status='active'`
 8. On failure: delete subscription and revoke permission
 
 ## Schedulers
 
-### subscription-charge-scheduler
+### order-scheduler
 
 **Schedule:** Every 15 minutes
-**Purpose:** Find and enqueue due billing entries
-**Source:** ONLY reads from `billing_entries` table
+**Purpose:** Find and enqueue due orders
+**Source:** ONLY reads from `orders` table
 
 **Implementation:**
 
 ```sql
 -- Atomic claim prevents double-processing
-UPDATE billing_entries
+UPDATE orders
 SET status = 'processing',
     processing_lock = datetime('now'),
     locked_by = ?
 WHERE id IN (
-  SELECT id FROM billing_entries
+  SELECT id FROM orders
   WHERE status = 'pending'
     AND due_at <= datetime('now')
     AND processing_lock IS NULL
@@ -209,11 +209,11 @@ RETURNING *
 
 The scheduler is simple - it only finds due entries and enqueues them. It does NOT:
 
-- Calculate next billing dates
+- Calculate next order dates
 - Check subscription states
 - Make business decisions
 
-All intelligence is in the consumer that creates new billing entries.
+All intelligence is in the consumer that creates new orders.
 
 ### subscription-reconciler-scheduler
 
@@ -232,9 +232,9 @@ All intelligence is in the consumer that creates new billing entries.
 
 ## Queue Workers
 
-### subscription-charge-consumer
+### order-processor
 
-**Queue:** `subscription-charge-queue`
+**Queue:** `order-queue`
 **Concurrency:** 10 workers
 **Retry:** 3 attempts with exponential backoff
 
@@ -244,22 +244,22 @@ All intelligence is in the consumer that creates new billing entries.
 2. Verify permission is active and allows charge
 3. Execute charge via CDP using onchain parameters
 4. Create transaction record
-5. Mark billing entry complete
-6. Create next billing entry (perpetual cycle)
+5. Mark order complete
+6. Create next order (perpetual cycle)
 7. On failure:
    - Permission expired/revoked: Mark subscription inactive
    - Technical errors (network, timeout): Use queue retry (exponential backoff)
    - Business errors (insufficient funds):
      - Mark entry as 'failed'
-     - Create new retry billing entry with custom date (+1 day, +3 days, +7 days)
+     - Create new retry order with custom date (+1 day, +3 days, +7 days)
      - After max retries: mark subscription inactive
 
-**Billing Entry Lifecycle:**
+**Order Lifecycle:**
 
-- API creates first entry when subscription starts
-- Each successful charge creates the next entry
-- Failed charges create retry entries with custom schedules
-- The billing_entries table drives scheduling, but always validates against onchain state
+- API creates first order when subscription starts
+- Each successful charge creates the next order
+- Failed charges create retry orders with custom schedules
+- The orders table drives scheduling, but always validates against onchain state
 
 ### subscription-revoke-consumer
 
@@ -283,7 +283,7 @@ name = "subscription-system"
 crons = ["*/15 * * * *", "*/30 * * * *"]
 
 [[queues.consumers]]
-queue = "subscription-charge-queue"
+queue = "order-queue"
 max_batch_size = 10
 max_retries = 3
 
@@ -302,19 +302,19 @@ database_name = "subscription-db"
 ### Idempotency
 
 - Atomic `INSERT OR IGNORE` prevents duplicate subscriptions
-- `UPDATE...RETURNING` ensures each billing entry processed once
+- `UPDATE...RETURNING` ensures each order processed once
 - Transaction `tx_hash` uniqueness prevents double charges
 
 ### Failure Recovery
 
 - Technical failures: Queue retries (seconds/minutes, exponential backoff)
-- Business failures: New billing entries with custom retry schedule (days/weeks)
+- Business failures: New orders with custom retry schedule (days/weeks)
 - Stuck subscriptions auto-cleaned after 30 minutes
 - Orphaned permissions revoked via KV-cached reconciliation
 
 ### Monitoring
 
-- Track billing entry status distribution
+- Track order status distribution
 - Alert on high failure rates
 - Monitor queue depth and processing time
 
@@ -336,4 +336,4 @@ database_name = "subscription-db"
 - Webhook notifications
 - Subscription plan changes
 - Grace periods for failed payments
-- Usage-based billing support
+- Usage-based payment support

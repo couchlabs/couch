@@ -1,6 +1,6 @@
 # Subscription Backend Service
 
-A stablecoin subscription billing system built on Cloudflare Workers, using Coinbase CDP for payment processing and Base network for blockchain operations.
+A stablecoin subscription payment system built on Cloudflare Workers, using Coinbase CDP for payment processing and Base network for blockchain operations.
 
 > **Getting Started**: See the [Getting Started guide](../../README.md#getting-started) in the main README for initial setup instructions.
 
@@ -23,7 +23,7 @@ A stablecoin subscription billing system built on Cloudflare Workers, using Coin
                            │                     │
                            │                     ▼
                            │              ┌──────────────┐
-                           └─────────────▶│   Consumer   │
+                           └─────────────▶│  Processor   │
                                           └──────────────┘
                                                  │
                                                  ▼
@@ -33,8 +33,8 @@ A stablecoin subscription billing system built on Cloudflare Workers, using Coin
                                           └──────────────┘
 
 Note: API accesses Blockchain directly for initial activation (onchain first charge + offchain setup)
-      Consumer accesses Blockchain for recurring payments
-      Both API, Scheduler, and Consumer access the same D1 database
+      Processor accesses Blockchain for recurring payments
+      Both API, Scheduler, and Processor access the same D1 database
 ```
 
 ## Testing Guide
@@ -92,7 +92,7 @@ Expected response:
   "data": {
     "subscription_id": "0xa123...",
     "transaction_hash": "0x456...",
-    "next_billing_date": "2025-09-25T17:25:26.000Z"
+    "next_order_date": "2025-09-25T17:25:26.000Z"
   }
 }
 ```
@@ -107,8 +107,8 @@ curl http://localhost:3100/__scheduled
 
 Check logs to see:
 
-- "Found X due billing entries"
-- "Successfully queued X billing entries for processing"
+- "Found X due orders"
+- "Successfully queued X orders for processing"
 
 ### Step 4: Monitor Recurring Payments
 
@@ -116,14 +116,14 @@ Watch the logs to see the complete flow:
 
 ```bash
 # Scheduler finds due entries
-INFO: Found 1 due billing entries
-INFO: Sending billing entry to queue
+INFO: Found 1 due orders
+INFO: Sending order to queue
 
-# Consumer processes payment
+# Processor processes payment
 INFO: Processing batch of 1 charge messages
 INFO: Processing recurring payment
 INFO: Onchain charge successful
-INFO: Creating next billing entry
+INFO: Creating next order
 ```
 
 ### Step 5: Check Database State
@@ -133,9 +133,9 @@ INFO: Creating next billing entry
 sqlite3 ../../alchemy/miniflare/v3/d1/miniflare-D1DatabaseObject/<generated_hash>.sqlite \
   "SELECT * FROM subscriptions"
 
-# View billing entries
+# View orders
 sqlite3 ../../alchemy/miniflare/v3/d1/miniflare-D1DatabaseObject/<generated_hash>.sqlite \
-  "SELECT id, status, due_at, amount FROM billing_entries ORDER BY id DESC"
+  "SELECT id, status, due_at, amount FROM orders ORDER BY id DESC"
 
 # View transactions
 sqlite3 ../../alchemy/miniflare/v3/d1/miniflare-D1DatabaseObject/<generated_hash>.sqlite \
@@ -168,31 +168,31 @@ Body: {
 - Processes initial payments
 - Reads/writes to D1 database
 
-### 2. Scheduler (`subscription-charge-scheduler`)
+### 2. Scheduler (`order-scheduler`)
 
 - Runs every 15 minutes
-- Claims due billing entries atomically from D1
+- Claims due orders atomically from D1
 - Sends charge tasks to queue
-- Updates billing entry status in D1
+- Updates order status in D1
 
-### 3. Queue (`subscription-charge-queue`)
+### 3. Queue (`order-queue`)
 
 - Buffers charge tasks
 - Handles retries (3 attempts)
 - Ensures reliable processing
 
-### 4. Consumer (`subscription-charge-consumer`)
+### 4. Processor (`order-processor`)
 
 - Processes charge messages from queue
 - Executes blockchain transactions on Base
 - Updates D1 with transaction results
-- Creates next billing entries in D1
+- Creates next orders in D1
 
 ## Troubleshooting
 
 ### Common Issues
 
-1. **"No due billing entries found"**
+1. **"No due orders found"**
    - Check datetime format in database (should be ISO 8601 with 'Z')
    - Verify subscription is active
    - Check if current time > due_at

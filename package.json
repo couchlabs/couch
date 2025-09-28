@@ -14,7 +14,7 @@
       "apps/*"
     ],
     "catalog": {
-      "alchemy": "https://pkg.pr.new/sam-goodwin/alchemy@f3e84a9",
+      "alchemy": "https://pkg.pr.new/sam-goodwin/alchemy@b954271",
       "typescript": "^5.9.2"
     },
     "catalogs": {

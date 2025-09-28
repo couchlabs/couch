@@ -7,7 +7,7 @@ export enum LogLevel {
 
 export interface LogContext {
   subscriptionId?: string
-  billingEntryId?: number
+  orderId?: number
   transactionHash?: string
   userId?: string
   [key: string]: string | number | boolean | null | undefined

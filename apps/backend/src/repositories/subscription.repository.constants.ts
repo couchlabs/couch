@@ -1,8 +1,8 @@
 /**
- * Repository-level constants for subscription data
+ * Repository-level constants for subscription and order data
  *
  * IMPORTANT: These values MUST match the CHECK constraints in the database schema
- * See: apps/backend/migrations/0001_init_subscription_billing_schema.sql
+ * See: apps/backend/migrations/0001_init_subscription_order_schema.sql
  *
  * When modifying these enums:
  * 1. Update the corresponding CHECK constraint in the SQL migration
@@ -16,15 +16,16 @@ export enum SubscriptionStatus {
   INACTIVE = "inactive",
 }
 
-export enum BillingType {
+export enum OrderType {
+  INITIAL = "initial",
   RECURRING = "recurring",
   RETRY = "retry",
 }
 
-export enum BillingStatus {
+export enum OrderStatus {
   PENDING = "pending",
   PROCESSING = "processing",
-  COMPLETED = "completed",
+  PAID = "paid",
   FAILED = "failed",
 }
 

@@ -79,7 +79,7 @@ const compatibilityFlags = ["nodejs_compat", "disallow_importable_env"]
 // DATABASES
 // -----------------------------------------------------------------------------
 
-// subscription-db: Main database for subscription and billing data
+// subscription-db: Main database for subscription and order data
 const DB_NAME = "subscription-db"
 const subscriptionDB = await D1Database(DB_NAME, {
   name: `${NAME_PREFIX}-${DB_NAME}`,
@@ -124,19 +124,19 @@ export const subscriptionAPI = await Worker(API_NAME, {
 // QUEUES
 // -----------------------------------------------------------------------------
 
-// subscription-charge-queue: Queue for charge tasks
-const CHARGE_QUEUE_NAME = "subscription-charge-queue"
-export interface ChargeQueueMessage {
-  billingEntryId: number
+// order-queue: Queue for processing orders
+const ORDER_QUEUE_NAME = "order-queue"
+export interface OrderQueueMessage {
+  orderId: number
   subscriptionId: Hash
   amount: string
   dueAt: string
   attemptNumber: number
 }
-export const subscriptionChargeQueue = await Queue<ChargeQueueMessage>(
-  CHARGE_QUEUE_NAME,
+export const orderQueue = await Queue<OrderQueueMessage>(
+  ORDER_QUEUE_NAME,
   {
-    name: `${NAME_PREFIX}-${CHARGE_QUEUE_NAME}`,
+    name: `${NAME_PREFIX}-${ORDER_QUEUE_NAME}`,
   },
 )
 
@@ -151,20 +151,20 @@ export const subscriptionChargeQueue = await Queue<ChargeQueueMessage>(
 // SCHEDULERS
 // -----------------------------------------------------------------------------
 
-// subscription-charge-scheduler: Schedules recurring charges
-const CHARGE_SCHEDULER_NAME = "subscription-charge-scheduler"
-export const subscriptionChargeScheduler = await Worker(CHARGE_SCHEDULER_NAME, {
-  name: `${NAME_PREFIX}-${CHARGE_SCHEDULER_NAME}`,
+// order-scheduler: Schedules order processing
+const ORDER_SCHEDULER_NAME = "order-scheduler"
+export const orderScheduler = await Worker(ORDER_SCHEDULER_NAME, {
+  name: `${NAME_PREFIX}-${ORDER_SCHEDULER_NAME}`,
   entrypoint: path.join(
     import.meta.dirname,
     "src",
     "schedulers",
-    "subscription-charge-scheduler.ts",
+    "order-scheduler.ts",
   ),
   crons: ["*/15 * * * *"], // Run every 15 minutes
   bindings: {
     DB: subscriptionDB,
-    CHARGE_QUEUE: subscriptionChargeQueue,
+    ORDER_QUEUE: orderQueue,
   },
   dev: { port: 3100 },
 })
@@ -202,19 +202,19 @@ export const subscriptionChargeScheduler = await Worker(CHARGE_SCHEDULER_NAME, {
 // QUEUE CONSUMERS
 // -----------------------------------------------------------------------------
 
-// subscription-charge-consumer:  Processes subscription charges
-const CHARGE_CONSUMER_NAME = "subscription-charge-consumer"
-export const subscriptionChargeConsumer = await Worker(CHARGE_CONSUMER_NAME, {
-  name: `${NAME_PREFIX}-${CHARGE_CONSUMER_NAME}`,
+// order-processor: Processes orders
+const ORDER_PROCESSOR_NAME = "order-processor"
+export const orderProcessor = await Worker(ORDER_PROCESSOR_NAME, {
+  name: `${NAME_PREFIX}-${ORDER_PROCESSOR_NAME}`,
   entrypoint: path.join(
     import.meta.dirname,
     "src",
-    "consumers",
-    "subscription-charge-consumer.ts",
+    "processors",
+    "order-processor.ts",
   ),
   eventSources: [
     {
-      queue: subscriptionChargeQueue,
+      queue: orderQueue,
       settings: {
         batchSize: 10,
         maxConcurrency: 10,
@@ -269,9 +269,9 @@ export const subscriptionChargeConsumer = await Worker(CHARGE_CONSUMER_NAME, {
 console.log({
   [API_NAME]: subscriptionAPI,
   [DB_NAME]: subscriptionDB,
-  [CHARGE_SCHEDULER_NAME]: subscriptionChargeScheduler,
-  [CHARGE_QUEUE_NAME]: subscriptionChargeQueue,
-  [CHARGE_CONSUMER_NAME]: subscriptionChargeConsumer,
+  [ORDER_SCHEDULER_NAME]: orderScheduler,
+  [ORDER_QUEUE_NAME]: orderQueue,
+  [ORDER_PROCESSOR_NAME]: orderProcessor,
   // [RECONCILER_SCHEDULER_NAME]: subscriptionReconcilerScheduler,
   // [REVOKE_QUEUE_NAME]: subscriptionRevokeQueue,
   // [REVOKE_CONSUMER_NAME]: subscriptionRevokeConsumer,
