@@ -26,8 +26,7 @@ export default {
 
       // Claim due orders atomically
       log.info("Claiming due orders")
-      const dueOrders =
-        await subscriptionRepository.claimDueOrders(100)
+      const dueOrders = await subscriptionRepository.claimDueOrders(100)
 
       if (dueOrders.length === 0) {
         log.info("No due orders found")
@@ -61,9 +60,7 @@ export default {
         entriesProcessed: dueOrders.length,
       })
 
-      log.info(
-        `Successfully queued ${dueOrders.length} orders for processing`,
-      )
+      log.info(`Successfully queued ${dueOrders.length} orders for processing`)
     } catch (error) {
       op.failure(error)
       log.error("Failed to process due orders", error)

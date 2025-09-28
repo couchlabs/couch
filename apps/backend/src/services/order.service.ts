@@ -44,9 +44,7 @@ export class OrderService {
    * Process a recurring payment for an order
    * Creates next order on success, marks subscription inactive on failure
    */
-  async processOrder(
-    params: ProcessOrderParams,
-  ): Promise<ProcessOrderResult> {
+  async processOrder(params: ProcessOrderParams): Promise<ProcessOrderResult> {
     const { orderId, subscriptionId, amount } = params
 
     const log = logger.with({

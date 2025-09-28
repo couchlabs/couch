@@ -133,12 +133,9 @@ export interface OrderQueueMessage {
   dueAt: string
   attemptNumber: number
 }
-export const orderQueue = await Queue<OrderQueueMessage>(
-  ORDER_QUEUE_NAME,
-  {
-    name: `${NAME_PREFIX}-${ORDER_QUEUE_NAME}`,
-  },
-)
+export const orderQueue = await Queue<OrderQueueMessage>(ORDER_QUEUE_NAME, {
+  name: `${NAME_PREFIX}-${ORDER_QUEUE_NAME}`,
+})
 
 // subscription-revoke-queue: Queue for revocation tasks
 // const REVOKE_QUEUE_NAME = "subscription-revoke-queue"

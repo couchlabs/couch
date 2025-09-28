@@ -412,9 +412,7 @@ export class SubscriptionRepository {
    * Atomically claim due orders for processing
    * This prevents race conditions between multiple schedulers
    */
-  async claimDueOrders(
-    limit: number = 100,
-  ): Promise<DueOrder[]> {
+  async claimDueOrders(limit: number = 100): Promise<DueOrder[]> {
     const result = await this.db
       .prepare(
         `UPDATE orders
@@ -447,8 +445,7 @@ export class SubscriptionRepository {
    * Record a transaction for an order
    */
   async recordTransaction(params: RecordTransactionParams): Promise<void> {
-    const { transactionHash, orderId, subscriptionId, amount, status } =
-      params
+    const { transactionHash, orderId, subscriptionId, amount, status } = params
 
     await this.db
       .prepare(
