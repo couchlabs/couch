@@ -13,17 +13,20 @@ A stablecoin subscription payment system built on Cloudflare Workers, using Coin
                            │                     ▲
                            │                     │
                            │              ┌──────────────┐
+                           │              │    Order     │
                            │              │  Scheduler   │
                            │              └──────────────┘
                            │                     │
                            │                     ▼
                            │              ┌──────────────┐
+                           │              │    Order     │
                            │              │    Queue     │
                            │              └──────────────┘
                            │                     │
                            │                     ▼
                            │              ┌──────────────┐
-                           └─────────────▶│  Processor   │
+                           └─────────────▶│    Order     │
+                                          │  Processor   │
                                           └──────────────┘
                                                  │
                                                  ▼
@@ -33,8 +36,8 @@ A stablecoin subscription payment system built on Cloudflare Workers, using Coin
                                           └──────────────┘
 
 Note: API accesses Blockchain directly for initial activation (onchain first charge + offchain setup)
-      Processor accesses Blockchain for recurring payments
-      Both API, Scheduler, and Processor access the same D1 database
+      Order Processor accesses Blockchain for recurring payments
+      Both API, Order Scheduler, and Order Processor access the same D1 database
 ```
 
 ## Testing Guide
