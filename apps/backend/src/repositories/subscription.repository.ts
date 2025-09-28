@@ -2,8 +2,8 @@ import { D1Database } from "@cloudflare/workers-types"
 
 import {
   SubscriptionStatus,
-  BillingType,
-  BillingStatus,
+  OrderType,
+  OrderStatus,
   TransactionStatus,
 } from "@/repositories/subscription.repository.constants"
 
@@ -17,15 +17,15 @@ export interface Subscription {
   modified_at?: string
 }
 
-export interface BillingEntry {
+export interface Order {
   id?: number
   subscription_id: string
-  type: BillingType
+  type: OrderType
   due_at: string
   amount: string
-  status: BillingStatus
+  status: OrderStatus
   attempts?: number
-  parent_billing_id?: number
+  parent_order_id?: number
   failure_reason?: string
   processing_lock?: string
   locked_by?: string
@@ -34,7 +34,7 @@ export interface BillingEntry {
 
 export interface Transaction {
   transaction_hash: string
-  billing_entry_id: number
+  order_id: number
   subscription_id: string
   amount: string
   status: TransactionStatus
@@ -55,12 +55,12 @@ export interface SubscriptionExistsParams {
 
 export interface GetSuccessfulTransactionParams {
   subscriptionId: Hash
-  billingEntryId: number
+  orderId: number
 }
 
 export interface TransactionResult {
   transaction_hash: Hash
-  billing_entry_id: number
+  order_id: number
   subscription_id: Hash
   amount: string
   status: TransactionStatus
@@ -69,7 +69,7 @@ export interface TransactionResult {
   created_at?: string
 }
 
-export interface DueBillingEntry {
+export interface DueOrder {
   id: number
   subscription_id: Hash
   amount: string
@@ -79,15 +79,15 @@ export interface DueBillingEntry {
 
 export interface RecordTransactionParams {
   transactionHash: Hash
-  billingEntryId: number
+  orderId: number
   subscriptionId: Hash
   amount: string
   status: string
 }
 
-export interface UpdateBillingEntryParams {
+export interface UpdateOrderParams {
   id: number
-  status: BillingStatus
+  status: OrderStatus
   failureReason?: string // Mapped error code (e.g., 'INSUFFICIENT_SPENDING_ALLOWANCE')
   rawError?: string // Original error message for debugging
 }
@@ -101,22 +101,22 @@ export interface DeleteSubscriptionDataParams {
   subscriptionId: Hash
 }
 
-export interface CreateSubscriptionWithBillingParams {
+export interface CreateSubscriptionWithOrderParams {
   subscriptionId: Hash
   accountAddress: Address
-  billingEntry: BillingEntry
+  order: Order
 }
 
 export interface ExecuteSubscriptionActivationParams {
   subscriptionId: Hash
-  billingEntry: {
+  order: {
     id: number
   }
   transaction: {
     hash: Hash
     amount: string
   }
-  nextBilling: {
+  nextOrder: {
     dueAt: string
     amount: string
   }
@@ -124,7 +124,7 @@ export interface ExecuteSubscriptionActivationParams {
 
 export interface MarkSubscriptionInactiveParams {
   subscriptionId: Hash
-  billingEntryId: number
+  orderId: number
   reason: string
 }
 
@@ -175,41 +175,41 @@ export class SubscriptionRepository {
       .first()
   }
 
-  async createBillingEntry(entry: BillingEntry): Promise<number> {
+  async createOrder(order: Order): Promise<number> {
     const result = await this.db
       .prepare(
-        `INSERT INTO billing_entries (
+        `INSERT INTO orders (
           subscription_id, type, due_at, amount, status
         ) VALUES (?, ?, ?, ?, ?)
         RETURNING id`,
       )
       .bind(
-        entry.subscription_id,
-        entry.type,
-        entry.due_at,
-        entry.amount,
-        entry.status || BillingStatus.PROCESSING,
+        order.subscription_id,
+        order.type,
+        order.due_at,
+        order.amount,
+        order.status || OrderStatus.PROCESSING,
       )
       .first<{ id: number }>()
 
     return result!.id
   }
 
-  async completeBillingEntry(id: number): Promise<void> {
+  async completeOrder(id: number): Promise<void> {
     await this.db
-      .prepare(`UPDATE billing_entries SET status = ? WHERE id = ?`)
-      .bind(BillingStatus.COMPLETED, id)
+      .prepare(`UPDATE orders SET status = ? WHERE id = ?`)
+      .bind(OrderStatus.PAID, id)
       .run()
   }
 
-  async failBillingEntry(id: number, reason: string): Promise<void> {
+  async failOrder(id: number, reason: string): Promise<void> {
     await this.db
       .prepare(
-        `UPDATE billing_entries
+        `UPDATE orders
          SET status = ?, failure_reason = ?
          WHERE id = ?`,
       )
-      .bind(BillingStatus.FAILED, reason, id)
+      .bind(OrderStatus.FAILED, reason, id)
       .run()
   }
 
@@ -217,12 +217,12 @@ export class SubscriptionRepository {
     await this.db
       .prepare(
         `INSERT INTO transactions (
-          transaction_hash, billing_entry_id, subscription_id, amount, status
+          transaction_hash, order_id, subscription_id, amount, status
         ) VALUES (?, ?, ?, ?, ?)`,
       )
       .bind(
         transaction.transaction_hash, // transaction_hash first as it's the PK
-        transaction.billing_entry_id,
+        transaction.order_id,
         transaction.subscription_id,
         transaction.amount,
         transaction.status,
@@ -236,16 +236,16 @@ export class SubscriptionRepository {
   async getSuccessfulTransaction(
     params: GetSuccessfulTransactionParams,
   ): Promise<TransactionResult | null> {
-    const { subscriptionId, billingEntryId } = params
+    const { subscriptionId, orderId } = params
     const transaction = await this.db
       .prepare(
         `SELECT * FROM transactions
          WHERE subscription_id = ?
-         AND billing_entry_id = ?
+         AND order_id = ?
          AND status = ?
          LIMIT 1`,
       )
-      .bind(subscriptionId, billingEntryId, TransactionStatus.CONFIRMED)
+      .bind(subscriptionId, orderId, TransactionStatus.CONFIRMED)
       .first<Transaction>()
 
     return transaction
@@ -266,7 +266,7 @@ export class SubscriptionRepository {
         .prepare("DELETE FROM transactions WHERE subscription_id = ?")
         .bind(subscriptionId),
       this.db
-        .prepare("DELETE FROM billing_entries WHERE subscription_id = ?")
+        .prepare("DELETE FROM orders WHERE subscription_id = ?")
         .bind(subscriptionId),
       this.db
         .prepare("DELETE FROM subscriptions WHERE subscription_id = ?")
@@ -275,13 +275,13 @@ export class SubscriptionRepository {
   }
 
   /**
-   * TRANSACTION: Create subscription and initial billing entry atomically
+   * TRANSACTION: Create subscription and initial order atomically
    * This ensures we either create both or neither
    */
-  async createSubscriptionWithBilling(
-    params: CreateSubscriptionWithBillingParams,
-  ): Promise<{ created: boolean; billingEntryId?: number }> {
-    const { subscriptionId, accountAddress, billingEntry } = params
+  async createSubscriptionWithOrder(
+    params: CreateSubscriptionWithOrderParams,
+  ): Promise<{ created: boolean; orderId?: number }> {
+    const { subscriptionId, accountAddress, order } = params
     try {
       // D1 supports transactions via batch
       // First, check if subscription exists
@@ -304,24 +304,24 @@ export class SubscriptionRepository {
         return { created: false }
       }
 
-      // Create billing entry
-      const billingResult = await this.db
+      // Create order
+      const orderResult = await this.db
         .prepare(
-          `INSERT INTO billing_entries (
+          `INSERT INTO orders (
             subscription_id, type, due_at, amount, status
           ) VALUES (?, ?, ?, ?, ?)
           RETURNING id`,
         )
         .bind(
-          billingEntry.subscription_id,
-          billingEntry.type,
-          billingEntry.due_at,
-          billingEntry.amount,
-          billingEntry.status || BillingStatus.PROCESSING,
+          order.subscription_id,
+          order.type,
+          order.due_at,
+          order.amount,
+          order.status || OrderStatus.PROCESSING,
         )
         .first<{ id: number }>()
 
-      return { created: true, billingEntryId: billingResult!.id }
+      return { created: true, orderId: orderResult!.id }
     } catch (error) {
       // If anything fails, clean up
       await this.deleteSubscriptionData({ subscriptionId })
@@ -331,44 +331,44 @@ export class SubscriptionRepository {
 
   /**
    * TRANSACTION: Finalize subscription activation
-   * Updates subscription status, billing entry, creates transaction, and next billing
+   * Updates subscription status, order, creates transaction, and next order
    */
   async executeSubscriptionActivation(
     params: ExecuteSubscriptionActivationParams,
   ): Promise<void> {
-    const { subscriptionId, billingEntry, transaction, nextBilling } = params
+    const { subscriptionId, order, transaction, nextOrder } = params
     await this.db.batch([
       // Create transaction record
       this.db
         .prepare(
           `INSERT INTO transactions (
-            transaction_hash, billing_entry_id, subscription_id, amount, status
+            transaction_hash, order_id, subscription_id, amount, status
           ) VALUES (?, ?, ?, ?, ?)`,
         )
         .bind(
           transaction.hash, // transaction_hash column (PK)
-          billingEntry.id,
+          order.id,
           subscriptionId,
           transaction.amount,
           TransactionStatus.CONFIRMED,
         ),
-      // Mark billing entry as completed
+      // Mark order as completed
       this.db
-        .prepare(`UPDATE billing_entries SET status = ? WHERE id = ?`)
-        .bind(BillingStatus.COMPLETED, billingEntry.id),
-      // Create next billing entry
+        .prepare(`UPDATE orders SET status = ? WHERE id = ?`)
+        .bind(OrderStatus.PAID, order.id),
+      // Create next order
       this.db
         .prepare(
-          `INSERT INTO billing_entries (
+          `INSERT INTO orders (
             subscription_id, type, due_at, amount, status
           ) VALUES (?, ?, ?, ?, ?)`,
         )
         .bind(
           subscriptionId,
-          BillingType.RECURRING,
-          nextBilling.dueAt,
-          nextBilling.amount,
-          BillingStatus.PENDING,
+          OrderType.RECURRING,
+          nextOrder.dueAt,
+          nextOrder.amount,
+          OrderStatus.PENDING,
         ),
       // Activate subscription
       this.db
@@ -387,7 +387,7 @@ export class SubscriptionRepository {
   async markSubscriptionInactive(
     params: MarkSubscriptionInactiveParams,
   ): Promise<void> {
-    const { subscriptionId, billingEntryId, reason } = params
+    const { subscriptionId, orderId, reason } = params
     await this.db.batch([
       // Mark subscription as inactive
       this.db
@@ -397,42 +397,40 @@ export class SubscriptionRepository {
            WHERE subscription_id = ?`,
         )
         .bind(SubscriptionStatus.INACTIVE, subscriptionId),
-      // Mark billing entry as failed
+      // Mark order as failed
       this.db
         .prepare(
-          `UPDATE billing_entries
+          `UPDATE orders
            SET status = ?, failure_reason = ?
            WHERE id = ?`,
         )
-        .bind(BillingStatus.FAILED, reason, billingEntryId),
+        .bind(OrderStatus.FAILED, reason, orderId),
     ])
   }
 
   /**
-   * Atomically claim due billing entries for processing
+   * Atomically claim due orders for processing
    * This prevents race conditions between multiple schedulers
    */
-  async claimDueBillingEntries(
-    limit: number = 100,
-  ): Promise<DueBillingEntry[]> {
+  async claimDueOrders(limit: number = 100): Promise<DueOrder[]> {
     const result = await this.db
       .prepare(
-        `UPDATE billing_entries
+        `UPDATE orders
          SET status = ?
          WHERE id IN (
-           SELECT be.id
-           FROM billing_entries be
-           JOIN subscriptions s ON be.subscription_id = s.subscription_id
-           WHERE be.status = ?
-             AND datetime(substr(be.due_at, 1, 19)) <= datetime('now', 'utc')
+           SELECT o.id
+           FROM orders o
+           JOIN subscriptions s ON o.subscription_id = s.subscription_id
+           WHERE o.status = ?
+             AND datetime(substr(o.due_at, 1, 19)) <= datetime('now', 'utc')
              AND s.status = ?
-           ORDER BY be.due_at
+           ORDER BY o.due_at
            LIMIT ?
          )
          RETURNING id, subscription_id, amount, due_at, attempts`,
       )
-      .bind(BillingStatus.PROCESSING, BillingStatus.PENDING, "active", limit)
-      .all<DueBillingEntry>()
+      .bind(OrderStatus.PROCESSING, OrderStatus.PENDING, "active", limit)
+      .all<DueOrder>()
 
     return (result.results || []).map((entry) => ({
       id: entry.id,
@@ -444,32 +442,31 @@ export class SubscriptionRepository {
   }
 
   /**
-   * Record a transaction for a billing entry
+   * Record a transaction for an order
    */
   async recordTransaction(params: RecordTransactionParams): Promise<void> {
-    const { transactionHash, billingEntryId, subscriptionId, amount, status } =
-      params
+    const { transactionHash, orderId, subscriptionId, amount, status } = params
 
     await this.db
       .prepare(
         `INSERT INTO transactions (
-          transaction_hash, billing_entry_id, subscription_id, amount, status
+          transaction_hash, order_id, subscription_id, amount, status
         ) VALUES (?, ?, ?, ?, ?)`,
       )
-      .bind(transactionHash, billingEntryId, subscriptionId, amount, status)
+      .bind(transactionHash, orderId, subscriptionId, amount, status)
       .run()
   }
 
   /**
-   * Update billing entry status
+   * Update order status
    */
-  async updateBillingEntry(params: UpdateBillingEntryParams): Promise<void> {
+  async updateOrder(params: UpdateOrderParams): Promise<void> {
     const { id, status, failureReason, rawError } = params
 
     if (failureReason || rawError) {
       await this.db
         .prepare(
-          `UPDATE billing_entries
+          `UPDATE orders
            SET status = ?, failure_reason = ?, raw_error = ?
            WHERE id = ?`,
         )
@@ -478,7 +475,7 @@ export class SubscriptionRepository {
     } else {
       await this.db
         .prepare(
-          `UPDATE billing_entries
+          `UPDATE orders
            SET status = ?
            WHERE id = ?`,
         )

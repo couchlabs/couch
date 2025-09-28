@@ -89,7 +89,7 @@ export function SubscriptionManager() {
   // Create Subscription
   const handleCreateSubscription = async () => {
     // get CDP Wallet
-    const accountAddress = import.meta.env.VITE_COUCH_WALLET_ADDRESS
+    const accountAddress = import.meta.env.VITE_SPENDER_ADDRESS
 
     if (!accountAddress) {
       throw new Error("SERVER ADDRESS NOT SET")

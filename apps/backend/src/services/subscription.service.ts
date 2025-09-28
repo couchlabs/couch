@@ -1,7 +1,7 @@
 import { logger } from "@/lib/logger"
 import {
-  BillingType,
-  BillingStatus,
+  OrderType,
+  OrderStatus,
 } from "@/repositories/subscription.repository.constants"
 import { SubscriptionRepository } from "@/repositories/subscription.repository"
 import {
@@ -31,10 +31,10 @@ export interface ActivationResult {
     hash: Hash
     amount: string
   }
-  billingEntry: {
+  order: {
     id: number
   }
-  nextBilling: {
+  nextOrder: {
     date: string
     amount: string
   }
@@ -54,7 +54,7 @@ export class SubscriptionService {
 
   /**
    * Completes the subscription activation in the background.
-   * This includes database updates and scheduling next billing.
+   * This includes database updates and scheduling next order.
    * Errors are logged but not thrown since this runs in background.
    */
   async completeActivation(result: ActivationResult): Promise<void> {
@@ -68,11 +68,11 @@ export class SubscriptionService {
 
       await this.subscriptionRepository.executeSubscriptionActivation({
         subscriptionId: result.subscriptionId,
-        billingEntry: result.billingEntry,
+        order: result.order,
         transaction: result.transaction,
-        nextBilling: {
-          dueAt: result.nextBilling.date,
-          amount: result.nextBilling.amount,
+        nextOrder: {
+          dueAt: result.nextOrder.date,
+          amount: result.nextOrder.amount,
         },
       })
 
@@ -167,18 +167,18 @@ export class SubscriptionService {
         nextPeriod: subscription.nextPeriodStart,
       })
 
-      // Step 2-3: Create subscription and billing entry atomically
-      log.info("Creating subscription and billing entry")
-      const { created, billingEntryId } =
-        await this.subscriptionRepository.createSubscriptionWithBilling({
+      // Step 2-3: Create subscription and order atomically
+      log.info("Creating subscription and order")
+      const { created, orderId } =
+        await this.subscriptionRepository.createSubscriptionWithOrder({
           subscriptionId,
           accountAddress: subscription.subscriptionOwner,
-          billingEntry: {
+          order: {
             subscription_id: subscriptionId,
-            type: BillingType.RECURRING,
+            type: OrderType.INITIAL,
             due_at: new Date().toISOString(),
             amount: String(subscription.remainingChargeInPeriod),
-            status: BillingStatus.PROCESSING,
+            status: OrderStatus.PROCESSING,
           },
         })
 
@@ -187,11 +187,11 @@ export class SubscriptionService {
       }
 
       // Step 4: Check for existing successful transaction (idempotency)
-      // This saves some gas by avoiding to charge an already processed billing entry
+      // This saves some gas by avoiding to charge an already processed order
       const existingTransaction =
         await this.subscriptionRepository.getSuccessfulTransaction({
           subscriptionId,
-          billingEntryId: billingEntryId!,
+          orderId: orderId!,
         })
 
       let transaction: ChargeTransactionResult
@@ -228,16 +228,16 @@ export class SubscriptionService {
             amount: chargeAmount,
           })
 
-          // COMPENSATING ACTION: Mark subscription and billing as inactive/failed
+          // COMPENSATING ACTION: Mark subscription and order as inactive/failed
           log.info("Marking subscription as inactive due to payment failure", {
             subscriptionId,
             errorCode,
-            billingEntryId: billingEntryId!,
+            orderId: orderId!,
           })
 
           await this.subscriptionRepository.markSubscriptionInactive({
             subscriptionId,
-            billingEntryId: billingEntryId!,
+            orderId: orderId!,
             reason: chargeError.message,
           })
 
@@ -260,10 +260,10 @@ export class SubscriptionService {
           hash: transaction.hash,
           amount: transaction.amount,
         },
-        billingEntry: {
-          id: billingEntryId!,
+        order: {
+          id: orderId!,
         },
-        nextBilling: {
+        nextOrder: {
           date: subscription.nextPeriodStart.toISOString(),
           amount: String(subscription.recurringCharge),
         },
@@ -271,7 +271,7 @@ export class SubscriptionService {
 
       op.success({
         transactionHash: transaction.hash,
-        nextBillingDate: subscription.nextPeriodStart,
+        nextOrderDate: subscription.nextPeriodStart,
       })
 
       return result

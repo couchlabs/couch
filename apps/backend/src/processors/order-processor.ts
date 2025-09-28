@@ -1,22 +1,19 @@
 import { SubscriptionRepository } from "@/repositories/subscription.repository"
 import { OnchainRepository } from "@/repositories/onchain.repository"
-import { BillingService } from "@/services/billing.service"
+import { OrderService } from "@/services/order.service"
 import { logger } from "@/lib/logger"
 import { isTestnetEnvironment } from "@/lib/constants"
 
-import type {
-  subscriptionChargeConsumer,
-  subscriptionChargeQueue,
-} from "@alchemy.run"
+import type { orderProcessor, orderQueue } from "@alchemy.run"
 
 export default {
   /**
-   * Queue handler - processes charge messages from the charge queue
-   * Each message represents a billing entry that needs to be charged
+   * Queue handler - processes order messages from the order queue
+   * Each message represents an order that needs to be processed
    */
   async queue(
-    batch: typeof subscriptionChargeQueue.Batch,
-    env: typeof subscriptionChargeConsumer.Env,
+    batch: typeof orderQueue.Batch,
+    env: typeof orderProcessor.Env,
     _ctx: ExecutionContext,
   ): Promise<void> {
     const log = logger.with({
@@ -24,24 +21,24 @@ export default {
       queueName: batch.queue,
     })
 
-    log.info(`Processing batch of ${batch.messages.length} charge messages`)
+    log.info(`Processing batch of ${batch.messages.length} order messages`)
 
     // Process each message in the batch
     const results = await Promise.allSettled(
       batch.messages.map(async (message) => {
-        const { billingEntryId, subscriptionId, amount } = message.body
+        const { orderId, subscriptionId, amount } = message.body
 
         const messageLog = log.with({
           messageId: message.id,
-          billingEntryId,
+          orderId,
           subscriptionId,
         })
-        const op = messageLog.operation("processCharge")
+        const op = messageLog.operation("processOrder")
 
         try {
           op.start()
 
-          const billingService = new BillingService({
+          const orderService = new OrderService({
             subscriptionRepository: new SubscriptionRepository({
               db: env.DB,
             }),
@@ -60,8 +57,8 @@ export default {
 
           // Process the recurring payment
           messageLog.info("Processing recurring payment")
-          const result = await billingService.processRecurringPayment({
-            billingEntryId,
+          const result = await orderService.processOrder({
+            orderId,
             subscriptionId,
             amount,
           })
@@ -69,7 +66,7 @@ export default {
           if (result.success) {
             messageLog.info("Payment processed successfully", {
               transactionHash: result.transactionHash,
-              nextBillingCreated: result.nextBillingCreated,
+              nextOrderCreated: result.nextOrderCreated,
             })
 
             // ACK the message on success
@@ -77,7 +74,7 @@ export default {
 
             op.success({
               transactionHash: result.transactionHash,
-              nextBillingCreated: result.nextBillingCreated,
+              nextOrderCreated: result.nextOrderCreated,
             })
           } else {
             messageLog.warn("Payment failed", {
@@ -95,7 +92,7 @@ export default {
           }
         } catch (error) {
           op.failure(error)
-          messageLog.error("Failed to process charge message", error)
+          messageLog.error("Failed to process order message", error)
 
           // Retry the message if there's an unexpected error
           // (not a payment failure, but a system error)

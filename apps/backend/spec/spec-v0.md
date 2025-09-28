@@ -50,9 +50,9 @@ Initiates the subscription setup process by starting a workflow that handles val
 CREATE TABLE subscriptions (
   subscription_id TEXT PRIMARY KEY,    -- Onchain subscription ID (also workflow ID)
   is_subscribed BOOLEAN NOT NULL,      -- Current onchain subscription status
-  billing_status TEXT NOT NULL,        -- Billing status: pending, active, failed
+  order_status TEXT NOT NULL,        -- Order status: pending, active, failed
   recurring_charge TEXT NOT NULL,      -- Amount in USD (e.g., "9.99")
-  period_days INTEGER,                 -- Billing period in days (nullable if not provided)
+  period_days INTEGER,                 -- Order period in days (nullable if not provided)
   next_charge_at DATETIME,              -- Next scheduled charge time
   last_charge_at DATETIME,              -- Last successful charge time
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -81,7 +81,7 @@ Handles the initial subscription creation, validation, and first charge.
    - Throws NonRetryableError if validation fails
 
 2. **create_db_record**: Creates database entry
-   - Inserts subscription with `billing_status = 'pending'`
+   - Inserts subscription with `order_status = 'pending'`
    - Stores recurring charge amount and period
 
 3. **first_charge**: Processes initial payment
@@ -90,14 +90,14 @@ Handles the initial subscription creation, validation, and first charge.
 
 4. **activate_subscription** OR **mark_failed**: Final status update
    - If charge successful:
-     - Updates `billing_status = 'active'`
+     - Updates `order_status = 'active'`
      - Sets `next_charge_at` and `last_charge_at`
-     - Starts SubscriptionBilling workflow
+     - Starts SubscriptionOrder workflow
    - If charge failed:
-     - Updates `billing_status = 'failed'`
+     - Updates `order_status = 'failed'`
      - Throws NonRetryableError
 
-### 2. SubscriptionBilling Workflow
+### 2. SubscriptionOrder Workflow
 
 Handles recurring charges after initial setup.
 
@@ -120,11 +120,11 @@ Handles recurring charges after initial setup.
    - If successful: Schedule next charge, continue loop
    - If failed: Mark as failed, terminate workflow
 
-5. **Loop**: Return to step 1 for continuous billing
+5. **Loop**: Return to step 1 for continuous order
 
 #### On Failure
 
-- Set `billing_status = 'failed'`
+- Set `order_status = 'failed'`
 - Terminate the workflow
 - Throw NonRetryableError
 
@@ -146,28 +146,28 @@ await env.SUBSCRIPTION_SETUP.create({
 })
 ```
 
-#### SubscriptionBilling Workflow
+#### SubscriptionOrder Workflow
 
 - **Workflow ID**: `{subscription_id}` (direct mapping)
 - **Triggered by**: SubscriptionSetup workflow after successful first charge
 - **Continuous execution**: Loops indefinitely until terminated
 
 ```javascript
-// Start billing workflow
-await env.SUBSCRIPTION_BILLING.create({
+// Start order workflow
+await env.SUBSCRIPTION_ORDER.create({
   id: subscriptionId,
   params: { nextChargeAt },
 })
 
-// Terminate billing workflow
-await env.SUBSCRIPTION_BILLING.get(subscriptionId).terminate()
+// Terminate order workflow
+await env.SUBSCRIPTION_ORDER.get(subscriptionId).terminate()
 ```
 
 ### Status Management
 
 - **is_subscribed**: Onchain subscription state (boolean)
-- **billing_status**: Billing operations (pending, active, failed)
-- Query billable: `WHERE is_subscribed = true AND billing_status = 'active'`
+- **order_status**: Order operations (pending, active, failed)
+- Query billable: `WHERE is_subscribed = true AND order_status = 'active'`
 
 ## Architecture Decisions for v0 POC
 
@@ -180,24 +180,24 @@ For the v0 POC, the initial charge is processed in the SubscriptionSetup workflo
 - Initial charge happens in SubscriptionSetup workflow
 - Setup either fully succeeds (subscription activated) or fails
 - Failed setups require manual intervention
-- Clear separation: Setup handles onboarding, Billing handles recurring only
+- Clear separation: Setup handles onboarding, Order handles recurring only
 
 **Future Enhancement (v1):**
 
-- Consider moving initial charge to SubscriptionBilling workflow
+- Consider moving initial charge to SubscriptionOrder workflow
 - Would enable automatic retry of failed initial charges
 - Provides unified payment handling and better recovery options
-- Setup workflow would create subscription record and immediately start billing
-- Billing workflow would detect first charge vs recurring charge
+- Setup workflow would create subscription record and immediately start order
+- Order workflow would detect first charge vs recurring charge
 
 This architectural change is deferred to v1 to keep the POC simple and ship faster.
 
 ## Future Improvements
 
-- **Unified Charge Handling**: Move initial charge to billing workflow for better retry capabilities
+- **Unified Charge Handling**: Move initial charge to order workflow for better retry capabilities
 - **Webhook Support**: Add webhook endpoints for subscription status updates
 - **Batch Processing**: Process multiple subscription charges in parallel
-- **Monitoring Dashboard**: Real-time subscription status and billing metrics
+- **Monitoring Dashboard**: Real-time subscription status and order metrics
 - **Retry Strategies**: Configurable retry policies per subscription tier
 - **Payment Method Fallbacks**: Try alternative payment methods on failure
 - **Subscription Pausing**: Allow temporary subscription holds

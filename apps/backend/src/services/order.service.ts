@@ -4,31 +4,31 @@ import { getPaymentErrorCode } from "@/services/subscription.service.errors"
 import { SubscriptionRepository } from "@/repositories/subscription.repository"
 import { OnchainRepository } from "@/repositories/onchain.repository"
 import {
-  BillingStatus,
-  BillingType,
+  OrderStatus,
+  OrderType,
 } from "@/repositories/subscription.repository.constants"
 import { logger } from "@/lib/logger"
 
-export interface ProcessRecurringPaymentParams {
-  billingEntryId: number
+export interface ProcessOrderParams {
+  orderId: number
   subscriptionId: Hash
   amount: string
 }
 
-export interface RecurringPaymentResult {
+export interface ProcessOrderResult {
   success: boolean
   transactionHash?: Hash
   failureReason?: string
-  nextBillingCreated: boolean
+  nextOrderCreated: boolean
 }
 
-export interface ScheduleNextBillingParams {
+export interface ScheduleNextOrderParams {
   subscriptionId: Hash
   dueAt: Date
   amount: string
 }
 
-export class BillingService {
+export class OrderService {
   private subscriptionRepository: SubscriptionRepository
   private onchainRepository: OnchainRepository
 
@@ -41,20 +41,18 @@ export class BillingService {
   }
 
   /**
-   * Process a recurring payment for a billing entry
-   * Creates next billing entry on success, marks subscription inactive on failure
+   * Process a recurring payment for an order
+   * Creates next order on success, marks subscription inactive on failure
    */
-  async processRecurringPayment(
-    params: ProcessRecurringPaymentParams,
-  ): Promise<RecurringPaymentResult> {
-    const { billingEntryId, subscriptionId, amount } = params
+  async processOrder(params: ProcessOrderParams): Promise<ProcessOrderResult> {
+    const { orderId, subscriptionId, amount } = params
 
     const log = logger.with({
-      billingEntryId,
+      orderId,
       subscriptionId,
       amount,
     })
-    const op = log.operation("processRecurringPayment")
+    const op = log.operation("processOrder")
 
     try {
       op.start()
@@ -72,52 +70,52 @@ export class BillingService {
       })
       await this.subscriptionRepository.recordTransaction({
         transactionHash: chargeResult.hash,
-        billingEntryId,
+        orderId,
         subscriptionId,
         amount: chargeResult.amount,
         status: "confirmed",
       })
 
-      // Step 3: Update billing entry as completed
-      await this.subscriptionRepository.updateBillingEntry({
-        id: billingEntryId,
-        status: BillingStatus.COMPLETED,
+      // Step 3: Update order as paid
+      await this.subscriptionRepository.updateOrder({
+        id: orderId,
+        status: OrderStatus.PAID,
       })
 
       // Step 4: Get next period from onchain (source of truth)
-      log.info("Fetching next billing period from onchain")
+      log.info("Fetching next order period from onchain")
       const { subscription } =
         await this.onchainRepository.getSubscriptionStatus({
           subscriptionId,
         })
 
-      // Step 5: Create next billing entry
-      let nextBillingCreated = false
+      // Step 5: Create next order
+      let nextOrderCreated = false
       if (subscription.isSubscribed && subscription.nextPeriodStart) {
-        log.info("Creating next billing entry", {
+        log.info("Creating next order", {
           dueAt: subscription.nextPeriodStart,
           amount: subscription.recurringCharge,
         })
 
-        await this.subscriptionRepository.createBillingEntry({
+        await this.subscriptionRepository.createOrder({
           subscription_id: subscriptionId,
-          type: BillingType.RECURRING,
+          type: OrderType.RECURRING,
           due_at: subscription.nextPeriodStart.toISOString(),
           amount: String(subscription.recurringCharge),
-          status: BillingStatus.PENDING,
+          status: OrderStatus.PENDING,
         })
-        nextBillingCreated = true
+        nextOrderCreated = true
       }
 
       op.success({
         transactionHash: chargeResult.hash,
-        nextBillingCreated,
+        nextOrderCreated,
       })
 
       return {
         success: true,
         transactionHash: chargeResult.hash,
-        nextBillingCreated,
+        nextOrderCreated,
       }
     } catch (error) {
       op.failure(error)
@@ -126,10 +124,10 @@ export class BillingService {
       const errorCode = getPaymentErrorCode(error)
       const rawError = error instanceof Error ? error.message : String(error)
 
-      // Mark billing entry as failed with both mapped code and raw error
-      await this.subscriptionRepository.updateBillingEntry({
-        id: billingEntryId,
-        status: BillingStatus.FAILED,
+      // Mark order as failed with both mapped code and raw error
+      await this.subscriptionRepository.updateOrder({
+        id: orderId,
+        status: OrderStatus.FAILED,
         failureReason: errorCode,
         rawError: rawError,
       })
@@ -144,16 +142,16 @@ export class BillingService {
       return {
         success: false,
         failureReason: errorCode,
-        nextBillingCreated: false,
+        nextOrderCreated: false,
       }
     }
   }
 
   /**
-   * Schedule next billing for a subscription
-   * Used when we need to create a billing entry outside of payment processing
+   * Schedule next order for a subscription
+   * Used when we need to create an order outside of payment processing
    */
-  async scheduleNextBilling(params: ScheduleNextBillingParams): Promise<void> {
+  async scheduleNextOrder(params: ScheduleNextOrderParams): Promise<void> {
     const { subscriptionId, dueAt, amount } = params
 
     const log = logger.with({
@@ -161,14 +159,14 @@ export class BillingService {
       dueAt: dueAt.toISOString(),
       amount,
     })
-    log.info("Scheduling next billing")
+    log.info("Scheduling next order")
 
-    await this.subscriptionRepository.createBillingEntry({
+    await this.subscriptionRepository.createOrder({
       subscription_id: subscriptionId,
-      type: BillingType.RECURRING,
+      type: OrderType.RECURRING,
       due_at: dueAt.toISOString(),
       amount,
-      status: BillingStatus.PENDING,
+      status: OrderStatus.PENDING,
     })
   }
 }

@@ -75,7 +75,7 @@ app.post("/api/subscriptions", async (ctx) => {
       data: {
         subscription_id: result.subscriptionId,
         transaction_hash: result.transaction.hash,
-        next_billing_date: result.nextBilling.date,
+        next_order_date: result.nextOrder.date,
       },
     }),
     {

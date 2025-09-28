@@ -13,18 +13,22 @@
       "bun": "./alchemy.run.ts",
       "import": "./alchemy.run.js",
       "types": "./alchemy.run.ts"
+    },
+    "./constants": {
+      "import": "./src/lib/constants.ts"
     }
   },
-  "devDependencies": {
-    "@types/node": "^24.5.2",
-    "@cloudflare/workers-types": "^4.20250922.0",
-    "alchemy": "^0.68.0",
-    "typescript": "^5.9.2"
-  },
   "dependencies": {
-    "@base-org/account": "^2.3.1",
-    "@coinbase/cdp-sdk": "^1.38.1",
+    "@base-org/account": "catalog:coinbase",
+    "@coinbase/cdp-sdk": "catalog:coinbase",
     "viem": "^2.37.8",
     "hono": "^4.9.8"
+  },
+  "devDependencies": {
+    "alchemy": "catalog:",
+    "typescript": "catalog:",
+    "miniflare": "catalog:cloudflare",
+    "@cloudflare/workers-types": "catalog:cloudflare",
+    "@types/node": "^24.5.2"
   }
 }
