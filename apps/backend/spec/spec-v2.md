@@ -14,26 +14,28 @@ A minimal account management and webhook system that enables developers to integ
 
 ```
   ┌─────────────────────────┐
-  │   subscription-api      │──────────► subscription-db
+  │         api             │──────────► subscription-db
   │   (with auth middleware)│                ▲
   └───────────┬─────────────┘                │
               │                              │
+              │ (emits webhook events)       │
               ▼                              │
-       webhook-queue                         │
+         webhook-queue                       │
               │                              │
               ▼                              │
   ┌─────────────────────────┐                │
-  │  webhook-delivery       │────────────────┤
-  │                         │                │
-  └─────────────────────────┘                │
-                                             │
-  ┌─────────────────────────┐                │
-  │    order-processor      │────────────────┤
-  │                         │                │
+  │   webhook-delivery      │────────────────┘
+  │                         │   (reads webhooks table)
+  └─────────────────────────┘
+
+  ┌─────────────────────────┐
+  │    order-processor      │──────────► subscription-db
+  │                         │                ▲
   └───────────┬─────────────┘                │
               │                              │
-              └──────────────────────────────┘
-                   (emits webhook events)
+              │ (emits webhook events)       │
+              ▼                              │
+         webhook-queue ──────────────────────┘
 ```
 
 ### Core Components
@@ -406,6 +408,7 @@ Follow the existing patterns for Workers, Queues, and Databases when adding new 
 ## Implementation Plan
 
 ### Phase 1: Account System & Authentication
+
 1. **Database schema** - Add accounts and api_keys tables
 2. **Account endpoints** - `POST /api/account`, `POST /api/api-keys`
 3. **Auth middleware** - API key validation
@@ -413,12 +416,14 @@ Follow the existing patterns for Workers, Queues, and Databases when adding new 
 5. **Test** - Ensure existing subscription flow works with auth
 
 ### Phase 2: Webhook Endpoint
+
 1. **Database schema** - Add webhooks table
 2. **Webhook endpoint** - `PUT /api/webhook` for setting webhook URL
 3. **Webhook secret generation** - HMAC secret per account
 4. **Test** - Webhook CRUD operations
 
 ### Phase 3: Webhook Delivery System
+
 1. **Queue setup** - Create webhook-queue in alchemy.run.ts
 2. **Webhook delivery consumer** - Process and deliver webhooks
 3. **Event emission** - Integrate `emitSubscriptionEvent` in:
