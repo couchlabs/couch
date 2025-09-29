@@ -8,6 +8,7 @@ import { logger } from "@/lib/logger"
 // Route imports
 import healthRoutes from "@/api/routes/health"
 import subscriptionRoutes from "@/api/routes/subscriptions"
+import { accountRoutes } from "@/api/routes/account.routes"
 
 import type { WorkerEnv } from "@/types/api.env"
 
@@ -41,5 +42,6 @@ api.onError((error, ctx) => {
 // Mount routes
 api.route("/health", healthRoutes)
 api.route("/subscriptions", subscriptionRoutes)
+api.route("/account", accountRoutes)
 
 export default api

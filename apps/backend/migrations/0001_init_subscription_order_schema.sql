@@ -1,6 +1,10 @@
 -- Migration: Create schema for subscription order system
 -- Description: Core tables for managing subscriptions, orders, and transactions
 
+-- =============================================================================
+-- SUBSCRIPTION SYSTEM TABLES
+-- =============================================================================
+
 -- Core subscription state (minimal - onchain is source of truth)
 CREATE TABLE IF NOT EXISTS subscriptions (
   subscription_id TEXT PRIMARY KEY,  -- This IS the permission hash from onchain
@@ -41,7 +45,10 @@ CREATE TABLE IF NOT EXISTS transactions (
   FOREIGN KEY (subscription_id) REFERENCES subscriptions(subscription_id)
 );
 
--- Indexes for performance
+-- -----------------------------------------------------------------------------
+-- Indexes for Subscription System
+-- -----------------------------------------------------------------------------
+
 -- Time-based queries
 CREATE INDEX idx_subscriptions_created ON subscriptions(created_at);
 CREATE INDEX idx_orders_created ON orders(created_at);
@@ -63,3 +70,39 @@ CREATE INDEX idx_transactions_status ON transactions(status);
 
 -- Account lookup
 CREATE INDEX idx_subscriptions_owner ON subscriptions(owner_address);
+
+-- =============================================================================
+-- ACCOUNT SYSTEM TABLES
+-- =============================================================================
+
+-- Accounts table (tied to merchant wallet address)
+CREATE TABLE IF NOT EXISTS accounts (
+    evm_address TEXT PRIMARY KEY  -- Checksummed address (0x...)
+);
+
+-- API Keys table (V1: one key per account, V2: multiple)
+CREATE TABLE IF NOT EXISTS api_keys (
+    key_hash TEXT PRIMARY KEY,          -- SHA-256 hash of the secret part (no prefix)
+    evm_address TEXT NOT NULL REFERENCES accounts(evm_address) ON DELETE CASCADE
+);
+
+-- Single webhook per account
+CREATE TABLE IF NOT EXISTS webhooks (
+    evm_address TEXT PRIMARY KEY REFERENCES accounts(evm_address) ON DELETE CASCADE,
+    url TEXT NOT NULL,                  -- HTTPS URL
+    secret TEXT NOT NULL                -- For HMAC signature verification
+);
+
+-- Link subscriptions to accounts (merchant who receives payments)
+ALTER TABLE subscriptions ADD COLUMN evm_address TEXT REFERENCES accounts(evm_address);
+
+-- Add order sequence tracking for webhook events
+ALTER TABLE orders ADD COLUMN order_number INTEGER;
+
+-- -----------------------------------------------------------------------------
+-- Indexes for Account System
+-- -----------------------------------------------------------------------------
+
+CREATE INDEX idx_api_keys_account ON api_keys(evm_address);
+CREATE INDEX idx_subscriptions_evm_address ON subscriptions(evm_address);
+CREATE INDEX idx_orders_subscription_number ON orders(subscription_id, order_number);

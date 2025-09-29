@@ -147,13 +147,36 @@ sqlite3 ../../alchemy/miniflare/v3/d1/miniflare-D1DatabaseObject/<generated_hash
 
 ## API Endpoints
 
-### Health Check
+### Postman Collection
+
+A complete Postman collection is available for testing all endpoints:
+
+📥 **[Import Collection](./src/api/postman/collection.json)** - Import this file into Postman to get all endpoints pre-configured with proper headers and request bodies.
+
+### Available Endpoints
+
+#### Health Check
 
 ```
 GET /health
 ```
 
-### Activate Subscription
+#### Account Management
+
+```
+PUT /api/account
+Body: {
+  "evm_address": "0x..."
+}
+
+Response: {
+  "api_key": "ck_dev_..."  // Only shown once, save it!
+}
+```
+
+Creates a new account or rotates the API key for an existing account.
+
+#### Activate Subscription
 
 ```
 POST /api/subscriptions
