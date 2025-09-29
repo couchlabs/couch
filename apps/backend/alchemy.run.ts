@@ -132,13 +132,6 @@ export const orderQueue = await Queue<OrderQueueMessage>(ORDER_QUEUE_NAME, {
   name: `${NAME_PREFIX}-${ORDER_QUEUE_NAME}`,
 })
 
-// subscription-revoke-queue: Queue for revocation tasks
-// const REVOKE_QUEUE_NAME = "subscription-revoke-queue"
-// export const subscriptionRevokeQueue = await Queue(REVOKE_QUEUE_NAME, {
-//   name: `${scope.name}-${scope.stage}-${REVOKE_QUEUE_NAME}`,
-//   adopt: true,
-// })
-
 // -----------------------------------------------------------------------------
 // SCHEDULERS
 // -----------------------------------------------------------------------------
@@ -160,35 +153,6 @@ export const orderScheduler = await Worker(ORDER_SCHEDULER_NAME, {
   },
   dev: { port: 3100 },
 })
-
-// subscription-reconciler-scheduler:  Audits permission consistency
-// const RECONCILER_SCHEDULER_NAME = "subscription-reconciler-scheduler"
-// const KV_ORPHAN_NAME = "subscription-orphan-cache"
-// export const subscriptionReconcilerScheduler = await Worker(
-//   RECONCILER_SCHEDULER_NAME,
-//   {
-//     name: `${scope.name}-${scope.stage}-${RECONCILER_SCHEDULER_NAME}`,
-//     entrypoint: path.join(
-//       import.meta.dirname,
-//       "src",
-//       "subscription-reconciler-scheduler.ts",
-//     ),
-//     adopt: true,
-//     crons: ["*/30 * * * *"], // Run every 30 minutes
-//     bindings: {
-//       // ENV & SECRETS:
-//       CDP_API_KEY_ID: alchemy.secret.env.CDP_API_KEY_ID,
-//       CDP_API_KEY_SECRET: alchemy.secret.env.CDP_API_KEY_SECRET,
-//       // RESOURCES:
-//       DB: subscriptionDB,
-//       ORPHAN_CACHE: await KVNamespace(KV_ORPHAN_NAME, {
-//         title: `${scope.name}-${scope.stage}-${KV_ORPHAN_NAME}`,
-//         adopt: true,
-//       }),
-//       REVOKE_QUEUE: subscriptionRevokeQueue,
-//     },
-//   },
-// )
 
 // -----------------------------------------------------------------------------
 // QUEUE CONSUMERS
@@ -225,48 +189,19 @@ export const orderProcessor = await Worker(ORDER_PROCESSOR_NAME, {
   dev: { port: 3200 },
 })
 
-// subscription-revoke-consumer:  Revokes cancelled subscriptions
-// const REVOKE_CONSUMER_NAME = "subscription-revoke-consumer"
-// export const subscriptionRevokeConsumer = await Worker(REVOKE_CONSUMER_NAME, {
-//   name: `${scope.name}-${scope.stage}-${REVOKE_CONSUMER_NAME}`,
-//   entrypoint: path.join(
-//     import.meta.dirname,
-//     "src",
-//     "subscription-revoke-consumer.ts",
-//   ),
-//   adopt: true,
-//   eventSources: [
-//     {
-//       queue: subscriptionRevokeQueue,
-//       settings: {
-//         batchSize: 10,
-//         maxConcurrency: 10,
-//         maxRetries: 3,
-//         maxWaitTimeMs: 5000,
-//         retryDelay: 60,
-//       },
-//     },
-//   ],
-//   bindings: {
-//     // ENV & SECRETS:
-//     CDP_API_KEY_ID: alchemy.secret.env.CDP_API_KEY_ID,
-//     CDP_API_KEY_SECRET: alchemy.secret.env.CDP_API_KEY_SECRET,
-//     CDP_WALLET_SECRET: alchemy.secret.env.CDP_WALLET_SECRET,
-//     CDP_WALLET_NAME: alchemy.env.CDP_WALLET_NAME,
-//     // RESOURCES:
-//     DB: subscriptionDB,
-//   },
-// })
-
 console.log({
   [API_NAME]: subscriptionAPI,
   [DB_NAME]: subscriptionDB,
   [ORDER_SCHEDULER_NAME]: orderScheduler,
   [ORDER_QUEUE_NAME]: orderQueue,
   [ORDER_PROCESSOR_NAME]: orderProcessor,
-  // [RECONCILER_SCHEDULER_NAME]: subscriptionReconcilerScheduler,
-  // [REVOKE_QUEUE_NAME]: subscriptionRevokeQueue,
-  // [REVOKE_CONSUMER_NAME]: subscriptionRevokeConsumer,
 })
 
 await scope.finalize()
+
+// TODOS
+// Reconciler components - see commit ee65232 for commented implementation
+// - subscription-reconciler-scheduler:  Audits permission consistency (Worker with cron trigger)
+// - subscription-orphan-cache (KV)
+// - subscription-revoke-queue: Queue for revocation tasks (Queue)
+// - subscription-revoke-consumer:  Revokes cancelled subscriptions (Worker with Queue consumer settings)
