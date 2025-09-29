@@ -4,19 +4,59 @@
 
 A minimal account management and webhook system that enables developers to integrate Couch's subscription payment infrastructure into their applications. The system provides API key authentication and webhook notifications for subscription events.
 
+### Payment Flow
+
+Couch enables merchants to collect recurring USDC payments from their subscribers:
+
+```
+Subscriber Wallet → [Couch Smart Wallet charges] → Merchant's evm_address
+```
+
+**Three Key Roles:**
+
+1. **Subscriber** (not currently stored - SDK limitation)
+   - The end user who signs the subscription permission
+   - Their wallet that holds the USDC being charged
+   - Approves Couch as the spender
+   - Note: `subscriptionPayer` available during creation but not from `getStatus`
+
+2. **Owner** (`owner_address` in subscriptions table - Couch's wallet)
+   - Couch's CDP smart wallet that has permission to execute charges
+   - Acts as the "spender" in the Base Account permission system
+   - Same for all subscriptions (Couch is always the owner/charger)
+
+3. **Recipient** (`evm_address` in accounts table - the Merchant)
+   - The merchant/developer using Couch's API
+   - Receives the USDC payments from subscriptions
+   - Identified by their EVM address in the accounts system
+
+**Flow:**
+
+1. **Subscriber** approves spend permission for **Couch (owner)** via frontend SDK
+2. **Couch (owner)** executes charges on subscriptions
+3. **Merchant (recipient)** receives USDC directly to their `evm_address`
+
+The merchant's `evm_address` serves dual purposes:
+
+- **Identity:** Primary key for the account system
+- **Payment Recipient:** Where subscription payments are sent via the `recipient` parameter in the [Base Account SDK charge method](https://github.com/base/account-sdk/blob/master/packages/account-sdk/src/interface/payment/charge.ts)
+
+**Security Note:** This dual-purpose design is powerful because signature verification (V2) will guarantee that whoever controls the API keys also has access to the funds. No one can redirect payments to an address they don't control.
+
 ### Design Principles
 
-- **Web3-Native Identity:** EVM addresses as primary account identifiers
+- **Web3-Native Identity:** EVM addresses as primary account identifiers and payment recipients
+- **Direct Payment:** Subscribers pay directly to merchants (no intermediary custody)
 - **Single Event Type:** One webhook event for all subscription changes
-- **Minimal Surface Area:** 4 endpoints total for v1
+- **Minimal Surface Area:** 3 endpoints total for v1
 
 ### Architecture
 
 ```
   ┌─────────────────────────┐
-  │         api             │──────────► subscription-db
-  │   (with auth middleware)│                ▲
-  └───────────┬─────────────┘                │
+  │         api             │──────────► db
+  │   (with auth middleware)│           ▲
+  └───────────┬─────────────┘           │
               │                              │
               │ (emits webhook events)       │
               ▼                              │
@@ -29,9 +69,9 @@ A minimal account management and webhook system that enables developers to integ
   └─────────────────────────┘
 
   ┌─────────────────────────┐
-  │    order-processor      │──────────► subscription-db
-  │                         │                ▲
-  └───────────┬─────────────┘                │
+  │    order-processor      │──────────► db
+  │                         │           ▲
+  └───────────┬─────────────┘           │
               │                              │
               │ (emits webhook events)       │
               ▼                              │
@@ -41,7 +81,7 @@ A minimal account management and webhook system that enables developers to integ
 ### Core Components
 
 1. **SERVICES** - CF Workers with Hono
-   - `subscription-api` - Account, API key, webhook, and subscription management with auth
+   - `api` - Account, API key, webhook, and subscription management with auth
 
 2. **CONSUMERS** - CF Queue Consumers
    - `order-processor` - Processes orders from order-queue
@@ -52,44 +92,43 @@ A minimal account management and webhook system that enables developers to integ
    - `webhook-queue` - Queue for webhook delivery
 
 4. **DATABASE** - CF D1
-   - `subscription-db` - Extended with accounts, api_keys, and webhooks tables
+   - `db` - Single database with all tables (subscriptions, orders, accounts, api_keys, webhooks)
 
 ## Database Schema
 
 ```sql
 -- Accounts table (tied to wallet address)
 CREATE TABLE accounts (
-    evm_address TEXT PRIMARY KEY,       -- Checksummed address (0x...)
-    created_at INTEGER NOT NULL         -- Unix timestamp
+    evm_address TEXT PRIMARY KEY        -- Checksummed address (0x...)
 );
 
--- API Keys table
+-- API Keys table (V1: one key per account, V2: multiple)
 CREATE TABLE api_keys (
     key_hash TEXT PRIMARY KEY,          -- SHA-256 hash of the actual key
-    evm_address TEXT NOT NULL REFERENCES accounts(evm_address),
-    key_prefix TEXT NOT NULL,           -- First ~16 chars for identification
-    created_at INTEGER NOT NULL         -- Unix timestamp
+    evm_address TEXT NOT NULL REFERENCES accounts(evm_address) ON DELETE CASCADE
 );
 
 -- Single webhook per account
 CREATE TABLE webhooks (
-    evm_address TEXT PRIMARY KEY REFERENCES accounts(evm_address),
+    evm_address TEXT PRIMARY KEY REFERENCES accounts(evm_address) ON DELETE CASCADE,
     url TEXT NOT NULL,                  -- HTTPS URL
-    secret TEXT NOT NULL,               -- For HMAC signature verification
-    created_at INTEGER NOT NULL         -- Unix timestamp
+    secret TEXT NOT NULL                -- For HMAC signature verification
 );
 
 -- Link subscriptions to accounts
 ALTER TABLE subscriptions ADD COLUMN evm_address TEXT REFERENCES accounts(evm_address);
+
+-- Add order sequence tracking
+ALTER TABLE orders ADD COLUMN order_number INTEGER;
 ```
 
-## API Endpoints (4 Total)
+## API Endpoints (3 Total)
 
-### 1. Create Account / Recover Access
+### 1. Create Account / Rotate API Key
 
 `POST /api/account`
 
-Creates a new account or recovers access to an existing one.
+Creates a new account or rotates the API key for an existing account.
 
 **Request:**
 
@@ -107,55 +146,24 @@ Creates a new account or recovers access to an existing one.
 }
 ```
 
-**Notes:**
+**Behavior:**
 
-- First call creates account (permissionless)
-- Subsequent calls could require signature in v2 for security
-- Always returns a new API key
+- **New account:** Creates account and generates first API key
+- **Existing account:** Replaces the existing API key (old key becomes invalid)
+- **Security Note for V1:** No verification required - anyone can rotate keys for any address
+- **V2 Enhancement:** Will require signature verification for existing accounts
 
-### 2. Create Additional API Key
+**Implementation:**
 
-`POST /api/api-keys`
-
-**Headers:** `X-API-Key: ck_live_...` (existing key for auth)
-
-**Request:**
-
-```json
-{
-  // empty for v1, or could add optional metadata later
-}
+```sql
+-- For existing accounts, replace the key atomically
+BEGIN TRANSACTION;
+DELETE FROM api_keys WHERE evm_address = ?;
+INSERT INTO api_keys (key_hash, evm_address) VALUES (?, ?);
+COMMIT;
 ```
 
-**Response (201):**
-
-```json
-{
-  "data": {
-    "id": "key_xyz789",
-    "api_key": "ck_live_a3f4b2c1d5e6...", // FULL KEY - ONLY SHOWN ONCE
-    "api_key_prefix": "ck_live_a3f4b2c1", // For future identification
-    "created_at": 1234567890,
-    "warning": "Save this API key securely. You won't be able to see it again."
-  }
-}
-```
-
-#### List API Keys
-
-`GET /api/accounts/{account_id}/api-keys`
-
-**Headers:** `X-API-Key: ck_live_...`
-
-**Response (201):**
-
-```json
-{
-  "api_key": "ck_live_xyz987def..." // New API key - only shown once
-}
-```
-
-### 3. Set Webhook URL
+### 2. Set Webhook URL
 
 `PUT /api/webhook`
 
@@ -179,7 +187,13 @@ Creates or updates the webhook URL for the account.
 }
 ```
 
-### 4. Create Subscription
+**Validation:**
+
+- URL must be a non-empty string starting with `https://`
+- No connectivity tests - fails at delivery time if unreachable
+- Same philosophy as subscriptions: validate when executing, not when storing
+
+### 3. Create Subscription
 
 `POST /api/subscriptions`
 
@@ -197,6 +211,13 @@ Activates a subscription (requires authentication).
 
 **Response:** (same as current implementation, subscription linked to authenticated account)
 
+**Future Enhancement Note:**
+
+- The frontend's `subscribe()` call returns `subscriptionPayer` (the subscriber's address)
+- Could accept optional `subscriber_address` parameter to store the payer's wallet
+- Not in V1 scope, but if SDK doesn't add it to `getStatus()`, we could track it ourselves
+- Would require adding `subscriber_address` column to subscriptions table
+
 ## Webhook Event: `subscription.updated`
 
 ### Event Structure
@@ -212,7 +233,6 @@ Single event type with domain-aligned structure:
     "subscription": {
       "id": "0x...",
       "status": "active" | "inactive" | "failed" | "canceled",
-      "account_address": "0x...",
       "current_period_end": 1234567890  // if active
     },
     "order": {  // if this event relates to a payment
@@ -245,7 +265,6 @@ Single event type with domain-aligned structure:
     "subscription": {
       "id": "0xabc...",
       "status": "active",
-      "account_address": "0x123...",
       "current_period_end": 1234567890
     },
     "order": {
@@ -271,8 +290,7 @@ Single event type with domain-aligned structure:
   "data": {
     "subscription": {
       "id": "0xabc...",
-      "status": "inactive",
-      "account_address": "0x123..."
+      "status": "inactive"
     },
     "order": {
       "number": 3,
@@ -296,8 +314,7 @@ Single event type with domain-aligned structure:
   "data": {
     "subscription": {
       "id": "0xabc...",
-      "status": "canceled",
-      "account_address": "0x123..."
+      "status": "canceled"
     }
   }
 }
@@ -330,9 +347,36 @@ async function authenticateRequest(request: Request, env: Env) {
 
   if (!result) throw new AuthError("Invalid API key")
 
-  return result.evm_address // Return EVM address instead of account_id
+  return result.evm_address // Return EVM address for authorization
 }
 ```
+
+## Payment Integration
+
+When processing subscription charges, the merchant's `evm_address` must be passed as the recipient:
+
+```typescript
+// In onchain.repository.ts
+async chargeSubscription(params: {
+  subscriptionId: Hash
+  amount: string
+  recipient: Address  // Merchant's evm_address from accounts table
+}): Promise<ChargeTransactionResult> {
+  const result = await charge({
+    id: params.subscriptionId,
+    amount: params.amount,
+    recipient: params.recipient,  // Funds go directly to merchant
+    // ... CDP config
+  })
+  return result
+}
+```
+
+The flow for charges:
+
+1. Look up merchant's `evm_address` from subscription's `evm_address` foreign key
+2. Pass merchant address as `recipient` to charge method
+3. USDC flows directly from subscriber → merchant
 
 ## Webhook Event Emission
 
@@ -393,9 +437,10 @@ async function deliverWebhook(message: WebhookMessage, env: Env) {
     body: JSON.stringify(event),
   })
 
-  // Retry logic for failures
-  if (!response.ok && message.attempts < 3) {
-    throw new Error("Retry webhook delivery") // Queue will retry
+  // V1: No retries - log and move on
+  if (!response.ok) {
+    console.error(`Webhook delivery failed: ${response.status}`)
+    // V2 will add retry logic here
   }
 }
 ```
@@ -403,15 +448,101 @@ async function deliverWebhook(message: WebhookMessage, env: Env) {
 ## Configuration
 
 All infrastructure and configuration is managed through Alchemy IaC in `alchemy.run.ts`.
-Follow the existing patterns for Workers, Queues, and Databases when adding new resources.
+
+### Required Infrastructure Additions
+
+Add the following to `alchemy.run.ts` after the existing order queue definitions:
+
+```typescript
+// -----------------------------------------------------------------------------
+// WEBHOOK SYSTEM
+// -----------------------------------------------------------------------------
+
+// Webhook Queue - for delivering webhook events to merchants
+const WEBHOOK_QUEUE_NAME = "webhook-queue"
+export interface WebhookQueueMessage {
+  url: string // Webhook URL to deliver to
+  secret: string // HMAC secret for signing
+  event: {
+    // The actual event payload
+    id: string
+    type: string
+    created_at: number
+    data: any
+  }
+  attemptNumber: number // Current attempt (for retry logic)
+}
+
+export const webhookQueue = await Queue<WebhookQueueMessage>(
+  WEBHOOK_QUEUE_NAME,
+  {
+    name: `${NAME_PREFIX}-${WEBHOOK_QUEUE_NAME}`,
+  },
+)
+
+// -----------------------------------------------------------------------------
+// WEBHOOK DELIVERY CONSUMER
+// -----------------------------------------------------------------------------
+
+// webhook-delivery: Processes webhook deliveries with retries
+const WEBHOOK_DELIVERY_NAME = "webhook-delivery"
+export const webhookDelivery = await Worker(WEBHOOK_DELIVERY_NAME, {
+  name: `${NAME_PREFIX}-${WEBHOOK_DELIVERY_NAME}`,
+  entrypoint: path.join(
+    import.meta.dirname,
+    "src",
+    "consumers",
+    "webhook-delivery.ts",
+  ),
+  eventSources: [
+    {
+      queue: webhookQueue,
+      settings: {
+        batchSize: 10,
+        maxConcurrency: 20,
+        maxRetries: 0, // V1: No retries - fire and forget
+      },
+    },
+  ],
+  bindings: {
+    DB: db, // For tracking delivery status if needed in V2
+  },
+  compatibilityFlags,
+  dev: { port: 3300 },
+})
+```
+
+### Update Existing Workers
+
+Add webhook queue binding to workers that emit events:
+
+```typescript
+// Update api bindings
+export const api = await Worker(API_NAME, {
+  // ... existing config
+  bindings: {
+    // ... existing bindings
+    WEBHOOK_QUEUE: webhookQueue, // Add this
+  },
+})
+
+// Update orderProcessor bindings
+export const orderProcessor = await Worker(ORDER_PROCESSOR_NAME, {
+  // ... existing config
+  bindings: {
+    // ... existing bindings
+    WEBHOOK_QUEUE: webhookQueue, // Add this
+  },
+})
+```
 
 ## Implementation Plan
 
 ### Phase 1: Account System & Authentication
 
-1. **Database schema** - Add accounts and api_keys tables
-2. **Account endpoints** - `POST /api/account`, `POST /api/api-keys`
-3. **Auth middleware** - API key validation
+1. **Database schema** - Add accounts and api_keys tables (simplified, no timestamps)
+2. **Account endpoint** - `POST /api/account` for creation and key rotation
+3. **Auth middleware** - API key validation via api_keys table
 4. **Update subscription endpoint** - Add authentication, link subscriptions to accounts
 5. **Test** - Ensure existing subscription flow works with auth
 
@@ -434,9 +565,12 @@ Follow the existing patterns for Workers, Queues, and Databases when adding new 
 
 ### V2 - Future Enhancements
 
+- Multiple API keys per account (same table, remove uniqueness constraint)
+- API key management endpoints (list, revoke)
+- API key metadata (name/label, created_at, last_used_at)
+- Signature verification for secure key rotation
 - Multiple webhooks per account
 - Additional event types (order.created, order.paid)
-- Signature verification for account recovery
 - Webhook delivery tracking and debugging
 - Rate limiting and usage analytics
 
@@ -451,7 +585,9 @@ Follow the existing patterns for Workers, Queues, and Databases when adding new 
 
 This V1 specification provides:
 
-- **4 simple endpoints** for complete functionality
+- **3 simple endpoints** for complete functionality
+- **One API key per account** (enforced in application logic, rotatable)
 - **Single webhook event** that covers all subscription changes
 - **Web3-native** identity with EVM addresses
+- **Minimal database schema** without unnecessary fields
 - **Clear upgrade path** to V2 with additional features

@@ -12,7 +12,7 @@ import type { Hash, Address } from "viem"
 export interface Subscription {
   subscription_id: string
   status: SubscriptionStatus
-  account_address: string
+  owner_address: string
   created_at?: string
   modified_at?: string
 }
@@ -46,7 +46,7 @@ export interface Transaction {
 // Method parameter interfaces
 export interface CreateSubscriptionParams {
   subscriptionId: Hash
-  accountAddress: Address
+  ownerAddress: Address
 }
 
 export interface SubscriptionExistsParams {
@@ -103,7 +103,7 @@ export interface DeleteSubscriptionDataParams {
 
 export interface CreateSubscriptionWithOrderParams {
   subscriptionId: Hash
-  accountAddress: Address
+  ownerAddress: Address
   order: Order
 }
 
@@ -141,15 +141,15 @@ export class SubscriptionRepository {
    * This is atomic - prevents race conditions
    */
   async createSubscription(params: CreateSubscriptionParams): Promise<boolean> {
-    const { subscriptionId, accountAddress } = params
+    const { subscriptionId, ownerAddress } = params
     // Use INSERT OR IGNORE to handle race conditions atomically
     // This ensures only one request can create the subscription
     const result = await this.db
       .prepare(
-        `INSERT OR IGNORE INTO subscriptions (subscription_id, account_address, status)
+        `INSERT OR IGNORE INTO subscriptions (subscription_id, owner_address, status)
          VALUES (?, ?, ?)`,
       )
-      .bind(subscriptionId, accountAddress, SubscriptionStatus.PROCESSING)
+      .bind(subscriptionId, ownerAddress, SubscriptionStatus.PROCESSING)
       .run()
 
     return result.meta.changes > 0
@@ -281,7 +281,7 @@ export class SubscriptionRepository {
   async createSubscriptionWithOrder(
     params: CreateSubscriptionWithOrderParams,
   ): Promise<{ created: boolean; orderId?: number }> {
-    const { subscriptionId, accountAddress, order } = params
+    const { subscriptionId, ownerAddress, order } = params
     try {
       // D1 supports transactions via batch
       // First, check if subscription exists
@@ -293,10 +293,10 @@ export class SubscriptionRepository {
       // Create subscription
       const subResult = await this.db
         .prepare(
-          `INSERT INTO subscriptions (subscription_id, account_address, status)
+          `INSERT INTO subscriptions (subscription_id, owner_address, status)
            VALUES (?, ?, ?)`,
         )
-        .bind(subscriptionId, accountAddress, SubscriptionStatus.PROCESSING)
+        .bind(subscriptionId, ownerAddress, SubscriptionStatus.PROCESSING)
         .run()
 
       if (subResult.meta.changes === 0) {

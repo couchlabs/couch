@@ -88,7 +88,7 @@ This design prevents dual sources of truth - we never store period dates or perm
 CREATE TABLE subscriptions (
   subscription_id TEXT PRIMARY KEY,  -- This IS the permission hash from onchain
   status TEXT NOT NULL,  -- 'processing', 'active', 'inactive'
-  account_address TEXT NOT NULL,  -- User's wallet address
+  owner_address TEXT NOT NULL,  -- User's wallet address
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   modified_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
@@ -132,7 +132,7 @@ CREATE INDEX idx_orders_subscription ON orders(subscription_id);
 CREATE INDEX idx_transactions_subscription ON transactions(subscription_id);
 CREATE INDEX idx_transactions_order ON transactions(order_id);
 CREATE INDEX idx_subscriptions_status ON subscriptions(status);
-CREATE INDEX idx_subscriptions_account ON subscriptions(account_address);
+CREATE INDEX idx_subscriptions_account ON subscriptions(owner_address);
 ```
 
 ## API Endpoints
@@ -173,7 +173,7 @@ Creates a new subscription with immediate first charge.
 **Implementation:**
 
 1. Insert subscription with `status='processing'` (atomic lock)
-2. Store `account_address` for future permission queries
+2. Store `owner_address` for future permission queries
 3. Fetch permission from onchain to validate it's active
 4. Execute first charge via CDP
 5. Create first transaction record
@@ -240,7 +240,7 @@ All intelligence is in the consumer that creates new orders.
 
 **Process:**
 
-1. Fetch current permission state from onchain (using account_address and subscription_id)
+1. Fetch current permission state from onchain (using owner_address and subscription_id)
 2. Verify permission is active and allows charge
 3. Execute charge via CDP using onchain parameters
 4. Create transaction record

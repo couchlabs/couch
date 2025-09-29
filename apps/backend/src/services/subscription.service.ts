@@ -195,7 +195,7 @@ export class SubscriptionService {
       const { created, orderId } =
         await this.subscriptionRepository.createSubscriptionWithOrder({
           subscriptionId,
-          accountAddress: subscription.subscriptionOwner,
+          ownerAddress: subscription.subscriptionOwner,
           order: {
             subscription_id: subscriptionId,
             type: OrderType.INITIAL,

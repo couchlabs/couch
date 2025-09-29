@@ -5,7 +5,7 @@
 CREATE TABLE IF NOT EXISTS subscriptions (
   subscription_id TEXT PRIMARY KEY,  -- This IS the permission hash from onchain
   status TEXT NOT NULL CHECK(status IN ('processing', 'active', 'inactive')),
-  account_address TEXT NOT NULL,  -- User's wallet address
+  owner_address TEXT NOT NULL,  -- Couch's smart wallet address (the spender)
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   modified_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
@@ -62,4 +62,4 @@ CREATE INDEX idx_orders_status ON orders(status);
 CREATE INDEX idx_transactions_status ON transactions(status);
 
 -- Account lookup
-CREATE INDEX idx_subscriptions_account ON subscriptions(account_address);
+CREATE INDEX idx_subscriptions_owner ON subscriptions(owner_address);

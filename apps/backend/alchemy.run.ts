@@ -80,8 +80,8 @@ const compatibilityFlags = ["nodejs_compat", "disallow_importable_env"]
 // -----------------------------------------------------------------------------
 
 // subscription-db: Main database for subscription and order data
-const DB_NAME = "subscription-db"
-const subscriptionDB = await D1Database(DB_NAME, {
+const DB_NAME = "db"
+const db = await D1Database(DB_NAME, {
   name: `${NAME_PREFIX}-${DB_NAME}`,
   migrationsDir: path.join(import.meta.dirname, "migrations"),
   primaryLocationHint: "wnam",
@@ -95,8 +95,8 @@ const subscriptionDB = await D1Database(DB_NAME, {
 // -----------------------------------------------------------------------------
 
 // subscription-api: Main API service
-const API_NAME = "subscription-api"
-export const subscriptionAPI = await Worker(API_NAME, {
+const API_NAME = "api"
+export const api = await Worker(API_NAME, {
   name: `${NAME_PREFIX}-${API_NAME}`,
   entrypoint: path.join(import.meta.dirname, "src", "api", "main.ts"),
   bindings: {
@@ -109,7 +109,7 @@ export const subscriptionAPI = await Worker(API_NAME, {
     CDP_SMART_ACCOUNT_ADDRESS: spenderSmartAccount.address,
     STAGE: scope.stage as Stage,
     // RESOURCES:
-    DB: subscriptionDB,
+    DB: db,
   },
   compatibilityFlags,
   dev: { port: 3000 },
@@ -148,7 +148,7 @@ export const orderScheduler = await Worker(ORDER_SCHEDULER_NAME, {
   ),
   crons: ["*/15 * * * *"], // Run every 15 minutes
   bindings: {
-    DB: subscriptionDB,
+    DB: db,
     ORDER_QUEUE: orderQueue,
   },
   dev: { port: 3100 },
@@ -183,15 +183,15 @@ export const orderProcessor = await Worker(ORDER_PROCESSOR_NAME, {
   bindings: {
     // Consumer requires same bindings as API.
     // Both instantiate repositories and services to process payments (API via HTTP, consumer via queue messages)
-    ...subscriptionAPI.bindings,
+    ...api.bindings,
   },
   compatibilityFlags,
   dev: { port: 3200 },
 })
 
 console.log({
-  [API_NAME]: subscriptionAPI,
-  [DB_NAME]: subscriptionDB,
+  [API_NAME]: api,
+  [DB_NAME]: db,
   [ORDER_SCHEDULER_NAME]: orderScheduler,
   [ORDER_QUEUE_NAME]: orderQueue,
   [ORDER_PROCESSOR_NAME]: orderProcessor,
