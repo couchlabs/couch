@@ -126,7 +126,7 @@ ALTER TABLE orders ADD COLUMN order_number INTEGER;
 
 ### 1. Create Account / Rotate API Key
 
-`POST /api/account`
+`PUT /api/account`
 
 Creates a new account or rotates the API key for an existing account.
 
@@ -142,9 +142,18 @@ Creates a new account or rotates the API key for an existing account.
 
 ```json
 {
-  "api_key": "ck_live_a3f4b2c1d5e6..." // Full API key - only shown once
+  "api_key": "ck_prod_a3f4b2c1d5e6..." // Full API key - only shown once
 }
 ```
+
+**API Key Format:**
+
+- Prefix based on `STAGE` environment variable: `ck_{stage}_`
+- Examples:
+  - `ck_prod_...` for production
+  - `ck_sandbox_...` for sandbox
+  - `ck_staging_...` for staging
+  - `ck_dev_...` for development
 
 **Behavior:**
 
@@ -154,6 +163,34 @@ Creates a new account or rotates the API key for an existing account.
 - **V2 Enhancement:** Will require signature verification for existing accounts
 
 **Implementation:**
+
+```typescript
+// Generate API key with stage-based prefix
+import { Stage } from "@/lib/constants"
+
+function generateApiKey(stage: Stage): string {
+  const prefix = `ck_${stage}_`
+  const randomPart = crypto.randomUUID().replace(/-/g, "")
+  return `${prefix}${randomPart}`
+}
+
+// Hash only the secret part (without prefix)
+function hashApiKey(apiKey: string): Promise<string> {
+  // Strip the prefix before hashing
+  const prefixMatch = apiKey.match(/^ck_[^_]+_(.+)$/)
+  const secretPart = prefixMatch ? prefixMatch[1] : apiKey
+
+  const encoder = new TextEncoder()
+  const data = encoder.encode(secretPart)
+  const hashBuffer = await crypto.subtle.digest("SHA-256", data)
+  const hashArray = Array.from(new Uint8Array(hashBuffer))
+  return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("")
+}
+
+// Usage in endpoint handler
+const apiKey = generateApiKey(env.STAGE)
+const keyHash = await hashApiKey(apiKey) // Hashes only the secret part
+```
 
 ```sql
 -- For existing accounts, replace the key atomically
@@ -541,7 +578,7 @@ export const orderProcessor = await Worker(ORDER_PROCESSOR_NAME, {
 ### Phase 1: Account System & Authentication
 
 1. **Database schema** - Add accounts and api_keys tables (simplified, no timestamps)
-2. **Account endpoint** - `POST /api/account` for creation and key rotation
+2. **Account endpoint** - `PUT /api/account` for creation and key rotation
 3. **Auth middleware** - API key validation via api_keys table
 4. **Update subscription endpoint** - Add authentication, link subscriptions to accounts
 5. **Test** - Ensure existing subscription flow works with auth
