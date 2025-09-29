@@ -9,11 +9,8 @@ import {
   type ChargeTransactionResult,
 } from "@/repositories/onchain.repository"
 
-import { APIErrors } from "@/api/errors"
-import {
-  SubscriptionErrors,
-  getPaymentErrorCode,
-} from "@/services/subscription.service.errors"
+import { HTTPError, ErrorCode } from "@/api/errors"
+import { getPaymentErrorCode } from "@/services/subscription.service.errors"
 
 import { isHash, isAddressEqual, type Hash } from "viem"
 
@@ -87,7 +84,9 @@ export class SubscriptionService {
   static validateId(params: ValidateSubscriptionIdParams): void {
     const { subscriptionId } = params
     if (!isHash(subscriptionId)) {
-      throw APIErrors.invalidRequest(
+      throw new HTTPError(
+        400,
+        ErrorCode.INVALID_FORMAT,
         "Invalid subscription_id format. Must be a 32-byte hash",
       )
     }
@@ -116,7 +115,12 @@ export class SubscriptionService {
         subscriptionId,
       })
       if (exists) {
-        throw APIErrors.subscriptionExists(subscriptionId)
+        throw new HTTPError(
+          409,
+          ErrorCode.SUBSCRIPTION_EXISTS,
+          "Subscription already exists",
+          { subscriptionId },
+        )
       }
 
       // Step 2: Get onchain subscription status
@@ -125,11 +129,19 @@ export class SubscriptionService {
         await this.onchainRepository.getSubscriptionStatus({ subscriptionId })
 
       if (!subscription.isSubscribed) {
-        throw APIErrors.permissionNotActive(subscriptionId)
+        throw new HTTPError(
+          403,
+          ErrorCode.SUBSCRIPTION_NOT_ACTIVE,
+          "Subscription not active",
+          { subscriptionId },
+        )
       }
 
       if (!subscription.subscriptionOwner) {
-        throw SubscriptionErrors.missingSubscriptionOwner()
+        logger.error("Missing subscription owner", { subscriptionId })
+        throw new Error(
+          "Invalid subscription configuration: missing subscriptionOwner",
+        )
       }
 
       // Verify the subscription owner matches our smart wallet
@@ -144,22 +156,33 @@ export class SubscriptionService {
           actual: subscription.subscriptionOwner,
           subscriptionId,
         })
-        throw SubscriptionErrors.unauthorizedSpender(
-          context.smartAccountAddress,
-          subscription.subscriptionOwner,
+        throw new HTTPError(
+          403,
+          ErrorCode.FORBIDDEN,
+          "Unauthorized to charge subscription",
+          { subscriptionId },
         )
       }
 
       if (!subscription.remainingChargeInPeriod) {
-        throw SubscriptionErrors.missingRemainingCharge()
+        logger.error("Missing remaining charge in period", { subscriptionId })
+        throw new Error(
+          "Invalid subscription configuration: missing remainingChargeInPeriod",
+        )
       }
 
       if (!subscription.nextPeriodStart) {
-        throw SubscriptionErrors.missingNextPeriodStart()
+        logger.error("Missing next period start", { subscriptionId })
+        throw new Error(
+          "Invalid subscription configuration: missing nextPeriodStart",
+        )
       }
 
       if (!subscription.recurringCharge) {
-        throw SubscriptionErrors.missingRecurringCharge()
+        logger.error("Missing recurring charge", { subscriptionId })
+        throw new Error(
+          "Invalid subscription configuration: missing recurringCharge",
+        )
       }
 
       log.info("Subscription active onchain", {
@@ -183,7 +206,12 @@ export class SubscriptionService {
         })
 
       if (!created) {
-        throw APIErrors.subscriptionExists(subscriptionId)
+        throw new HTTPError(
+          409,
+          ErrorCode.SUBSCRIPTION_EXISTS,
+          "Subscription already exists",
+          { subscriptionId },
+        )
       }
 
       // Step 4: Check for existing successful transaction (idempotency)
@@ -241,11 +269,25 @@ export class SubscriptionService {
             reason: chargeError.message,
           })
 
-          throw APIErrors.paymentFailed(
-            errorCode,
-            { subscriptionId, amount: chargeAmount },
-            chargeError,
-          )
+          // Only expose user-actionable payment errors
+          if (
+            errorCode === ErrorCode.INSUFFICIENT_BALANCE ||
+            errorCode === ErrorCode.PERMISSION_EXPIRED
+          ) {
+            throw new HTTPError(
+              402,
+              errorCode,
+              errorCode === ErrorCode.INSUFFICIENT_BALANCE
+                ? "Insufficient balance to complete payment"
+                : "Subscription permission has expired",
+              { subscriptionId, amount: chargeAmount },
+            )
+          }
+
+          // For all other payment errors, return generic message
+          throw new HTTPError(402, ErrorCode.PAYMENT_FAILED, "Payment failed", {
+            subscriptionId,
+          })
         }
       }
 

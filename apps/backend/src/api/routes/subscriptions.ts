@@ -1,6 +1,6 @@
 import { Hono } from "hono"
 
-import { APIErrors } from "@/api/errors"
+import { HTTPError, ErrorCode } from "@/api/errors"
 import { SubscriptionService } from "@/services/subscription.service"
 import { SubscriptionRepository } from "@/repositories/subscription.repository"
 import { OnchainRepository } from "@/repositories/onchain.repository"
@@ -13,7 +13,11 @@ const subscription = new Hono<{ Bindings: WorkerEnv }>()
 subscription.post("/", async (ctx) => {
   const { subscription_id } = await ctx.req.json().catch(() => ({}))
   if (!subscription_id) {
-    throw APIErrors.invalidRequest("subscription_id is required")
+    throw new HTTPError(
+      400,
+      ErrorCode.MISSING_FIELD,
+      "subscription_id is required",
+    )
   }
 
   const subscriptionService = new SubscriptionService({

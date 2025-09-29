@@ -1,68 +1,66 @@
 import { HTTPException } from "hono/http-exception"
 import type { ContentfulStatusCode } from "hono/utils/http-status"
 
-import type { PaymentErrorCode } from "@/services/subscription.service.errors"
+// Error codes catalog
+export const ErrorCode = {
+  // Request errors (4xx)
+  BAD_REQUEST: "BAD_REQUEST",
+  INVALID_REQUEST: "INVALID_REQUEST",
+  MISSING_FIELD: "MISSING_FIELD",
+  INVALID_FORMAT: "INVALID_FORMAT",
 
-export enum ErrorCode {
-  // Client errors (4xx)
-  INVALID_REQUEST = "INVALID_REQUEST",
-  SUBSCRIPTION_EXISTS = "SUBSCRIPTION_EXISTS",
-  PERMISSION_NOT_ACTIVE = "PERMISSION_NOT_ACTIVE",
-  PAYMENT_FAILED = "PAYMENT_FAILED",
+  // Auth errors (4xx)
+  UNAUTHORIZED: "UNAUTHORIZED",
+  INVALID_API_KEY: "INVALID_API_KEY",
+  FORBIDDEN: "FORBIDDEN",
 
-  // Server errors (5xx)
-  INTERNAL_ERROR = "INTERNAL_ERROR",
-}
+  // Resource errors (4xx)
+  NOT_FOUND: "NOT_FOUND",
+  ALREADY_EXISTS: "ALREADY_EXISTS",
+  CONFLICT: "CONFLICT",
 
-export class APIException extends HTTPException {
+  // Subscription/Payment errors (4xx)
+  SUBSCRIPTION_NOT_FOUND: "SUBSCRIPTION_NOT_FOUND",
+  SUBSCRIPTION_EXISTS: "SUBSCRIPTION_EXISTS",
+  SUBSCRIPTION_NOT_ACTIVE: "SUBSCRIPTION_NOT_ACTIVE",
+  PERMISSION_EXPIRED: "PERMISSION_EXPIRED",
+
+  // User-actionable payment errors
+  INSUFFICIENT_BALANCE: "INSUFFICIENT_BALANCE", // User needs to add funds
+
+  // Generic payment error (for internal issues we don't expose)
+  PAYMENT_FAILED: "PAYMENT_FAILED",
+
+  // System errors (5xx)
+  INTERNAL_ERROR: "INTERNAL_ERROR",
+  SERVICE_UNAVAILABLE: "SERVICE_UNAVAILABLE",
+} as const
+
+export type ErrorCode = (typeof ErrorCode)[keyof typeof ErrorCode]
+
+// HTTPError class that extends HTTPException with consistent JSON format
+export class HTTPError extends HTTPException {
   constructor(
     status: ContentfulStatusCode,
+    code: ErrorCode,
     message: string,
-    public code: ErrorCode | PaymentErrorCode | string,
-    public details?: unknown,
-    cause?: unknown,
+    details?: unknown,
   ) {
-    const response = new Response(
+    // Create consistent JSON response body
+    const res = new Response(
       JSON.stringify({
         error: message,
         code,
         ...(details && { details }),
       }),
       {
-        status,
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
       },
     )
 
-    super(status, { res: response, message, cause })
+    // Call parent constructor with both res and message
+    // - message: for proper error.message property
+    // - res: for custom JSON response body
+    super(status, { res, message })
   }
-}
-
-export const APIErrors = {
-  invalidRequest: (message: string) =>
-    new APIException(400, message, ErrorCode.INVALID_REQUEST),
-
-  subscriptionExists: (subscriptionId?: string) =>
-    new APIException(
-      409,
-      "Subscription already exists",
-      ErrorCode.SUBSCRIPTION_EXISTS,
-      subscriptionId ? { subscriptionId } : undefined,
-    ),
-
-  permissionNotActive: (subscriptionId?: string) =>
-    new APIException(
-      422,
-      "Permission not active",
-      ErrorCode.PERMISSION_NOT_ACTIVE,
-      subscriptionId ? { subscriptionId } : undefined,
-    ),
-
-  paymentFailed: (
-    errorCode: PaymentErrorCode,
-    details?: any,
-    cause?: unknown,
-  ) => new APIException(402, "Payment failed", errorCode, details, cause),
 }
