@@ -2,7 +2,7 @@
  * Payment error mapping utilities for subscription service
  */
 
-import { ErrorCode } from "@/api/errors"
+import { ErrorCode } from "@/errors/http.errors"
 
 /**
  * Gets the appropriate error code for a payment/blockchain error.

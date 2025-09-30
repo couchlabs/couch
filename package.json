@@ -7,7 +7,8 @@
     "dev": "turbo run dev",
     "deploy": "turbo run deploy --ui=stream",
     "destroy": "turbo run destroy --ui=stream",
-    "prettier": "prettier --write \"**/*.{js,jsx,ts,tsx,json,css,md}\""
+    "check": "bun tsc --noEmit && biome check",
+    "fix": "biome check --write"
   },
   "workspaces": {
     "packages": [
@@ -30,10 +31,7 @@
   },
   "devDependencies": {
     "turbo": "latest",
-    "prettier": "latest"
+    "@biomejs/biome": "latest"
   },
-  "packageManager": "bun@1.2.22",
-  "prettier": {
-    "semi": false
-  }
+  "packageManager": "bun@1.2.22"
 }

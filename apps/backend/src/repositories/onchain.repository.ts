@@ -1,9 +1,7 @@
 import { base } from "@base-org/account"
-
-import { logger } from "@/lib/logger"
-import { Network, getNetwork } from "@/constants/env.constants"
-
 import type { Address, Hash } from "viem"
+import { getNetwork, type Network } from "@/constants/env.constants"
+import { logger } from "@/lib/logger"
 
 export interface CdpConfig {
   apiKeyId: string

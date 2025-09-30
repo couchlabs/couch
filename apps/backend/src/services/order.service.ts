@@ -1,10 +1,9 @@
 import type { Hash } from "viem"
-
-import { getPaymentErrorCode } from "@/services/subscription.service.errors"
-import { SubscriptionRepository } from "@/repositories/subscription.repository"
-import { OnchainRepository } from "@/repositories/onchain.repository"
 import { OrderStatus, OrderType } from "@/constants/subscription.constants"
+import { getPaymentErrorCode } from "@/errors/subscription.errors"
 import { logger } from "@/lib/logger"
+import type { OnchainRepository } from "@/repositories/onchain.repository"
+import type { SubscriptionRepository } from "@/repositories/subscription.repository"
 
 export interface ProcessOrderParams {
   orderId: number

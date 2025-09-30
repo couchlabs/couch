@@ -1,21 +1,27 @@
 import { Hono } from "hono"
-
-import { HTTPError, ErrorCode } from "@/api/errors"
-import { SubscriptionService } from "@/services/subscription.service"
-import { SubscriptionRepository } from "@/repositories/subscription.repository"
-import { OnchainRepository } from "@/repositories/onchain.repository"
+import { type AuthContext, apiKeyAuth } from "@/api/middleware/auth.middleware"
 import { isTestnetEnvironment } from "@/constants/env.constants"
-import { apiKeyAuth, type AuthContext } from "@/api/middleware/auth.middleware"
+import { ErrorCode, HTTPError } from "@/errors/http.errors"
+import { OnchainRepository } from "@/repositories/onchain.repository"
+import { SubscriptionRepository } from "@/repositories/subscription.repository"
+import { SubscriptionService } from "@/services/subscription.service"
 
 import type { WorkerEnv } from "@/types/api.env"
 
-const subscription = new Hono<{
+export const subscriptionRoutes = new Hono<{
   Bindings: WorkerEnv
   Variables: { auth: AuthContext }
 }>()
 
-subscription.post("/", apiKeyAuth(), async (ctx) => {
-  const { accountAddress } = ctx.get("auth")!
+// Require auth for all routes
+subscriptionRoutes.use(apiKeyAuth())
+
+/**
+ * POST /api/subscriptions
+ * Creates and activates a subscription with initial charge
+ */
+subscriptionRoutes.post("/", async (ctx) => {
+  const { accountAddress } = ctx.get("auth")
 
   const { subscription_id } = await ctx.req.json().catch(() => ({}))
   if (!subscription_id) {
@@ -67,5 +73,3 @@ subscription.post("/", apiKeyAuth(), async (ctx) => {
     },
   )
 })
-
-export default subscription

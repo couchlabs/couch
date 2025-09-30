@@ -1,8 +1,8 @@
-import { Stage } from "@/constants/env.constants"
-import { isAddress, getAddress, type Address } from "viem"
-import { AccountRepository } from "@/repositories/account.repository"
-import { HTTPError, ErrorCode } from "@/api/errors"
+import { type Address, getAddress, isAddress } from "viem"
+import type { Stage } from "@/constants/env.constants"
+import { ErrorCode, HTTPError } from "@/errors/http.errors"
 import { logger } from "@/lib/logger"
+import type { AccountRepository } from "@/repositories/account.repository"
 
 export interface CreateOrRotateAccountParams {
   evmAddress: string

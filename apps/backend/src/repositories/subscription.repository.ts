@@ -1,13 +1,11 @@
-import { D1Database } from "@cloudflare/workers-types"
-
+import type { D1Database } from "@cloudflare/workers-types"
+import type { Address, Hash } from "viem"
 import {
-  SubscriptionStatus,
-  OrderType,
   OrderStatus,
+  OrderType,
+  SubscriptionStatus,
   TransactionStatus,
 } from "@/constants/subscription.constants"
-
-import type { Hash, Address } from "viem"
 
 export interface Subscription {
   subscription_id: string
@@ -193,7 +191,7 @@ export class SubscriptionRepository {
       )
       .first<{ id: number }>()
 
-    return result!.id
+    return result?.id
   }
 
   async completeOrder(id: number): Promise<void> {
@@ -327,7 +325,7 @@ export class SubscriptionRepository {
         )
         .first<{ id: number }>()
 
-      return { created: true, orderId: orderResult!.id }
+      return { created: true, orderId: orderResult?.id }
     } catch (error) {
       // If anything fails, clean up
       await this.deleteSubscriptionData({ subscriptionId })

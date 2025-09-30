@@ -1,15 +1,13 @@
+import { type Address, type Hash, isAddressEqual, isHash } from "viem"
+import { OrderStatus, OrderType } from "@/constants/subscription.constants"
+import { ErrorCode, HTTPError } from "@/errors/http.errors"
+import { getPaymentErrorCode } from "@/errors/subscription.errors"
 import { logger } from "@/lib/logger"
-import { OrderType, OrderStatus } from "@/constants/subscription.constants"
-import { SubscriptionRepository } from "@/repositories/subscription.repository"
-import {
+import type {
+  ChargeTransactionResult,
   OnchainRepository,
-  type ChargeTransactionResult,
 } from "@/repositories/onchain.repository"
-
-import { HTTPError, ErrorCode } from "@/api/errors"
-import { getPaymentErrorCode } from "@/services/subscription.service.errors"
-
-import { isHash, isAddressEqual, type Hash, type Address } from "viem"
+import type { SubscriptionRepository } from "@/repositories/subscription.repository"
 
 export interface ActivateSubscriptionParams {
   subscriptionId: Hash
@@ -218,7 +216,7 @@ export class SubscriptionService {
       const existingTransaction =
         await this.subscriptionRepository.getSuccessfulTransaction({
           subscriptionId,
-          orderId: orderId!,
+          orderId: orderId,
         })
 
       let transaction: ChargeTransactionResult
@@ -259,12 +257,12 @@ export class SubscriptionService {
           log.info("Marking subscription as inactive due to payment failure", {
             subscriptionId,
             errorCode,
-            orderId: orderId!,
+            orderId: orderId,
           })
 
           await this.subscriptionRepository.markSubscriptionInactive({
             subscriptionId,
-            orderId: orderId!,
+            orderId: orderId,
             reason: chargeError.message,
           })
 
@@ -302,7 +300,7 @@ export class SubscriptionService {
           amount: transaction.amount,
         },
         order: {
-          id: orderId!,
+          id: orderId,
         },
         nextOrder: {
           date: subscription.nextPeriodStart.toISOString(),

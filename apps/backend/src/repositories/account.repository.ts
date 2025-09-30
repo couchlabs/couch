@@ -1,4 +1,4 @@
-import { getAddress, type Address } from "viem"
+import { type Address, getAddress } from "viem"
 
 export interface CreateAccountParams {
   accountAddress: Address

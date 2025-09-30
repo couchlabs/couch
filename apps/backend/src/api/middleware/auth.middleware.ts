@@ -1,9 +1,9 @@
 import type { MiddlewareHandler } from "hono"
-import { HTTPError, ErrorCode } from "@/api/errors"
-import { AccountService } from "@/services/account.service"
-import { AccountRepository } from "@/repositories/account.repository"
-import type { WorkerEnv } from "@/types/api.env"
 import type { Address } from "viem"
+import { ErrorCode, HTTPError } from "@/errors/http.errors"
+import { AccountRepository } from "@/repositories/account.repository"
+import { AccountService } from "@/services/account.service"
+import type { WorkerEnv } from "@/types/api.env"
 
 /**
  * Context with authenticated user information

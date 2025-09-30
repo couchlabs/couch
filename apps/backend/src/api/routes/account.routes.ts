@@ -1,7 +1,7 @@
 import { Hono } from "hono"
-import { AccountService } from "@/services/account.service"
+import { ErrorCode, HTTPError } from "@/errors/http.errors"
 import { AccountRepository } from "@/repositories/account.repository"
-import { HTTPError, ErrorCode } from "@/api/errors"
+import { AccountService } from "@/services/account.service"
 import type { WorkerEnv } from "@/types/api.env"
 
 export const accountRoutes = new Hono<{ Bindings: WorkerEnv }>()

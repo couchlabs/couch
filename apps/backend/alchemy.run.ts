@@ -1,11 +1,10 @@
 import path from "node:path"
 
 import alchemy from "alchemy"
-import { Worker, D1Database, Queue, KVNamespace } from "alchemy/cloudflare"
+import { D1Database, Queue, Worker } from "alchemy/cloudflare"
 import { EvmAccount, EvmSmartAccount } from "alchemy/coinbase"
-
-import { Stage } from "@/constants/env.constants"
 import type { Hash } from "viem"
+import { Stage } from "@/constants/env.constants"
 
 // =============================================================================
 // CONFIGURATION & CONVENTIONS
