@@ -3,10 +3,7 @@ import type { Hash } from "viem"
 import { getPaymentErrorCode } from "@/services/subscription.service.errors"
 import { SubscriptionRepository } from "@/repositories/subscription.repository"
 import { OnchainRepository } from "@/repositories/onchain.repository"
-import {
-  OrderStatus,
-  OrderType,
-} from "@/repositories/subscription.repository.constants"
+import { OrderStatus, OrderType } from "@/constants/subscription.constants"
 import { logger } from "@/lib/logger"
 
 export interface ProcessOrderParams {

@@ -1,4 +1,4 @@
-import { Stage } from "@/lib/constants"
+import { Stage } from "@/constants/env.constants"
 import { isAddress, getAddress, type Address } from "viem"
 import { AccountRepository } from "@/repositories/account.repository"
 import { HTTPError, ErrorCode } from "@/api/errors"

@@ -4,7 +4,7 @@ import alchemy from "alchemy"
 import { Worker, D1Database, Queue, KVNamespace } from "alchemy/cloudflare"
 import { EvmAccount, EvmSmartAccount } from "alchemy/coinbase"
 
-import { Stage } from "@/lib/constants"
+import { Stage } from "@/constants/env.constants"
 import type { Hash } from "viem"
 
 // =============================================================================

@@ -5,7 +5,7 @@ import {
   OrderType,
   OrderStatus,
   TransactionStatus,
-} from "@/repositories/subscription.repository.constants"
+} from "@/constants/subscription.constants"
 
 import type { Hash, Address } from "viem"
 

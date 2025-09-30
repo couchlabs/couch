@@ -1,7 +1,7 @@
 import { base } from "@base-org/account"
 
 import { logger } from "@/lib/logger"
-import { Network, getNetwork } from "@/lib/constants"
+import { Network, getNetwork } from "@/constants/env.constants"
 
 import type { Address, Hash } from "viem"
 

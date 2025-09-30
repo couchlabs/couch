@@ -4,7 +4,7 @@ import { HTTPError, ErrorCode } from "@/api/errors"
 import { SubscriptionService } from "@/services/subscription.service"
 import { SubscriptionRepository } from "@/repositories/subscription.repository"
 import { OnchainRepository } from "@/repositories/onchain.repository"
-import { isTestnetEnvironment } from "@/lib/constants"
+import { isTestnetEnvironment } from "@/constants/env.constants"
 import { apiKeyAuth, type AuthContext } from "@/api/middleware/auth.middleware"
 
 import type { WorkerEnv } from "@/types/api.env"

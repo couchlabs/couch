@@ -1,8 +1,5 @@
 import { logger } from "@/lib/logger"
-import {
-  OrderType,
-  OrderStatus,
-} from "@/repositories/subscription.repository.constants"
+import { OrderType, OrderStatus } from "@/constants/subscription.constants"
 import { SubscriptionRepository } from "@/repositories/subscription.repository"
 import {
   OnchainRepository,

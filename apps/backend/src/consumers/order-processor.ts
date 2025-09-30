@@ -2,7 +2,7 @@ import { SubscriptionRepository } from "@/repositories/subscription.repository"
 import { OnchainRepository } from "@/repositories/onchain.repository"
 import { OrderService } from "@/services/order.service"
 import { logger } from "@/lib/logger"
-import { isTestnetEnvironment } from "@/lib/constants"
+import { isTestnetEnvironment } from "@/constants/env.constants"
 
 import type { orderProcessor, orderQueue } from "@alchemy.run"
 
