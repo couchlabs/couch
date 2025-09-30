@@ -1,4 +1,4 @@
-# Subscription Backend Service
+# Couch Backend Service
 
 A stablecoin subscription payment system built on Cloudflare Workers, using Coinbase CDP for payment processing and Base network for blockchain operations.
 
@@ -35,61 +35,104 @@ A stablecoin subscription payment system built on Cloudflare Workers, using Coin
                                           │    (Base)    │
                                           └──────────────┘
 
-Note: API accesses Blockchain directly for initial activation (onchain first charge + offchain setup)
-      Order Processor accesses Blockchain for recurring payments
-      Both API, Order Scheduler, and Order Processor access the same D1 database
+Note: API accesses Blockchain directly for initial activation
+      Order Processor handles recurring payments
+      All components share the same D1 database
 ```
+
+## API Overview (V1)
+
+The V1 API provides the minimum viable functionality with just **3 endpoints**:
+
+1. **Account Management** - Get API key
+2. **Webhook Configuration** - Set webhook URL for events
+3. **Subscription Activation** - Activate and process subscriptions
+
+All subscription-related endpoints require authentication via API key.
 
 ## Testing Guide
 
-### Option A: Using the Frontend App (Recommended)
+### Step 1: Create an Account & Get API Key
 
-The easiest way to test is using the frontend app included in this monorepo:
+First, you need to create an account to get an API key:
 
 ```bash
-# In the root directory
-bun dev
-
-# Navigate to http://localhost:5173
-# The frontend handles subscription creation and activation automatically
-# Clean localstorage to create new subscriptions
+curl -X PUT http://localhost:3000/api/account \
+  -H "Content-Type: application/json" \
+  -d '{
+    "address": "0x123abc..."
+  }'
 ```
 
-### Option B: Manual Testing with SDK
+Response:
+```json
+{
+  "api_key": "ck_dev_456def..."  // Save this! Only shown once
+}
+```
 
-#### 1. Create a Test Subscription (1-minute period)
+> **Important**: Save the API key immediately. It's only shown once and cannot be retrieved later. You can rotate it by calling the same endpoint again.
 
-Create a subscription with a short period for testing:
+### Step 2: Set Webhook URL (Optional)
+
+Configure a webhook to receive subscription events:
+
+```bash
+curl -X PUT http://localhost:3000/api/webhook \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: ck_dev_YOUR_API_KEY" \
+  -d '{
+    "url": "https://your-domain.com/webhooks/couch"
+  }'
+```
+
+Response:
+```json
+{
+  "secret": "whsec_abc123..."  // Use this to verify webhook signatures
+}
+```
+
+### Step 3: Create a Test Subscription
+
+#### Option A: Using the Frontend App (Recommended)
+
+```bash
+# Navigate to http://localhost:8000
+# The frontend handles subscription creation automatically
+# Clear localStorage to create new subscriptions
+```
+
+#### Option B: Using the SDK Directly
 
 ```javascript
-// Use the Coinbase SDK with overridePeriodInSeconds
 import { subscribe } from "@base-org/account/payment"
 
 const subscription = await subscribe({
   recurringCharge: "0.0009",
-  subscriptionOwner: "0x...",
-  periodInDays: 30, // Will be overridden
-  overridePeriodInSeconds: 60, // 1-minute period for testing
+  subscriptionOwner: "0x...",  // Couch's smart wallet address
+  periodInDays: 30,
+  overridePeriodInSeconds: 60,  // 1-minute period for testing
   testnet: true,
 })
 
 console.log("Subscription ID:", subscription.id)
 ```
 
-#### 2. Activate the Subscription
+### Step 4: Activate the Subscription
 
-Using the subscription ID from step 1:
+Using the subscription ID from step 3:
 
 ```bash
 curl -X POST http://localhost:3000/api/subscriptions \
   -H "Content-Type: application/json" \
+  -H "X-API-Key: ck_dev_YOUR_API_KEY" \
   -d '{
-    "subscription_id": "<subscription.id>"
+    "subscription_id": "0xa123..."
   }'
 ```
 
 Expected response:
-
 ```json
 {
   "data": {
@@ -100,134 +143,205 @@ Expected response:
 }
 ```
 
-### Step 3: Trigger Scheduler Manually
+### Step 5: Trigger Scheduler Manually (Dev Only)
 
-The scheduler [in dev mode](https://developers.cloudflare.com/workers/runtime-apis/handlers/scheduled/#background) doesn't runs automatically, you can trigger it manually:
+In development, trigger the scheduler manually:
 
 ```bash
 curl http://localhost:3100/__scheduled
 ```
 
-Check logs to see:
-
-- "Found X due orders"
-- "Successfully queued X orders for processing"
-
-### Step 4: Monitor Recurring Payments
+### Step 6: Monitor Recurring Payments
 
 Watch the logs to see the complete flow:
 
 ```bash
-# Scheduler finds due entries
+# Scheduler finds due orders
 INFO: Found 1 due orders
 INFO: Sending order to queue
 
 # Processor processes payment
-INFO: Processing batch of 1 charge messages
 INFO: Processing recurring payment
 INFO: Onchain charge successful
 INFO: Creating next order
 ```
 
-### Step 5: Check Database State
-
-```bash
-# View subscriptions
-sqlite3 ../../alchemy/miniflare/v3/d1/miniflare-D1DatabaseObject/<generated_hash>.sqlite \
-  "SELECT * FROM subscriptions"
-
-# View orders
-sqlite3 ../../alchemy/miniflare/v3/d1/miniflare-D1DatabaseObject/<generated_hash>.sqlite \
-  "SELECT id, status, due_at, amount FROM orders ORDER BY id DESC"
-
-# View transactions
-sqlite3 ../../alchemy/miniflare/v3/d1/miniflare-D1DatabaseObject/<generated_hash>.sqlite \
-  "SELECT transaction_hash, amount, created_at FROM transactions"
-```
-
-## API Endpoints
+## API Reference
 
 ### Postman Collection
 
-A complete Postman collection is available for testing all endpoints:
+📥 **[Import Collection](./src/api/postman/collection.json)** - Pre-configured collection with all endpoints, authentication, and examples.
 
-📥 **[Import Collection](./src/api/postman/collection.json)** - Import this file into Postman to get all endpoints pre-configured with proper headers and request bodies.
-
-### Available Endpoints
+### Endpoints
 
 #### Health Check
-
+```http
+GET /api/health
 ```
-GET /health
-```
+Returns API health status.
 
-#### Account Management
-
-```
+#### Create/Rotate Account API Key
+```http
 PUT /api/account
-Body: {
-  "evm_address": "0x..."
-}
+Content-Type: application/json
 
-Response: {
-  "api_key": "ck_dev_..."  // Only shown once, save it!
+{
+  "address": "0x..."  // Your EVM address
 }
 ```
 
-Creates a new account or rotates the API key for an existing account.
+Returns:
+```json
+{
+  "api_key": "ck_{stage}_..."  // Full API key - save it!
+}
+```
+
+**API Key Format:**
+- `ck_dev_...` - Development
+- `ck_staging_...` - Staging
+- `ck_sandbox_...` - Sandbox
+- `ck_prod_...` - Production
+
+#### Set Webhook URL
+```http
+PUT /api/webhook
+Content-Type: application/json
+X-API-Key: ck_dev_...
+
+{
+  "url": "https://your-domain.com/webhooks"
+}
+```
+
+Returns:
+```json
+{
+  "secret": "whsec_..."  // HMAC secret for signature verification
+}
+```
 
 #### Activate Subscription
-
-```
+```http
 POST /api/subscriptions
-Body: {
+Content-Type: application/json
+X-API-Key: ck_dev_...
+
+{
   "subscription_id": "0x..."
 }
 ```
 
-## System Components
+Returns subscription details and transaction hash.
 
-### 1. API Service (`subscription-api`)
+## Project Structure
 
-- Handles HTTP requests
-- Activates new subscriptions
-- Processes initial payments
-- Reads/writes to D1 database
+```
+src/
+├── api/              # HTTP API endpoints
+│   ├── routes/       # Route handlers
+│   └── middleware/   # Auth middleware
+├── constants/        # Shared constants
+│   ├── env.constants.ts
+│   └── subscription.constants.ts
+├── errors/           # Error handling
+│   ├── http.errors.ts
+│   └── subscription.errors.ts
+├── services/         # Business logic
+├── repositories/     # Data access layer
+├── consumers/        # Queue consumers
+└── schedulers/       # Cron job schedulers
+```
 
-### 2. Scheduler (`order-scheduler`)
+## Database Schema
 
-- Runs every 15 minutes
-- Claims due orders atomically from D1
-- Sends charge tasks to queue
-- Updates order status in D1
+```sql
+-- Core tables
+accounts            -- Merchant accounts
+api_keys           -- API key hashes
+webhooks           -- Webhook configurations
+subscriptions      -- Active subscriptions
+orders             -- Payment orders
+transactions       -- Blockchain transactions
+```
 
-### 3. Queue (`order-queue`)
+## Error Codes
 
-- Buffers charge tasks
-- Handles retries (3 attempts)
-- Ensures reliable processing
+The API uses consistent error codes:
 
-### 4. Processor (`order-processor`)
+- `INVALID_REQUEST` - Invalid request format
+- `INVALID_API_KEY` - Authentication failed
+- `NOT_FOUND` - Resource not found
+- `SUBSCRIPTION_EXISTS` - Subscription already activated
+- `INSUFFICIENT_BALANCE` - User needs to add funds
+- `PAYMENT_FAILED` - Payment processing failed
 
-- Processes charge messages from queue
-- Executes blockchain transactions on Base
-- Updates D1 with transaction results
-- Creates next orders in D1
+## Development Tools
+
+### Database Inspection
+
+```bash
+# Find your database file
+ls ../../.alchemy/miniflare/v3/d1/miniflare-D1DatabaseObject/
+
+# Query subscriptions
+sqlite3 <path-to-db> "SELECT * FROM subscriptions"
+
+# Query orders
+sqlite3 <path-to-db> "SELECT id, status, due_at FROM orders"
+
+# Query accounts
+sqlite3 <path-to-db> "SELECT * FROM accounts"
+```
+
+### Logs
+
+Development logs appear in the terminal. Key events to watch:
+
+- Account creation: `"Account API key rotated successfully"`
+- Webhook set: `"Webhook URL set successfully"`
+- Subscription activation: `"Subscription activated"`
+- Order processing: `"Processing recurring payment"`
+- Charge success: `"Onchain charge successful"`
+
+## Environment Variables
+
+Required environment variables (see `.env.example`):
+
+```env
+CDP_API_KEY_ID=
+CDP_API_KEY_SECRET=
+CDP_WALLET_SECRET=
+CDP_WALLET_NAME=
+CDP_PAYMASTER_URL=
+```
 
 ## Troubleshooting
 
 ### Common Issues
 
-1. **"No due orders found"**
-   - Check datetime format in database (should be ISO 8601 with 'Z')
-   - Verify subscription is active
-   - Check if current time > due_at
+1. **"Invalid API key"**
+   - Ensure you're using the correct API key from step 1
+   - Check the X-API-Key header format
 
-2. **"Remaining spend amount is insufficient"**
-   - Subscription period hasn't started yet
-   - User hasn't approved sufficient spending allowance
+2. **"Subscription already exists"**
+   - The subscription was already activated
+   - Use a new subscription ID
 
-3. **Payment failures**
+3. **"Webhook URL must use HTTPS"**
+   - Use HTTPS URLs (except localhost for development)
+
+4. **Payment failures**
    - Check user's USDC balance
    - Verify spend permission is active
    - Ensure CDP credentials are correct
+
+## Future Enhancements (V2+)
+
+Coming in future versions:
+
+- **Account Management**: Signature verification, multiple API keys
+- **Webhook Management**: GET/DELETE endpoints, multiple webhooks
+- **Enhanced Events**: More granular event types
+- **Monitoring**: Webhook delivery tracking, retry logic
+- **Security**: Rate limiting, usage analytics

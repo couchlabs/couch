@@ -11,7 +11,6 @@ export const accountRoutes = new Hono<{ Bindings: WorkerEnv }>()
  * Creates a new account or rotates the API key for an existing account
  */
 accountRoutes.put("/", async (c) => {
-  // Parse request body
   const body = await c.req.json<{ address?: string }>()
 
   if (!body.address) {

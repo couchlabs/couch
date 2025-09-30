@@ -25,6 +25,12 @@
       "key": "testSubscriptionId",
       "value": "0x0000000000000000000000000000000000000000000000000000000000000000",
       "type": "string"
+    },
+    {
+      "key": "testWebhookUrl",
+      "value": "https://example.com/webhooks/couch",
+      "type": "string",
+      "description": "Test webhook URL for receiving events"
     }
   ],
   "item": [
@@ -132,6 +138,38 @@
               "path": ["subscriptions"]
             },
             "description": "Creates and activates a subscription with initial charge. Requires authentication via API key."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Webhooks",
+      "item": [
+        {
+          "name": "Set Webhook URL",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-API-Key",
+                "value": "{{apiKey}}",
+                "description": "API key from account creation"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"url\": \"{{testWebhookUrl}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/webhook",
+              "host": ["{{baseUrl}}"],
+              "path": ["webhook"]
+            },
+            "description": "Sets or updates the webhook URL for the authenticated account. Returns a secret for HMAC signature verification."
           }
         }
       ]
