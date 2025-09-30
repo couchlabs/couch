@@ -1,16 +1,16 @@
 import { getAddress, type Address } from "viem"
 
 export interface CreateAccountParams {
-  evmAddress: Address
+  accountAddress: Address
 }
 
 export interface RotateApiKeyParams {
-  evmAddress: Address
+  accountAddress: Address
   keyHash: string
 }
 
 export interface GetAccountParams {
-  evmAddress: Address
+  address: Address
 }
 
 export interface GetApiKeyParams {
@@ -29,8 +29,8 @@ export class AccountRepository {
    */
   async createAccount(params: CreateAccountParams): Promise<void> {
     await this.db
-      .prepare("INSERT OR IGNORE INTO accounts (evm_address) VALUES (?)")
-      .bind(params.evmAddress)
+      .prepare("INSERT OR IGNORE INTO accounts (address) VALUES (?)")
+      .bind(params.accountAddress)
       .run()
   }
 
@@ -41,13 +41,15 @@ export class AccountRepository {
     const statements = [
       // Delete existing API key for this account (if any)
       this.db
-        .prepare("DELETE FROM api_keys WHERE evm_address = ?")
-        .bind(params.evmAddress),
+        .prepare("DELETE FROM api_keys WHERE account_address = ?")
+        .bind(params.accountAddress),
 
       // Insert new API key
       this.db
-        .prepare("INSERT INTO api_keys (key_hash, evm_address) VALUES (?, ?)")
-        .bind(params.keyHash, params.evmAddress),
+        .prepare(
+          "INSERT INTO api_keys (key_hash, account_address) VALUES (?, ?)",
+        )
+        .bind(params.keyHash, params.accountAddress),
     ]
 
     // Execute atomically
@@ -55,21 +57,21 @@ export class AccountRepository {
   }
 
   /**
-   * Gets account by EVM address
+   * Gets account by address
    */
   async getAccount(
     params: GetAccountParams,
-  ): Promise<{ evm_address: Address } | null> {
+  ): Promise<{ address: Address } | null> {
     const result = await this.db
-      .prepare("SELECT evm_address FROM accounts WHERE evm_address = ?")
-      .bind(params.evmAddress)
-      .first<{ evm_address: string }>()
+      .prepare("SELECT address FROM accounts WHERE address = ?")
+      .bind(params.address)
+      .first<{ address: string }>()
 
     if (!result) {
       return null
     }
 
-    return { evm_address: getAddress(result.evm_address) }
+    return { address: getAddress(result.address) }
   }
 
   /**
@@ -77,16 +79,16 @@ export class AccountRepository {
    */
   async getAccountByApiKey(
     params: GetApiKeyParams,
-  ): Promise<{ evm_address: Address } | null> {
+  ): Promise<{ address: Address } | null> {
     const result = await this.db
-      .prepare("SELECT evm_address FROM api_keys WHERE key_hash = ?")
+      .prepare("SELECT account_address FROM api_keys WHERE key_hash = ?")
       .bind(params.keyHash)
-      .first<{ evm_address: string }>()
+      .first<{ account_address: string }>()
 
     if (!result) {
       return null
     }
 
-    return { evm_address: getAddress(result.evm_address) }
+    return { address: getAddress(result.account_address) }
   }
 }

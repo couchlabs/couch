@@ -12,10 +12,11 @@ import {
 import { HTTPError, ErrorCode } from "@/api/errors"
 import { getPaymentErrorCode } from "@/services/subscription.service.errors"
 
-import { isHash, isAddressEqual, type Hash } from "viem"
+import { isHash, isAddressEqual, type Hash, type Address } from "viem"
 
 export interface ActivateSubscriptionParams {
   subscriptionId: Hash
+  accountAddress: Address // Merchant's account address from auth
 }
 
 export interface ValidateSubscriptionIdParams {
@@ -99,7 +100,7 @@ export class SubscriptionService {
   async activate(
     params: ActivateSubscriptionParams,
   ): Promise<ActivationResult> {
-    const { subscriptionId } = params
+    const { subscriptionId, accountAddress } = params
 
     // Validate domain constraints
     SubscriptionService.validateId({ subscriptionId })
@@ -196,6 +197,7 @@ export class SubscriptionService {
         await this.subscriptionRepository.createSubscriptionWithOrder({
           subscriptionId,
           ownerAddress: subscription.subscriptionOwner,
+          accountAddress, // Link to merchant's account
           order: {
             subscription_id: subscriptionId,
             type: OrderType.INITIAL,

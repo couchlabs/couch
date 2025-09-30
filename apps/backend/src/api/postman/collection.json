@@ -1,7 +1,7 @@
 {
   "info": {
-    "name": "Couch Backend API",
-    "description": "API collection for Couch subscription payment system",
+    "name": "Couch API",
+    "description": "API collection for Couch stablecoin recurring billing infrastructure",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -17,7 +17,7 @@
       "description": "API key obtained from PUT /api/account"
     },
     {
-      "key": "testEvmAddress",
+      "key": "testAddress",
       "value": "0x742d35Cc6634C0532925a3b844Bc9e7595f0fA4b",
       "type": "string"
     },
@@ -75,7 +75,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"evm_address\": \"{{testEvmAddress}}\"\n}"
+              "raw": "{\n  \"address\": \"{{testAddress}}\"\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/account",
@@ -115,6 +115,11 @@
               {
                 "key": "Content-Type",
                 "value": "application/json"
+              },
+              {
+                "key": "X-API-Key",
+                "value": "{{apiKey}}",
+                "description": "API key from account creation"
               }
             ],
             "body": {
@@ -126,7 +131,7 @@
               "host": ["{{baseUrl}}"],
               "path": ["subscriptions"]
             },
-            "description": "Creates and activates a subscription with initial charge."
+            "description": "Creates and activates a subscription with initial charge. Requires authentication via API key."
           }
         }
       ]

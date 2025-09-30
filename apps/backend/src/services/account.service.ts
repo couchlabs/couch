@@ -69,7 +69,7 @@ export class AccountService {
       throw new HTTPError(
         400,
         ErrorCode.INVALID_FORMAT,
-        "Invalid EVM address format",
+        "Invalid address format",
       )
     }
     return getAddress(address) // Returns checksummed address
@@ -81,19 +81,19 @@ export class AccountService {
   async createOrRotateAccount(
     params: CreateOrRotateAccountParams,
   ): Promise<AccountResult> {
-    const evmAddress = this.validateAddress(params.evmAddress)
-    const log = logger.with({ evmAddress })
+    const accountAddress = this.validateAddress(params.evmAddress)
+    const log = logger.with({ accountAddress })
 
     log.info("Creating or rotating account API key")
 
     const { apiKey, keyHash } = await this.generateApiKey()
 
     // Create account if it doesn't exist
-    await this.accountRepository.createAccount({ evmAddress })
+    await this.accountRepository.createAccount({ accountAddress })
 
     // Rotate API key (atomic delete + insert)
     await this.accountRepository.rotateApiKey({
-      evmAddress,
+      accountAddress,
       keyHash,
     })
 
@@ -104,15 +104,20 @@ export class AccountService {
 
   /**
    * Authenticates a request by validating the API key
-   * Returns the associated EVM address if valid, null otherwise
+   * Returns the associated account address if valid
+   * Throws HTTPError if invalid
    */
-  async authenticateApiKey(apiKey: string): Promise<Address | null> {
+  async authenticateApiKey(apiKey: string): Promise<Address> {
     const keyHash = await this.hashApiKey(apiKey)
 
     const account = await this.accountRepository.getAccountByApiKey({
       keyHash,
     })
 
-    return account?.evm_address || null
+    if (!account) {
+      throw new HTTPError(401, ErrorCode.INVALID_API_KEY, "Invalid API key")
+    }
+
+    return account.address
   }
 }

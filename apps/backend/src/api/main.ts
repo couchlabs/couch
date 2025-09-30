@@ -41,7 +41,7 @@ api.onError((error, ctx) => {
 
 // Mount routes
 api.route("/health", healthRoutes)
-api.route("/subscriptions", subscriptionRoutes)
 api.route("/account", accountRoutes)
+api.route("/subscriptions", subscriptionRoutes)
 
 export default api

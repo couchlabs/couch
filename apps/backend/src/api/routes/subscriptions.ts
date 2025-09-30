@@ -5,12 +5,18 @@ import { SubscriptionService } from "@/services/subscription.service"
 import { SubscriptionRepository } from "@/repositories/subscription.repository"
 import { OnchainRepository } from "@/repositories/onchain.repository"
 import { isTestnetEnvironment } from "@/lib/constants"
+import { apiKeyAuth, type AuthContext } from "@/api/middleware/auth.middleware"
 
 import type { WorkerEnv } from "@/types/api.env"
 
-const subscription = new Hono<{ Bindings: WorkerEnv }>()
+const subscription = new Hono<{
+  Bindings: WorkerEnv
+  Variables: { auth: AuthContext }
+}>()
 
-subscription.post("/", async (ctx) => {
+subscription.post("/", apiKeyAuth(), async (ctx) => {
+  const { accountAddress } = ctx.get("auth")!
+
   const { subscription_id } = await ctx.req.json().catch(() => ({}))
   if (!subscription_id) {
     throw new HTTPError(
@@ -35,9 +41,10 @@ subscription.post("/", async (ctx) => {
     }),
   })
 
-  // Activate the subscription (validates and charges)
+  // Activate the subscription (validates and process first charge) and link to merchant account
   const result = await subscriptionService.activate({
     subscriptionId: subscription_id,
+    accountAddress,
   })
 
   // Complete database operations in the background

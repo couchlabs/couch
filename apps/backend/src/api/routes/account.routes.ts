@@ -12,14 +12,10 @@ export const accountRoutes = new Hono<{ Bindings: WorkerEnv }>()
  */
 accountRoutes.put("/", async (c) => {
   // Parse request body
-  const body = await c.req.json<{ evm_address?: string }>()
+  const body = await c.req.json<{ address?: string }>()
 
-  if (!body.evm_address) {
-    throw new HTTPError(
-      400,
-      ErrorCode.INVALID_REQUEST,
-      "evm_address is required",
-    )
+  if (!body.address) {
+    throw new HTTPError(400, ErrorCode.INVALID_REQUEST, "address is required")
   }
 
   const accountService = new AccountService({
@@ -31,7 +27,7 @@ accountRoutes.put("/", async (c) => {
 
   // Create or rotate account
   const result = await accountService.createOrRotateAccount({
-    evmAddress: body.evm_address,
+    evmAddress: body.address,
   })
 
   // Return the new API key

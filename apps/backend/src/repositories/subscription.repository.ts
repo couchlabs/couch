@@ -103,7 +103,8 @@ export interface DeleteSubscriptionDataParams {
 
 export interface CreateSubscriptionWithOrderParams {
   subscriptionId: Hash
-  ownerAddress: Address
+  ownerAddress: Address // Couch's smart wallet (the spender)
+  accountAddress: Address // Merchant's account address (from auth)
   order: Order
 }
 
@@ -281,7 +282,7 @@ export class SubscriptionRepository {
   async createSubscriptionWithOrder(
     params: CreateSubscriptionWithOrderParams,
   ): Promise<{ created: boolean; orderId?: number }> {
-    const { subscriptionId, ownerAddress, order } = params
+    const { subscriptionId, ownerAddress, accountAddress, order } = params
     try {
       // D1 supports transactions via batch
       // First, check if subscription exists
@@ -290,13 +291,18 @@ export class SubscriptionRepository {
         return { created: false }
       }
 
-      // Create subscription
+      // Create subscription linked to merchant account
       const subResult = await this.db
         .prepare(
-          `INSERT INTO subscriptions (subscription_id, owner_address, status)
-           VALUES (?, ?, ?)`,
+          `INSERT INTO subscriptions (subscription_id, owner_address, status, account_address)
+           VALUES (?, ?, ?, ?)`,
         )
-        .bind(subscriptionId, ownerAddress, SubscriptionStatus.PROCESSING)
+        .bind(
+          subscriptionId,
+          ownerAddress,
+          SubscriptionStatus.PROCESSING,
+          accountAddress,
+        )
         .run()
 
       if (subResult.meta.changes === 0) {
