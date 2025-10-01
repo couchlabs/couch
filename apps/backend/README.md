@@ -58,20 +58,33 @@ A stablecoin subscription payment system built on Cloudflare Edge Infrastructure
 - `POST /api/subscriptions` - Register subscription (Bind Onchain Permission to Offchain Infra)
 - `PUT /api/webhook` - Set webhook URL for events
 
-#### Error Codes
+### Error Codes
 
-- `INVALID_REQUEST` - Invalid request format
+**Request Errors:**
+- `INVALID_REQUEST` - Missing required field
+- `MISSING_FIELD` - Required field not provided
+- `INVALID_FORMAT` - Invalid format (address, URL, subscription_id)
+
+**Authentication Errors:**
+- `UNAUTHORIZED` - Missing API key
 - `INVALID_API_KEY` - Authentication failed
-- `NOT_FOUND` - Resource not found
+- `FORBIDDEN` - Not authorized to perform action
+
+**Subscription/Payment Errors:**
 - `SUBSCRIPTION_EXISTS` - Subscription already registered
-- `INSUFFICIENT_BALANCE` - User needs to add funds to be able to Activate Subscription and process first charge
+- `SUBSCRIPTION_NOT_ACTIVE` - Subscription is not active
+- `INSUFFICIENT_BALANCE` - User needs to add funds to activate subscription
+- `PERMISSION_EXPIRED` - Onchain permission has expired
 - `PAYMENT_FAILED` - Payment processing failed
 
-#### DEV Endpoints
+**System Errors:**
+- `INTERNAL_ERROR` - Internal server error
+
+### DEV Endpoints
 
 - `GET http://localhost:3100/__scheduled` - Trigger order schedulers to process due recurring payments
 
-#### DEV Resources
+### DEV Resources
 
 - [Postman Collection](./src/api/postman/collection.json) - Pre-configured collection with all endpoints, authentication, and examples.
 
@@ -109,23 +122,23 @@ transactions       -- Blockchain transactions
 
 ## Testing Guide
 
-**1. Setup Merchant Account**
+### 1. Setup Merchant Account
   
 1. Create an Account & Get API Key via `/api/account` endpoint
 2. Set Webhook URL (Optional) via `/api/webhook` endpoint
 
-**2a. Subscribe using the included frontend app (Recommended)**
+### 2a. Subscribe using the included frontend app (Recommended)
 
 3. Set Frontend demo app envs: `COUCH_API_KEY`, `COUCH_WEBHOOK_SECRET`
 4. Open http://localhost:8000 in your browser and follow step to susbcribe 
 
-**2b. Subscribe using the SDK directly**
+### 2b. Subscribe using the SDK directly
 
 3. `import { subscribe } from @base-org/account/payment`
 4. Sign subscription `subscription_id = subscribe()`
 5. Register subscription in couch via `api/subscriptions` endpoint
 
-#### Monitoring
+### Monitoring
 - Check Frontend webhook logs in the terminal
 - Check Backend logs in the terminal
 - Inspect sqlite DB file at `.alchemy/miniflare/v3/d1/miniflare-D1DatabaseObject`
