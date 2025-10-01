@@ -4,7 +4,7 @@ import alchemy from "alchemy"
 import { D1Database, Queue, Worker } from "alchemy/cloudflare"
 import { EvmAccount, EvmSmartAccount } from "alchemy/coinbase"
 import { Stage } from "@/constants/env.constants"
-import type { WebhookEvent } from "@/types/webhook.types"
+import type { WebhookEvent } from "@/services/webhook.service"
 
 // =============================================================================
 // CONFIGURATION & CONVENTIONS
