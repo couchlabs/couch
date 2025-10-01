@@ -1,7 +1,6 @@
 import type { MiddlewareHandler } from "hono"
 import type { Address } from "viem"
 import { ErrorCode, HTTPError } from "@/errors/http.errors"
-import { AccountRepository } from "@/repositories/account.repository"
 import { AccountService } from "@/services/account.service"
 import type { WorkerEnv } from "@/types/api.env"
 
@@ -27,13 +26,7 @@ export const apiKeyAuth = (): MiddlewareHandler<{
       throw new HTTPError(401, ErrorCode.UNAUTHORIZED, "Missing API key")
     }
 
-    const accountService = new AccountService({
-      accountRepository: new AccountRepository({
-        db: c.env.DB,
-      }),
-      stage: c.env.STAGE,
-    })
-
+    const accountService = new AccountService()
     const accountAddress = await accountService.authenticateApiKey(apiKey)
     c.set("auth", { accountAddress })
     await next()

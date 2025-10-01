@@ -3,11 +3,11 @@ import { OrderStatus, OrderType } from "@/constants/subscription.constants"
 import { ErrorCode, HTTPError } from "@/errors/http.errors"
 import { getPaymentErrorCode } from "@/errors/subscription.errors"
 import { logger } from "@/lib/logger"
-import type {
-  ChargeTransactionResult,
+import {
+  type ChargeSubscriptionResult,
   OnchainRepository,
 } from "@/repositories/onchain.repository"
-import type { SubscriptionRepository } from "@/repositories/subscription.repository"
+import { SubscriptionRepository } from "@/repositories/subscription.repository"
 
 export interface ActivateSubscriptionParams {
   subscriptionId: Hash
@@ -20,12 +20,14 @@ export interface ValidateSubscriptionIdParams {
 
 export interface ActivationResult {
   subscriptionId: Hash
+  accountAddress: Address // Include this in the result
   transaction: {
     hash: Hash
     amount: string
   }
   order: {
     id: number
+    number: number // Sequential order number from database
   }
   nextOrder: {
     date: string
@@ -37,12 +39,9 @@ export class SubscriptionService {
   private subscriptionRepository: SubscriptionRepository
   private onchainRepository: OnchainRepository
 
-  constructor(deps: {
-    subscriptionRepository: SubscriptionRepository
-    onchainRepository: OnchainRepository
-  }) {
-    this.subscriptionRepository = deps.subscriptionRepository
-    this.onchainRepository = deps.onchainRepository
+  constructor() {
+    this.subscriptionRepository = new SubscriptionRepository()
+    this.onchainRepository = new OnchainRepository()
   }
 
   /**
@@ -142,13 +141,10 @@ export class SubscriptionService {
 
       // Verify the subscription owner matches our smart wallet
       if (
-        !isAddressEqual(
-          subscription.subscriptionOwner,
-          context.smartAccountAddress,
-        )
+        !isAddressEqual(subscription.subscriptionOwner, context.spenderAddress)
       ) {
         log.warn("Subscription owner mismatch - not authorized to charge", {
-          expected: context.smartAccountAddress,
+          expected: context.spenderAddress,
           actual: subscription.subscriptionOwner,
           subscriptionId,
         })
@@ -188,7 +184,7 @@ export class SubscriptionService {
 
       // Step 2-3: Create subscription and order atomically
       log.info("Creating subscription and order")
-      const { created, orderId } =
+      const { created, orderId, orderNumber } =
         await this.subscriptionRepository.createSubscriptionWithOrder({
           subscriptionId,
           ownerAddress: subscription.subscriptionOwner,
@@ -219,7 +215,7 @@ export class SubscriptionService {
           orderId: orderId,
         })
 
-      let transaction: ChargeTransactionResult
+      let transaction: ChargeSubscriptionResult
       if (existingTransaction) {
         log.info("Found existing successful transaction, skipping charge", {
           transactionHash: existingTransaction.transaction_hash,
@@ -234,12 +230,14 @@ export class SubscriptionService {
         // Step 5: Execute charge (only if no successful transaction exists)
         log.info("Processing charge", {
           amount: subscription.remainingChargeInPeriod,
+          recipient: accountAddress,
         })
 
         try {
           transaction = await this.onchainRepository.chargeSubscription({
             subscriptionId,
             amount: subscription.remainingChargeInPeriod,
+            recipient: accountAddress,
           })
         } catch (chargeError) {
           log.error("Charge failed", chargeError)
@@ -295,12 +293,14 @@ export class SubscriptionService {
 
       const result: ActivationResult = {
         subscriptionId,
+        accountAddress,
         transaction: {
           hash: transaction.hash,
           amount: transaction.amount,
         },
         order: {
           id: orderId,
+          number: orderNumber,
         },
         nextOrder: {
           date: subscription.nextPeriodStart.toISOString(),

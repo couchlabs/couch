@@ -3,8 +3,8 @@ import path from "node:path"
 import alchemy from "alchemy"
 import { D1Database, Queue, Worker } from "alchemy/cloudflare"
 import { EvmAccount, EvmSmartAccount } from "alchemy/coinbase"
-import type { Hash } from "viem"
 import { Stage } from "@/constants/env.constants"
+import type { WebhookEvent } from "@/types/webhook.types"
 
 // =============================================================================
 // CONFIGURATION & CONVENTIONS
@@ -71,8 +71,8 @@ export const spenderSmartAccount = await EvmSmartAccount(SPENDER_ACCOUNT_NAME, {
 // OFFCHAIN RESOURCES (Cloudflare)
 // =============================================================================
 
-// Cloudflare Worker Compatibility
-const compatibilityFlags = ["nodejs_compat", "disallow_importable_env"]
+// Cloudflare Worker Flags
+const compatibilityFlags = ["nodejs_compat"]
 
 // -----------------------------------------------------------------------------
 // DATABASES
@@ -90,6 +90,35 @@ const db = await D1Database(DB_NAME, {
 })
 
 // -----------------------------------------------------------------------------
+// QUEUES
+// -----------------------------------------------------------------------------
+
+// order-queue: Queue for processing orders
+const ORDER_QUEUE_NAME = "order-queue"
+export interface OrderQueueMessage {
+  orderId: number
+}
+export const orderQueue = await Queue<OrderQueueMessage>(ORDER_QUEUE_NAME, {
+  name: `${NAME_PREFIX}-${ORDER_QUEUE_NAME}`,
+  // settings: { ... } // TODO: Add retry/delay settings when needed
+})
+
+// webhook-queue: Queue for webhook delivery
+const WEBHOOK_QUEUE_NAME = "webhook-queue"
+export interface WebhookQueueMessage {
+  url: string
+  secret: string
+  event: WebhookEvent
+}
+export const webhookQueue = await Queue<WebhookQueueMessage>(
+  WEBHOOK_QUEUE_NAME,
+  {
+    name: `${NAME_PREFIX}-${WEBHOOK_QUEUE_NAME}`,
+    // settings: { ... } // TODO: Add retry/delay settings when needed
+  },
+)
+
+// -----------------------------------------------------------------------------
 // API GATEWAY
 // -----------------------------------------------------------------------------
 
@@ -105,30 +134,14 @@ export const api = await Worker(API_NAME, {
     CDP_WALLET_SECRET: alchemy.secret.env.CDP_WALLET_SECRET,
     CDP_PAYMASTER_URL: alchemy.env.CDP_PAYMASTER_URL,
     CDP_WALLET_NAME: spenderSmartAccount.name,
-    CDP_SMART_ACCOUNT_ADDRESS: spenderSmartAccount.address,
+    CDP_SPENDER_ADDRESS: spenderSmartAccount.address,
     STAGE: scope.stage as Stage,
     // RESOURCES:
     DB: db,
+    WEBHOOK_QUEUE: webhookQueue,
   },
   compatibilityFlags,
   dev: { port: 3000 },
-})
-
-// -----------------------------------------------------------------------------
-// QUEUES
-// -----------------------------------------------------------------------------
-
-// order-queue: Queue for processing orders
-const ORDER_QUEUE_NAME = "order-queue"
-export interface OrderQueueMessage {
-  orderId: number
-  subscriptionId: Hash
-  amount: string
-  dueAt: string
-  attemptNumber: number
-}
-export const orderQueue = await Queue<OrderQueueMessage>(ORDER_QUEUE_NAME, {
-  name: `${NAME_PREFIX}-${ORDER_QUEUE_NAME}`,
 })
 
 // -----------------------------------------------------------------------------
@@ -188,12 +201,43 @@ export const orderProcessor = await Worker(ORDER_PROCESSOR_NAME, {
   dev: { port: 3200 },
 })
 
+// webhook-delivery: Delivers webhooks to merchant endpoints
+const WEBHOOK_DELIVERY_NAME = "webhook-delivery"
+export const webhookDelivery = await Worker(WEBHOOK_DELIVERY_NAME, {
+  name: `${NAME_PREFIX}-${WEBHOOK_DELIVERY_NAME}`,
+  entrypoint: path.join(
+    import.meta.dirname,
+    "src",
+    "consumers",
+    "webhook-delivery.ts",
+  ),
+  eventSources: [
+    {
+      queue: webhookQueue,
+      settings: {
+        batchSize: 5,
+        maxConcurrency: 5,
+        maxRetries: 3,
+        retryDelay: 60, // 1 minute
+      },
+    },
+  ],
+  bindings: {
+    // Webhook delivery only needs DB access
+    DB: db,
+  },
+  compatibilityFlags,
+  dev: { port: 3201 },
+})
+
 console.log({
   [API_NAME]: api,
   [DB_NAME]: db,
   [ORDER_SCHEDULER_NAME]: orderScheduler,
   [ORDER_QUEUE_NAME]: orderQueue,
   [ORDER_PROCESSOR_NAME]: orderProcessor,
+  [WEBHOOK_QUEUE_NAME]: webhookQueue,
+  [WEBHOOK_DELIVERY_NAME]: webhookDelivery,
 })
 
 await scope.finalize()

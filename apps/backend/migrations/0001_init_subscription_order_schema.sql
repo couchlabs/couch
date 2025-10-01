@@ -33,8 +33,8 @@ CREATE TABLE IF NOT EXISTS orders (
 
 -- Transaction log (actual onchain transactions)
 CREATE TABLE IF NOT EXISTS transactions (
-  transaction_hash TEXT PRIMARY KEY,  -- Use blockchain transaction hash as PK
-  order_id INTEGER NOT NULL,
+  transaction_hash TEXT NOT NULL,  -- Can be shared when SDK batches multiple orders
+  order_id INTEGER PRIMARY KEY,  -- Unique per order
   subscription_id TEXT NOT NULL,
   amount TEXT NOT NULL,  -- In USDC base units
   status TEXT NOT NULL CHECK(status IN ('pending', 'confirmed')),  -- Only successful transactions are recorded
@@ -61,6 +61,7 @@ CREATE INDEX idx_orders_due_status ON orders(due_at, status);
 CREATE INDEX idx_orders_subscription ON orders(subscription_id);
 CREATE INDEX idx_transactions_subscription ON transactions(subscription_id);
 CREATE INDEX idx_transactions_order ON transactions(order_id);
+CREATE INDEX idx_transactions_hash ON transactions(transaction_hash);  -- For looking up all orders in a batch
 CREATE INDEX idx_orders_parent ON orders(parent_order_id);
 
 -- Status filtering

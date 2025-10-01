@@ -1,3 +1,5 @@
+import { env } from "cloudflare:workers"
+import type { D1Database } from "@cloudflare/workers-types"
 import type { Address } from "viem"
 
 export interface CreateOrUpdateWebhookParams {
@@ -11,7 +13,7 @@ export interface GetWebhookParams {
 }
 
 export interface Webhook {
-  account_address: Address
+  accountAddress: Address
   url: string
   secret: string
 }
@@ -19,8 +21,8 @@ export interface Webhook {
 export class WebhookRepository {
   private db: D1Database
 
-  constructor(deps: { db: D1Database }) {
-    this.db = deps.db
+  constructor() {
+    this.db = env.DB
   }
 
   /**
@@ -56,8 +58,16 @@ export class WebhookRepository {
         "SELECT account_address, url, secret FROM webhooks WHERE account_address = ?",
       )
       .bind(params.accountAddress)
-      .first<Webhook>()
+      .first<{ account_address: string; url: string; secret: string }>()
 
-    return result
+    if (!result) {
+      return null
+    }
+
+    return {
+      accountAddress: result.account_address as Address,
+      url: result.url,
+      secret: result.secret,
+    }
   }
 }

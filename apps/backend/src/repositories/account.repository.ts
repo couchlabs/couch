@@ -1,4 +1,10 @@
+import { env } from "cloudflare:workers"
+import type { D1Database } from "@cloudflare/workers-types"
 import { type Address, getAddress } from "viem"
+
+export interface Account {
+  address: Address
+}
 
 export interface CreateAccountParams {
   accountAddress: Address
@@ -20,8 +26,8 @@ export interface GetApiKeyParams {
 export class AccountRepository {
   private db: D1Database
 
-  constructor(deps: { db: D1Database }) {
-    this.db = deps.db
+  constructor() {
+    this.db = env.DB
   }
 
   /**
@@ -59,9 +65,7 @@ export class AccountRepository {
   /**
    * Gets account by address
    */
-  async getAccount(
-    params: GetAccountParams,
-  ): Promise<{ address: Address } | null> {
+  async getAccount(params: GetAccountParams): Promise<Account | null> {
     const result = await this.db
       .prepare("SELECT address FROM accounts WHERE address = ?")
       .bind(params.address)
@@ -77,9 +81,7 @@ export class AccountRepository {
   /**
    * Gets account by API key hash
    */
-  async getAccountByApiKey(
-    params: GetApiKeyParams,
-  ): Promise<{ address: Address } | null> {
+  async getAccountByApiKey(params: GetApiKeyParams): Promise<Account | null> {
     const result = await this.db
       .prepare("SELECT account_address FROM api_keys WHERE key_hash = ?")
       .bind(params.keyHash)

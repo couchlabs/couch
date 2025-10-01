@@ -1,9 +1,7 @@
 import type { orderProcessor, orderQueue } from "@alchemy.run"
-import { isTestnetEnvironment } from "@/constants/env.constants"
 import { logger } from "@/lib/logger"
-import { OnchainRepository } from "@/repositories/onchain.repository"
-import { SubscriptionRepository } from "@/repositories/subscription.repository"
 import { OrderService } from "@/services/order.service"
+import { WebhookService } from "@/services/webhook.service"
 
 export default {
   /**
@@ -12,7 +10,7 @@ export default {
    */
   async queue(
     batch: typeof orderQueue.Batch,
-    env: typeof orderProcessor.Env,
+    _env: typeof orderProcessor.Env,
     _ctx: ExecutionContext,
   ): Promise<void> {
     const log = logger.with({
@@ -25,47 +23,39 @@ export default {
     // Process each message in the batch
     const results = await Promise.allSettled(
       batch.messages.map(async (message) => {
-        const { orderId, subscriptionId, amount } = message.body
+        const { orderId } = message.body
 
         const messageLog = log.with({
           messageId: message.id,
           orderId,
-          subscriptionId,
         })
         const op = messageLog.operation("processOrder")
 
         try {
           op.start()
+          const webhookService = new WebhookService()
+          const orderService = new OrderService()
 
-          const orderService = new OrderService({
-            subscriptionRepository: new SubscriptionRepository({
-              db: env.DB,
-            }),
-            onchainRepository: new OnchainRepository({
-              cdp: {
-                apiKeyId: env.CDP_API_KEY_ID,
-                apiKeySecret: env.CDP_API_KEY_SECRET,
-                walletSecret: env.CDP_WALLET_SECRET,
-                walletName: env.CDP_WALLET_NAME,
-                paymasterUrl: env.CDP_PAYMASTER_URL,
-                smartAccountAddress: env.CDP_SMART_ACCOUNT_ADDRESS,
-              },
-              testnet: isTestnetEnvironment(env.STAGE),
-            }),
-          })
+          // Fetch order details for webhook emission
+          const orderDetails = await orderService.getOrderDetails(orderId)
 
           // Process the recurring payment
           messageLog.info("Processing recurring payment")
-          const result = await orderService.processOrder({
-            orderId,
-            subscriptionId,
-            amount,
-          })
+          const result = await orderService.processOrder({ orderId })
 
           if (result.success) {
             messageLog.info("Payment processed successfully", {
               transactionHash: result.transactionHash,
               nextOrderCreated: result.nextOrderCreated,
+            })
+
+            // Emit webhook for successful payment
+            await webhookService.emitPaymentProcessed({
+              accountAddress: orderDetails.account_address,
+              subscriptionId: orderDetails.subscription_id,
+              orderNumber: result.orderNumber, // Guaranteed to exist
+              amount: orderDetails.amount,
+              transactionHash: result.transactionHash,
             })
 
             // ACK the message on success
@@ -77,6 +67,15 @@ export default {
             })
           } else {
             messageLog.warn("Payment failed", {
+              failureReason: result.failureReason,
+            })
+
+            // Emit webhook for failed payment
+            await webhookService.emitPaymentFailed({
+              accountAddress: orderDetails.account_address,
+              subscriptionId: orderDetails.subscription_id,
+              orderNumber: result.orderNumber, // Guaranteed to exist
+              amount: orderDetails.amount,
               failureReason: result.failureReason,
             })
 

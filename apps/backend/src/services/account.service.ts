@@ -1,11 +1,12 @@
+import { env } from "cloudflare:workers"
 import { type Address, getAddress, isAddress } from "viem"
 import type { Stage } from "@/constants/env.constants"
 import { ErrorCode, HTTPError } from "@/errors/http.errors"
 import { logger } from "@/lib/logger"
-import type { AccountRepository } from "@/repositories/account.repository"
+import { AccountRepository } from "@/repositories/account.repository"
 
 export interface CreateOrRotateAccountParams {
-  evmAddress: string
+  address: string
 }
 
 export interface AccountResult {
@@ -16,9 +17,9 @@ export class AccountService {
   private accountRepository: AccountRepository
   private stage: Stage
 
-  constructor(deps: { accountRepository: AccountRepository; stage: Stage }) {
-    this.accountRepository = deps.accountRepository
-    this.stage = deps.stage
+  constructor() {
+    this.accountRepository = new AccountRepository()
+    this.stage = env.STAGE
   }
 
   /**
@@ -81,7 +82,7 @@ export class AccountService {
   async createOrRotateAccount(
     params: CreateOrRotateAccountParams,
   ): Promise<AccountResult> {
-    const accountAddress = this.validateAddress(params.evmAddress)
+    const accountAddress = this.validateAddress(params.address)
     const log = logger.with({ accountAddress })
 
     log.info("Creating or rotating account API key")

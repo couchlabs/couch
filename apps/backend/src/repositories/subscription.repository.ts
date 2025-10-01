@@ -1,3 +1,4 @@
+import { env } from "cloudflare:workers"
 import type { D1Database } from "@cloudflare/workers-types"
 import type { Address, Hash } from "viem"
 import {
@@ -8,9 +9,10 @@ import {
 } from "@/constants/subscription.constants"
 
 export interface Subscription {
-  subscription_id: string
+  subscription_id: Hash
   status: SubscriptionStatus
-  owner_address: string
+  owner_address: Address
+  account_address: Address // Merchant account that receives payments
   created_at?: string
   modified_at?: string
 }
@@ -18,6 +20,7 @@ export interface Subscription {
 export interface Order {
   id?: number
   subscription_id: string
+  order_number: number // Sequential number per subscription (1, 2, 3...)
   type: OrderType
   due_at: string
   amount: string
@@ -30,10 +33,18 @@ export interface Order {
   created_at?: string
 }
 
+export interface CreateOrderParams {
+  subscription_id: Hash
+  type: OrderType
+  due_at: string
+  amount: string
+  status: OrderStatus
+}
+
 export interface Transaction {
-  transaction_hash: string
+  transaction_hash: Hash
   order_id: number
-  subscription_id: string
+  subscription_id: Hash
   amount: string
   status: TransactionStatus
   failure_reason?: string
@@ -47,7 +58,7 @@ export interface CreateSubscriptionParams {
   ownerAddress: Address
 }
 
-export interface SubscriptionExistsParams {
+interface SubscriptionExistsParams {
   subscriptionId: Hash
 }
 
@@ -56,23 +67,21 @@ export interface GetSuccessfulTransactionParams {
   orderId: number
 }
 
-export interface TransactionResult {
-  transaction_hash: Hash
-  order_id: number
-  subscription_id: Hash
-  amount: string
-  status: TransactionStatus
-  failure_reason?: string
-  gas_used?: string
-  created_at?: string
-}
-
 export interface DueOrder {
   id: number
   subscription_id: Hash
+  account_address: Address
   amount: string
-  due_at: string
   attempts: number
+}
+
+export interface OrderDetails {
+  id: number
+  subscription_id: Hash
+  account_address: Address
+  amount: string
+  order_number: number
+  status: string
 }
 
 export interface RecordTransactionParams {
@@ -103,7 +112,13 @@ export interface CreateSubscriptionWithOrderParams {
   subscriptionId: Hash
   ownerAddress: Address // Couch's smart wallet (the spender)
   accountAddress: Address // Merchant's account address (from auth)
-  order: Order
+  order: CreateOrderParams
+}
+
+export interface CreateSubscriptionWithOrderResult {
+  created: boolean
+  orderId?: number
+  orderNumber?: number
 }
 
 export interface ExecuteSubscriptionActivationParams {
@@ -130,8 +145,8 @@ export interface MarkSubscriptionInactiveParams {
 export class SubscriptionRepository {
   private db: D1Database
 
-  constructor(config: { db: D1Database }) {
-    this.db = config.db
+  constructor() {
+    this.db = env.DB
   }
 
   /**
@@ -167,23 +182,85 @@ export class SubscriptionRepository {
     return result !== null
   }
 
-  async getSubscription(subscriptionId: Hash): Promise<Subscription | null> {
-    return await this.db
-      .prepare("SELECT * FROM subscriptions WHERE subscription_id = ?")
-      .bind(subscriptionId)
-      .first()
+  /**
+   * Get order details with subscription info for processing
+   */
+  async getOrderDetails(orderId: number): Promise<OrderDetails | null> {
+    const result = await this.db
+      .prepare(
+        `SELECT
+          o.id,
+          o.subscription_id,
+          o.amount,
+          o.order_number,
+          o.status,
+          s.account_address
+        FROM orders o
+        JOIN subscriptions s ON o.subscription_id = s.subscription_id
+        WHERE o.id = ?`,
+      )
+      .bind(orderId)
+      .first<{
+        id: number
+        subscription_id: string
+        amount: string
+        order_number: number
+        status: string
+        account_address: string
+      }>()
+
+    if (!result) return null
+
+    return {
+      id: result.id,
+      subscription_id: result.subscription_id as Hash,
+      account_address: result.account_address as Address,
+      amount: result.amount,
+      order_number: result.order_number,
+      status: result.status,
+    }
   }
 
-  async createOrder(order: Order): Promise<number> {
+  async getSubscription(subscriptionId: Hash): Promise<Subscription | null> {
+    const result = await this.db
+      .prepare("SELECT * FROM subscriptions WHERE subscription_id = ?")
+      .bind(subscriptionId)
+      .first<{
+        subscription_id: string
+        status: SubscriptionStatus
+        owner_address: string
+        account_address: string
+        created_at?: string
+        modified_at?: string
+      }>()
+
+    if (!result) return null
+
+    return {
+      subscription_id: result.subscription_id as Hash,
+      status: result.status,
+      owner_address: result.owner_address as Address,
+      account_address: result.account_address as Address,
+      created_at: result.created_at,
+      modified_at: result.modified_at,
+    }
+  }
+
+  async createOrder(order: CreateOrderParams): Promise<number | undefined> {
     const result = await this.db
       .prepare(
         `INSERT INTO orders (
-          subscription_id, type, due_at, amount, status
-        ) VALUES (?, ?, ?, ?, ?)
+          subscription_id, order_number, type, due_at, amount, status
+        ) VALUES (
+          ?,
+          COALESCE((SELECT MAX(order_number) FROM orders WHERE subscription_id = ?), 0) + 1,
+          ?, ?, ?, ?
+        )
         RETURNING id`,
       )
       .bind(
         order.subscription_id,
+        order.subscription_id, // For the subquery
         order.type,
         order.due_at,
         order.amount,
@@ -192,24 +269,6 @@ export class SubscriptionRepository {
       .first<{ id: number }>()
 
     return result?.id
-  }
-
-  async completeOrder(id: number): Promise<void> {
-    await this.db
-      .prepare(`UPDATE orders SET status = ? WHERE id = ?`)
-      .bind(OrderStatus.PAID, id)
-      .run()
-  }
-
-  async failOrder(id: number, reason: string): Promise<void> {
-    await this.db
-      .prepare(
-        `UPDATE orders
-         SET status = ?, failure_reason = ?
-         WHERE id = ?`,
-      )
-      .bind(OrderStatus.FAILED, reason, id)
-      .run()
   }
 
   async createTransaction(transaction: Transaction): Promise<void> {
@@ -234,7 +293,7 @@ export class SubscriptionRepository {
    */
   async getSuccessfulTransaction(
     params: GetSuccessfulTransactionParams,
-  ): Promise<TransactionResult | null> {
+  ): Promise<Transaction | null> {
     const { subscriptionId, orderId } = params
     const transaction = await this.db
       .prepare(
@@ -279,7 +338,7 @@ export class SubscriptionRepository {
    */
   async createSubscriptionWithOrder(
     params: CreateSubscriptionWithOrderParams,
-  ): Promise<{ created: boolean; orderId?: number }> {
+  ): Promise<CreateSubscriptionWithOrderResult> {
     const { subscriptionId, ownerAddress, accountAddress, order } = params
     try {
       // D1 supports transactions via batch
@@ -308,24 +367,33 @@ export class SubscriptionRepository {
         return { created: false }
       }
 
-      // Create order
+      // Create order with auto-calculated order_number (starts at 1)
       const orderResult = await this.db
         .prepare(
           `INSERT INTO orders (
-            subscription_id, type, due_at, amount, status
-          ) VALUES (?, ?, ?, ?, ?)
-          RETURNING id`,
+            subscription_id, order_number, type, due_at, amount, status
+          ) VALUES (
+            ?,
+            COALESCE((SELECT MAX(order_number) FROM orders WHERE subscription_id = ?), 0) + 1,
+            ?, ?, ?, ?
+          )
+          RETURNING id, order_number`,
         )
         .bind(
           order.subscription_id,
+          order.subscription_id, // For the subquery
           order.type,
           order.due_at,
           order.amount,
           order.status || OrderStatus.PROCESSING,
         )
-        .first<{ id: number }>()
+        .first<{ id: number; order_number: number }>()
 
-      return { created: true, orderId: orderResult?.id }
+      return {
+        created: true,
+        orderId: orderResult?.id,
+        orderNumber: orderResult?.order_number,
+      }
     } catch (error) {
       // If anything fails, clean up
       await this.deleteSubscriptionData({ subscriptionId })
@@ -360,15 +428,20 @@ export class SubscriptionRepository {
       this.db
         .prepare(`UPDATE orders SET status = ? WHERE id = ?`)
         .bind(OrderStatus.PAID, order.id),
-      // Create next order
+      // Create next order with auto-incremented order_number
       this.db
         .prepare(
           `INSERT INTO orders (
-            subscription_id, type, due_at, amount, status
-          ) VALUES (?, ?, ?, ?, ?)`,
+            subscription_id, order_number, type, due_at, amount, status
+          ) VALUES (
+            ?,
+            COALESCE((SELECT MAX(order_number) FROM orders WHERE subscription_id = ?), 0) + 1,
+            ?, ?, ?, ?
+          )`,
         )
         .bind(
           subscriptionId,
+          subscriptionId, // For the subquery
           OrderType.RECURRING,
           nextOrder.dueAt,
           nextOrder.amount,
@@ -431,16 +504,24 @@ export class SubscriptionRepository {
            ORDER BY o.due_at
            LIMIT ?
          )
-         RETURNING id, subscription_id, amount, due_at, attempts`,
+         RETURNING id, subscription_id,
+                  (SELECT account_address FROM subscriptions WHERE subscription_id = orders.subscription_id) as account_address,
+                  amount, attempts`,
       )
       .bind(OrderStatus.PROCESSING, OrderStatus.PENDING, "active", limit)
-      .all<DueOrder>()
+      .all<{
+        id: number
+        subscription_id: string
+        account_address: string
+        amount: string
+        attempts: number
+      }>()
 
     return (result.results || []).map((entry) => ({
       id: entry.id,
       subscription_id: entry.subscription_id as Hash,
+      account_address: entry.account_address as Address,
       amount: entry.amount,
-      due_at: entry.due_at,
       attempts: entry.attempts,
     }))
   }
@@ -462,30 +543,41 @@ export class SubscriptionRepository {
   }
 
   /**
-   * Update order status
+   * Update order status and return order details
    */
-  async updateOrder(params: UpdateOrderParams): Promise<void> {
+  async updateOrder(
+    params: UpdateOrderParams,
+  ): Promise<{ order_number: number }> {
     const { id, status, failureReason, rawError } = params
 
+    let result: { order_number: number } | undefined
     if (failureReason || rawError) {
-      await this.db
+      result = await this.db
         .prepare(
           `UPDATE orders
            SET status = ?, failure_reason = ?, raw_error = ?
-           WHERE id = ?`,
+           WHERE id = ?
+           RETURNING order_number`,
         )
         .bind(status, failureReason || null, rawError || null, id)
-        .run()
+        .first<{ order_number: number }>()
     } else {
-      await this.db
+      result = await this.db
         .prepare(
           `UPDATE orders
            SET status = ?
-           WHERE id = ?`,
+           WHERE id = ?
+           RETURNING order_number`,
         )
         .bind(status, id)
-        .run()
+        .first<{ order_number: number }>()
     }
+
+    if (!result) {
+      throw new Error(`Failed to update order ${id} - order not found`)
+    }
+
+    return result
   }
 
   /**
