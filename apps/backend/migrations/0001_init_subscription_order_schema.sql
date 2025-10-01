@@ -1,6 +1,10 @@
 -- Migration: Create schema for subscription order system
 -- Description: Core tables for managing subscriptions, orders, and transactions
 
+-- =============================================================================
+-- SUBSCRIPTION SYSTEM TABLES
+-- =============================================================================
+
 -- Core subscription state (minimal - onchain is source of truth)
 CREATE TABLE IF NOT EXISTS subscriptions (
   subscription_id TEXT PRIMARY KEY,  -- This IS the permission hash from onchain
@@ -29,8 +33,8 @@ CREATE TABLE IF NOT EXISTS orders (
 
 -- Transaction log (actual onchain transactions)
 CREATE TABLE IF NOT EXISTS transactions (
-  transaction_hash TEXT PRIMARY KEY,  -- Use blockchain transaction hash as PK
-  order_id INTEGER NOT NULL,
+  transaction_hash TEXT NOT NULL,  -- Can be shared when SDK batches multiple orders
+  order_id INTEGER PRIMARY KEY,  -- Unique per order
   subscription_id TEXT NOT NULL,
   amount TEXT NOT NULL,  -- In USDC base units
   status TEXT NOT NULL CHECK(status IN ('pending', 'confirmed')),  -- Only successful transactions are recorded
@@ -41,7 +45,10 @@ CREATE TABLE IF NOT EXISTS transactions (
   FOREIGN KEY (subscription_id) REFERENCES subscriptions(subscription_id)
 );
 
--- Indexes for performance
+-- -----------------------------------------------------------------------------
+-- Indexes for Subscription System
+-- -----------------------------------------------------------------------------
+
 -- Time-based queries
 CREATE INDEX idx_subscriptions_created ON subscriptions(created_at);
 CREATE INDEX idx_orders_created ON orders(created_at);
@@ -54,6 +61,7 @@ CREATE INDEX idx_orders_due_status ON orders(due_at, status);
 CREATE INDEX idx_orders_subscription ON orders(subscription_id);
 CREATE INDEX idx_transactions_subscription ON transactions(subscription_id);
 CREATE INDEX idx_transactions_order ON transactions(order_id);
+CREATE INDEX idx_transactions_hash ON transactions(transaction_hash);  -- For looking up all orders in a batch
 CREATE INDEX idx_orders_parent ON orders(parent_order_id);
 
 -- Status filtering
@@ -63,3 +71,39 @@ CREATE INDEX idx_transactions_status ON transactions(status);
 
 -- Account lookup
 CREATE INDEX idx_subscriptions_owner ON subscriptions(owner_address);
+
+-- =============================================================================
+-- ACCOUNT SYSTEM TABLES
+-- =============================================================================
+
+-- Accounts table (tied to merchant wallet address)
+CREATE TABLE IF NOT EXISTS accounts (
+    address TEXT PRIMARY KEY  -- Checksummed address (0x...)
+);
+
+-- API Keys table (V1: one key per account, V2: multiple)
+CREATE TABLE IF NOT EXISTS api_keys (
+    key_hash TEXT PRIMARY KEY,          -- SHA-256 hash of the secret part (no prefix)
+    account_address TEXT NOT NULL REFERENCES accounts(address) ON DELETE CASCADE
+);
+
+-- Single webhook per account
+CREATE TABLE IF NOT EXISTS webhooks (
+    account_address TEXT PRIMARY KEY REFERENCES accounts(address) ON DELETE CASCADE,
+    url TEXT NOT NULL,                  -- HTTPS URL
+    secret TEXT NOT NULL                -- For HMAC signature verification
+);
+
+-- Link subscriptions to accounts (merchant who receives payments)
+ALTER TABLE subscriptions ADD COLUMN account_address TEXT REFERENCES accounts(address);
+
+-- Add order sequence tracking for webhook events
+ALTER TABLE orders ADD COLUMN order_number INTEGER;
+
+-- -----------------------------------------------------------------------------
+-- Indexes for Account System
+-- -----------------------------------------------------------------------------
+
+CREATE INDEX idx_api_keys_account ON api_keys(account_address);
+CREATE INDEX idx_subscriptions_account ON subscriptions(account_address);
+CREATE INDEX idx_orders_subscription_number ON orders(subscription_id, order_number);

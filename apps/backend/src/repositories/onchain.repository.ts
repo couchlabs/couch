@@ -1,27 +1,26 @@
+import { env } from "cloudflare:workers"
 import { base } from "@base-org/account"
-
-import { logger } from "@/lib/logger"
-import { Network, getNetwork } from "@/lib/constants"
-
 import type { Address, Hash } from "viem"
+import {
+  getNetwork,
+  isTestnetEnvironment,
+  type Network,
+} from "@/constants/env.constants"
+import { logger } from "@/lib/logger"
 
-export interface CdpConfig {
+interface CdpConfig {
   apiKeyId: string
   apiKeySecret: string
   walletSecret: string
   walletName: string
   paymasterUrl: string
-  smartAccountAddress: Address
-}
-
-export interface OnchainRepositoryConfig {
-  cdp: CdpConfig
-  testnet: boolean
+  spenderAddress: Address
 }
 
 export interface ChargeSubscriptionParams {
   subscriptionId: Hash
   amount: string
+  recipient: Address // Merchant account address to receive the USDC
 }
 
 export interface GetSubscriptionStatusParams {
@@ -37,11 +36,11 @@ export interface SubscriptionStatusResult {
     recurringCharge?: string
   }
   context: {
-    smartAccountAddress: Address
+    spenderAddress: Address
   }
 }
 
-export interface ChargeTransactionResult {
+export interface ChargeSubscriptionResult {
   hash: Hash
   amount: string
   success: boolean
@@ -53,13 +52,21 @@ export class OnchainRepository {
   private testnet: boolean
   private network: Network
 
-  constructor(config: OnchainRepositoryConfig) {
-    this.cdp = config.cdp
-    this.testnet = config.testnet
-    this.network = getNetwork(config.testnet)
+  constructor() {
+    this.cdp = {
+      apiKeyId: env.CDP_API_KEY_ID,
+      apiKeySecret: env.CDP_API_KEY_SECRET,
+      walletSecret: env.CDP_WALLET_SECRET,
+      walletName: env.CDP_WALLET_NAME,
+      spenderAddress: env.CDP_SPENDER_ADDRESS,
+      paymasterUrl: env.CDP_PAYMASTER_URL,
+    }
+
+    this.testnet = isTestnetEnvironment(env.STAGE)
+    this.network = getNetwork(this.testnet)
 
     logger.info("OnchainRepository initialized", {
-      smartAccountAddress: this.cdp.smartAccountAddress,
+      spenderAddress: this.cdp.spenderAddress,
       network: this.network,
       testnet: this.testnet,
     })
@@ -67,9 +74,9 @@ export class OnchainRepository {
 
   async chargeSubscription(
     params: ChargeSubscriptionParams,
-  ): Promise<ChargeTransactionResult> {
-    const { subscriptionId, amount } = params
-    const log = logger.with({ subscriptionId, amount })
+  ): Promise<ChargeSubscriptionResult> {
+    const { subscriptionId, amount, recipient } = params
+    const log = logger.with({ subscriptionId, amount, recipient })
 
     try {
       log.info("Executing onchain charge")
@@ -82,6 +89,7 @@ export class OnchainRepository {
         paymasterUrl: this.cdp.paymasterUrl,
         id: subscriptionId,
         amount,
+        recipient,
         testnet: this.testnet,
       })
 
@@ -89,6 +97,7 @@ export class OnchainRepository {
       log.info("Onchain charge successful", {
         transactionHash: transaction.id,
         amount: transaction.amount,
+        recipient,
       })
 
       // Transform external library result to our domain types
@@ -124,6 +133,14 @@ export class OnchainRepository {
       subscriptionOwner: subscription.subscriptionOwner,
     })
 
+    // Log warning if subscription is active but owner is missing
+    if (subscription.isSubscribed && !subscription.subscriptionOwner) {
+      log.warn("Active subscription has no owner", {
+        subscriptionId,
+        isSubscribed: subscription.isSubscribed,
+      })
+    }
+
     // Return subscription with our wallet address for service layer validation
     return {
       subscription: {
@@ -133,7 +150,7 @@ export class OnchainRepository {
           | undefined,
       },
       context: {
-        smartAccountAddress: this.cdp.smartAccountAddress,
+        spenderAddress: this.cdp.spenderAddress,
       },
     }
   }

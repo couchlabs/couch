@@ -122,7 +122,7 @@ ALTER TABLE subscriptions ADD COLUMN evm_address TEXT REFERENCES accounts(evm_ad
 ALTER TABLE orders ADD COLUMN order_number INTEGER;
 ```
 
-## API Endpoints (3 Total)
+## API Endpoints (3 Total for V1)
 
 ### 1. Create Account / Rotate API Key
 
@@ -134,7 +134,7 @@ Creates a new account or rotates the API key for an existing account.
 
 ```json
 {
-  "evm_address": "0x742d35Cc6634C0532925a3b844Bc9e7595f0fA4b"
+  "address": "0x123abc..."
 }
 ```
 
@@ -142,7 +142,7 @@ Creates a new account or rotates the API key for an existing account.
 
 ```json
 {
-  "api_key": "ck_prod_a3f4b2c1d5e6..." // Full API key - only shown once
+  "api_key": "ck_prod_456def..." // Full API key - only shown once
 }
 ```
 
@@ -600,16 +600,24 @@ export const orderProcessor = await Worker(ORDER_PROCESSOR_NAME, {
 4. **HMAC signatures** - Sign all outgoing webhooks
 5. **Test** - End-to-end webhook delivery
 
-### V2 - Future Enhancements
+### Future Enhancements (V2 and beyond)
 
-- Multiple API keys per account (same table, remove uniqueness constraint)
-- API key management endpoints (list, revoke)
-- API key metadata (name/label, created_at, last_used_at)
-- Signature verification for secure key rotation
+**Account & API Keys:**
+- Signature verification for secure account operations
+- Multiple API keys per account
+- API key management endpoints (GET, DELETE)
+- API key metadata (name, created_at, last_used_at)
+
+**Webhooks:**
+- GET /api/webhook - View current webhook
+- DELETE /api/webhook - Remove webhook
 - Multiple webhooks per account
 - Additional event types (order.created, order.paid)
-- Webhook delivery tracking and debugging
+- Webhook delivery status tracking
+
+**General:**
 - Rate limiting and usage analytics
+- More detailed error responses
 
 ## Security
 
@@ -620,11 +628,13 @@ export const orderProcessor = await Worker(ORDER_PROCESSOR_NAME, {
 
 ## Summary
 
-This V1 specification provides:
+This V1 specification provides the absolute minimum viable API:
 
-- **3 simple endpoints** for complete functionality
-- **One API key per account** (enforced in application logic, rotatable)
-- **Single webhook event** that covers all subscription changes
+- **3 endpoints only:**
+  - `PUT /api/account` - Get API key
+  - `PUT /api/webhook` - Set webhook URL
+  - `POST /api/subscriptions` - Activate subscription
+- **One API key per account** (rotatable)
+- **Single webhook event** (`subscription.updated`) for all changes
 - **Web3-native** identity with EVM addresses
-- **Minimal database schema** without unnecessary fields
-- **Clear upgrade path** to V2 with additional features
+- **Minimal surface area** - Add features as needed in future versions

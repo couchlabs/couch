@@ -1,7 +1,6 @@
-import { SubscriptionRepository } from "@/repositories/subscription.repository"
-import { logger } from "@/lib/logger"
-
 import type { orderScheduler } from "@alchemy.run"
+import { logger } from "@/lib/logger"
+import { SubscriptionRepository } from "@/repositories/subscription.repository"
 
 export default {
   /**
@@ -22,7 +21,7 @@ export default {
     try {
       op.start()
 
-      const subscriptionRepository = new SubscriptionRepository({ db: env.DB })
+      const subscriptionRepository = new SubscriptionRepository()
 
       // Claim due orders atomically
       log.info("Claiming due orders")
@@ -35,24 +34,16 @@ export default {
       }
 
       log.info(`Found ${dueOrders.length} due orders`)
-      // Send each order to the charge queue and
-      // Wait for all queue sends to complete
+      // Send each order to the charge queue
       await Promise.all(
         dueOrders.map((order) => {
-          const message = {
-            orderId: order.id,
-            subscriptionId: order.subscription_id,
-            amount: order.amount,
-            dueAt: order.due_at,
-            attemptNumber: order.attempts + 1,
-          }
-
           log.info("Sending order to queue", {
             orderId: order.id,
             subscriptionId: order.subscription_id,
+            accountAddress: order.account_address,
           })
 
-          return env.ORDER_QUEUE.send(message)
+          return env.ORDER_QUEUE.send({ orderId: order.id })
         }),
       )
 

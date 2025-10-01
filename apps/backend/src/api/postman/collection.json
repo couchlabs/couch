@@ -1,0 +1,199 @@
+{
+  "info": {
+    "name": "Couch API",
+    "description": "API collection for Couch stablecoin recurring billing infrastructure",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3000/api",
+      "type": "string"
+    },
+    {
+      "key": "apiKey",
+      "value": "",
+      "type": "string",
+      "description": "API key obtained from PUT /api/account"
+    },
+    {
+      "key": "testAddress",
+      "value": "0x742d35Cc6634C0532925a3b844Bc9e7595f0fA4b",
+      "type": "string"
+    },
+    {
+      "key": "testSubscriptionId",
+      "value": "0x0000000000000000000000000000000000000000000000000000000000000000",
+      "type": "string"
+    },
+    {
+      "key": "testWebhookUrl",
+      "value": "http://localhost:8000/api/webhook",
+      "type": "string",
+      "description": "Test webhook URL for receiving events"
+    }
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/health",
+              "host": ["{{baseUrl}}"],
+              "path": ["health"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Account",
+      "item": [
+        {
+          "name": "Create Account / Rotate API Key",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const response = pm.response.json();",
+                  "    pm.collectionVariables.set(\"apiKey\", response.api_key);",
+                  "    console.log(\"API Key saved to collection variables\");",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"address\": \"{{testAddress}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/account",
+              "host": ["{{baseUrl}}"],
+              "path": ["account"]
+            },
+            "description": "Creates a new account or rotates the API key for an existing account. The API key is only shown once in the response."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Subscriptions",
+      "item": [
+        {
+          "name": "Create Subscription",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 202) {",
+                  "    const response = pm.response.json();",
+                  "    if (response.data && response.data.subscription_id) {",
+                  "        pm.collectionVariables.set(\"testSubscriptionId\", response.data.subscription_id);",
+                  "        console.log(\"Subscription ID saved to collection variables\");",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-API-Key",
+                "value": "{{apiKey}}",
+                "description": "API key from account creation"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"subscription_id\": \"{{testSubscriptionId}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/subscriptions",
+              "host": ["{{baseUrl}}"],
+              "path": ["subscriptions"]
+            },
+            "description": "Creates and activates a subscription with initial charge. Requires authentication via API key."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Webhooks",
+      "item": [
+        {
+          "name": "Set Webhook URL",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-API-Key",
+                "value": "{{apiKey}}",
+                "description": "API key from account creation"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"url\": \"{{testWebhookUrl}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/webhook",
+              "host": ["{{baseUrl}}"],
+              "path": ["webhook"]
+            },
+            "description": "Sets or updates the webhook URL for the authenticated account. Returns a secret for HMAC signature verification."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Development Tools",
+      "description": "Development-only endpoints for testing and debugging. Not available in production.",
+      "item": [
+        {
+          "name": "Trigger Order Scheduler",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "http://localhost:3100/__scheduled",
+              "protocol": "http",
+              "host": ["localhost"],
+              "port": "3100",
+              "path": ["__scheduled"]
+            },
+            "description": "Manually triggers the order scheduler to process due recurring payments. This endpoint is only available in development mode. In production, the scheduler runs automatically via cron.\n\nThe scheduler will:\n1. Find all pending orders where due_at <= now\n2. Queue them for processing\n3. The order processor will attempt to charge each subscription\n4. Webhook events will be emitted for successful/failed payments"
+          }
+        }
+      ]
+    }
+  ]
+}
