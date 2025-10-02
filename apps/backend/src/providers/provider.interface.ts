@@ -30,9 +30,14 @@ export interface StatusParams {
   subscriptionId: string
 }
 
+// TODO: Revisit this interface when adding second provider
+// Current design is based on Base SDK behavior - may need adjustment
+// to be truly generic across different provider implementations
 export interface StatusResult {
   isSubscribed: boolean
-  subscriptionOwner: Address
-  remainingChargeInPeriod?: number
+  subscriptionOwner?: Address // Only when permission exists (found in indexer)
+  remainingChargeInPeriod?: string // Only when permission exists
   spenderAddress: Address
+  nextPeriodStart?: Date // Optional - undefined means no future recurring charges
+  recurringCharge: string // Always present (defaults to '0' when not found)
 }

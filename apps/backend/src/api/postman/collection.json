@@ -44,12 +44,8 @@
             "header": [],
             "url": {
               "raw": "{{baseUrl}}/health",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "health"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["health"]
             }
           }
         }
@@ -89,12 +85,8 @@
             },
             "url": {
               "raw": "{{baseUrl}}/account",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "account"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["account"]
             },
             "description": "Creates a new account or rotates the API key for an existing account. The API key is only shown once in the response."
           }
@@ -142,12 +134,8 @@
             },
             "url": {
               "raw": "{{baseUrl}}/subscriptions",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "subscriptions"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["subscriptions"]
             },
             "description": "Creates and activates a subscription with initial charge. Requires authentication via API key."
           }
@@ -178,12 +166,8 @@
             },
             "url": {
               "raw": "{{baseUrl}}/webhook",
-              "host": [
-                "{{baseUrl}}"
-              ],
-              "path": [
-                "webhook"
-              ]
+              "host": ["{{baseUrl}}"],
+              "path": ["webhook"]
             },
             "description": "Sets or updates the webhook URL for the authenticated account. Returns a secret for HMAC signature verification."
           }
@@ -202,13 +186,9 @@
             "url": {
               "raw": "http://localhost:3100/__scheduled",
               "protocol": "http",
-              "host": [
-                "localhost"
-              ],
+              "host": ["localhost"],
               "port": "3100",
-              "path": [
-                "__scheduled"
-              ]
+              "path": ["__scheduled"]
             },
             "description": "Manually triggers the order scheduler to process due recurring payments. This endpoint is only available in development mode. In production, the scheduler runs automatically via cron.\n\nThe scheduler will:\n1. Find all pending orders where due_at <= now\n2. Queue them for processing\n3. The order processor will attempt to charge each subscription\n4. Webhook events will be emitted for successful/failed payments"
           }

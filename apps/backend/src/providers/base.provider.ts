@@ -55,6 +55,18 @@ export class BaseProvider implements SubscriptionProvider {
     }
   }
 
+  /**
+   * Gets subscription status from Base SDK.
+   *
+   * Base SDK behavior:
+   * - When permission not found: returns { isSubscribed: false, recurringCharge: '0' }
+   * - When permission exists but inactive: returns all fields with isSubscribed: false
+   * - When permission exists and active: returns all fields with isSubscribed: true
+   * - subscriptionOwner and remainingChargeInPeriod only present when permission exists
+   * - nextPeriodStart may be undefined (indicates no future recurring charges)
+   * - Throws if subscription hasn't started yet (start time is in future)
+   * - Validates chain ID and token address (USDC only)
+   */
   async getSubscriptionStatus(params: StatusParams): Promise<StatusResult> {
     const subscription = await base.subscription.getStatus({
       id: params.subscriptionId as Hash,
@@ -64,8 +76,10 @@ export class BaseProvider implements SubscriptionProvider {
     return {
       isSubscribed: subscription.isSubscribed,
       subscriptionOwner: subscription.subscriptionOwner as Address,
-      remainingChargeInPeriod: Number(subscription.remainingChargeInPeriod),
+      remainingChargeInPeriod: subscription.remainingChargeInPeriod,
       spenderAddress: this.cdpConfig.spenderAddress,
+      nextPeriodStart: subscription.nextPeriodStart,
+      recurringCharge: subscription.recurringCharge,
     }
   }
 

@@ -1,6 +1,8 @@
 import type { WebhookQueueMessage } from "@alchemy.run"
-import { logger } from "@/lib/logger"
+import { createLogger } from "@/lib/logger"
 import type { WorkerEnv } from "@/types/api.env"
+
+const logger = createLogger("webhook.consumer")
 
 /**
  * Generates HMAC signature for webhook payload

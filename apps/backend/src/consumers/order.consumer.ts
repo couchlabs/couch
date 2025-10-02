@@ -1,7 +1,9 @@
 import type { orderProcessor, orderQueue } from "@alchemy.run"
-import { logger } from "@/lib/logger"
+import { createLogger } from "@/lib/logger"
 import { OrderService } from "@/services/order.service"
 import { WebhookService } from "@/services/webhook.service"
+
+const logger = createLogger("order.consumer")
 
 export default {
   /**
@@ -54,8 +56,8 @@ export default {
 
             // Emit webhook for successful payment
             await webhookService.emitPaymentProcessed({
-              accountAddress: orderDetails.account_address,
-              subscriptionId: orderDetails.subscription_id,
+              accountAddress: orderDetails.accountAddress,
+              subscriptionId: orderDetails.subscriptionId,
               orderNumber: result.orderNumber, // Guaranteed to exist
               amount: orderDetails.amount,
               transactionHash: result.transactionHash,
@@ -75,8 +77,8 @@ export default {
 
             // Emit webhook for failed payment
             await webhookService.emitPaymentFailed({
-              accountAddress: orderDetails.account_address,
-              subscriptionId: orderDetails.subscription_id,
+              accountAddress: orderDetails.accountAddress,
+              subscriptionId: orderDetails.subscriptionId,
               orderNumber: result.orderNumber, // Guaranteed to exist
               amount: orderDetails.amount,
               failureReason: result.failureReason,

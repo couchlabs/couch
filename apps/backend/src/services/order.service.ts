@@ -1,10 +1,13 @@
 import type { Hash } from "viem"
 import { OrderStatus, OrderType } from "@/constants/subscription.constants"
 import { getPaymentErrorCode } from "@/errors/subscription.errors"
-import { logger } from "@/lib/logger"
+import { createLogger } from "@/lib/logger"
 import type { Provider } from "@/providers/provider.interface"
 import { OnchainRepository } from "@/repositories/onchain.repository"
-import { SubscriptionRepository } from "@/repositories/subscription.repository"
+import {
+  type OrderDetails,
+  SubscriptionRepository,
+} from "@/repositories/subscription.repository"
 
 export interface ProcessOrderParams {
   orderId: number
@@ -25,6 +28,8 @@ export interface ScheduleNextOrderParams {
   amount: string
 }
 
+const logger = createLogger("order.service")
+
 export class OrderService {
   private subscriptionRepository: SubscriptionRepository
   private onchainRepository: OnchainRepository
@@ -38,7 +43,7 @@ export class OrderService {
    * Get order details for webhook emission
    * Throws if order not found
    */
-  async getOrderDetails(orderId: number) {
+  async getOrderDetails(orderId: number): Promise<OrderDetails> {
     const log = logger.with({ orderId })
 
     const orderDetails =

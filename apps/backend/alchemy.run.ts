@@ -3,7 +3,7 @@ import path from "node:path"
 import alchemy from "alchemy"
 import { D1Database, Queue, Worker } from "alchemy/cloudflare"
 import { EvmAccount, EvmSmartAccount } from "alchemy/coinbase"
-import { Stage } from "@/constants/env.constants"
+import type { Stage } from "@/constants/env.constants"
 import type { Provider } from "@/providers/provider.interface"
 import type { WebhookEvent } from "@/services/webhook.service"
 
@@ -39,7 +39,6 @@ import type { WebhookEvent } from "@/services/webhook.service"
 
 const app = { name: "couch" }
 export const scope = await alchemy("backend", {
-  stage: Stage.DEV,
   password: process.env.ALCHEMY_PASSWORD,
 })
 const NAME_PREFIX = `${app.name}-${scope.name}-${scope.stage}`

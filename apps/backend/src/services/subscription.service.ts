@@ -2,7 +2,7 @@ import { type Address, type Hash, isAddressEqual } from "viem"
 import { OrderStatus, OrderType } from "@/constants/subscription.constants"
 import { ErrorCode, HTTPError } from "@/errors/http.errors"
 import { getPaymentErrorCode } from "@/errors/subscription.errors"
-import { logger } from "@/lib/logger"
+import { createLogger } from "@/lib/logger"
 import type { Provider } from "@/providers/provider.interface"
 import {
   type ChargeResult,
@@ -37,6 +37,8 @@ export interface ActivationResult {
     amount: string
   }
 }
+
+const logger = createLogger("subscription.service")
 
 export class SubscriptionService {
   private subscriptionRepository: SubscriptionRepository

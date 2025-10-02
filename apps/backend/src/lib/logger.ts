@@ -83,3 +83,44 @@ class Logger {
 }
 
 export const logger = new Logger()
+
+/**
+ * Creates a logger with module tracking
+ * @param module - Module name (e.g., 'subscription.service', 'onchain.repository', 'webhook.consumer')
+ */
+export function createLogger(module: string): Logger {
+  return logger.with({ module })
+}
+
+// Auto logger factory that automatically detects type from file path
+// Usage: const logger = createAutoLogger(import.meta.url)
+export function createAutoLogger(url: string): Logger {
+  // Extract parts of the path
+  const parts = url.split("/")
+  const filename = parts.pop() || "unknown"
+
+  // Get relative path from 'src/' onwards (last 2-3 meaningful folders + filename)
+  const srcIndex = parts.indexOf("src")
+  const relativePath =
+    srcIndex >= 0
+      ? `${parts.slice(srcIndex + 1).join("/")}/${filename}`
+      : filename
+
+  // Auto-detect type from path structure
+  // Check more specific paths first to handle nested structures
+  let type = "component"
+  if (url.includes("/middleware/")) type = "middleware"
+  else if (url.includes("/services/")) type = "service"
+  else if (url.includes("/repositories/")) type = "repository"
+  else if (url.includes("/providers/")) type = "provider"
+  else if (url.includes("/consumers/")) type = "consumer"
+  else if (url.includes("/schedulers/")) type = "scheduler"
+  else if (url.includes("/routes/")) type = "route"
+  else if (url.includes("/api/")) type = "api"
+
+  return logger.with({
+    file: filename, // Just filename for quick reference
+    path: relativePath, // Relative path for full context
+    type, // Auto-detected component type
+  })
+}

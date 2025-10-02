@@ -9,6 +9,9 @@ import {
 } from "@/constants/subscription.constants"
 import type { Provider } from "@/providers/provider.interface"
 
+// import { createLogger } from "@/lib/logger"
+// const logger = createLogger('subscription:repository')
+
 export interface Subscription {
   subscriptionId: Hash
   status: SubscriptionStatus
@@ -291,9 +294,9 @@ export class SubscriptionRepository {
         ) VALUES (?, ?, ?, ?, ?)`,
       )
       .bind(
-        transaction.transaction_hash, // transaction_hash first as it's the PK
-        transaction.order_id,
-        transaction.subscription_id,
+        transaction.transactionHash, // transaction_hash column (PK)
+        transaction.orderId,
+        transaction.subscriptionId,
         transaction.amount,
         transaction.status,
       )
@@ -578,7 +581,7 @@ export class SubscriptionRepository {
    */
   async updateOrder(
     params: UpdateOrderParams,
-  ): Promise<{ order_number: number }> {
+  ): Promise<{ orderNumber: number }> {
     const { id, status, failureReason, rawError } = params
 
     let result: { order_number: number } | undefined
@@ -608,7 +611,7 @@ export class SubscriptionRepository {
       throw new Error(`Failed to update order ${id} - order not found`)
     }
 
-    return result
+    return { orderNumber: result.order_number }
   }
 
   /**

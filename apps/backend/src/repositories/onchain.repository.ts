@@ -1,5 +1,5 @@
 import type { Address, Hash } from "viem"
-import { logger } from "@/lib/logger"
+import { createLogger } from "@/lib/logger"
 import { type Provider, providers } from "@/providers"
 
 export interface ChargeSubscriptionParams {
@@ -36,6 +36,8 @@ export interface ChargeResult {
   transactionHash: Hash
   gasUsed?: string
 }
+
+const logger = createLogger("onchain.repository")
 
 export class OnchainRepository {
   constructor() {
@@ -82,6 +84,8 @@ export class OnchainRepository {
         subscriptionOwner,
         remainingChargeInPeriod,
         spenderAddress,
+        nextPeriodStart,
+        recurringCharge,
       } = await provider.getSubscriptionStatus({ subscriptionId })
 
       log.info("Onchain subscription status retrieved", {
@@ -105,7 +109,9 @@ export class OnchainRepository {
         subscription: {
           isSubscribed,
           subscriptionOwner,
-          remainingChargeInPeriod: remainingChargeInPeriod?.toString(),
+          remainingChargeInPeriod,
+          nextPeriodStart,
+          recurringCharge,
         },
         context: { spenderAddress },
       }

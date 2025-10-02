@@ -7,8 +7,11 @@ import {
   SubscriptionStatus,
 } from "@/constants/subscription.constants"
 import { ErrorCode, HTTPError } from "@/errors/http.errors"
-import { logger } from "@/lib/logger"
-import { WebhookRepository } from "@/repositories/webhook.repository"
+import { createLogger } from "@/lib/logger"
+import {
+  type Webhook,
+  WebhookRepository,
+} from "@/repositories/webhook.repository"
 import type { ActivationResult } from "@/services/subscription.service"
 
 /**
@@ -104,6 +107,8 @@ export interface EmitWebhookEventParams {
   errorMessage?: string
 }
 
+const logger = createLogger("webhook.service")
+
 export class WebhookService {
   private webhookRepository: WebhookRepository
   private webhookQueue: Queue<WebhookQueueMessage>
@@ -184,7 +189,7 @@ export class WebhookService {
   /**
    * Gets webhook with secret (for internal use only - webhook delivery)
    */
-  async getWebhookWithSecret(accountAddress: Address) {
+  async getWebhookWithSecret(accountAddress: Address): Promise<Webhook | null> {
     return await this.webhookRepository.getWebhook({ accountAddress })
   }
 
@@ -260,7 +265,6 @@ export class WebhookService {
   async emitSubscriptionUpdated(params: EmitWebhookEventParams): Promise<void> {
     const { accountAddress, subscriptionId } = params
     const log = logger.with({
-      service: "webhook-event",
       accountAddress,
       subscriptionId,
     })

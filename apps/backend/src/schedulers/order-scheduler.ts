@@ -1,6 +1,8 @@
 import type { orderScheduler } from "@alchemy.run"
-import { logger } from "@/lib/logger"
+import { createLogger } from "@/lib/logger"
 import { SubscriptionRepository } from "@/repositories/subscription.repository"
+
+const logger = createLogger("order.scheduler")
 
 export default {
   /**

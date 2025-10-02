@@ -126,7 +126,7 @@ transactions       -- Blockchain transactions
 
 ### 2a. Subscribe using the included frontend app (Recommended)
 
-3. Set Frontend demo app envs: `COUCH_API_KEY`, `COUCH_WEBHOOK_SECRET`
+3. Set envs required for frontend: `COUCH_API_KEY`, `COUCH_WEBHOOK_SECRET`
 4. Open http://localhost:8000 in your browser and follow step to subscribe
 
 ### 2b. Subscribe using the SDK directly
@@ -137,8 +137,6 @@ transactions       -- Blockchain transactions
 ### 3. Process recurring orders
 
 5. Trigger order scheduler to process recurring payments via `http://localhost:3100/__scheduled`
-
-**NOTE**: Recurring payments depend on the period set when subscribing. You can set `COUCH_SUBSCRIPTION_PERIOD_IN_SECONDS=60` in frontend envs to test with 1-minute periods instead of 30 days.
 
 ## Monitoring
 - Check Frontend webhook logs in the terminal
