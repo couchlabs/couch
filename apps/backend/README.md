@@ -60,6 +60,7 @@ src/
 │   └── middleware/   # Auth middleware
 ├── services/         # Business logic
 ├── repositories/     # Data access layer
+├── providers/        # Payment provider abstractions
 ├── consumers/        # Queue consumers
 ├── schedulers/       # Cron job schedulers
 ├── errors/           # Error handling
@@ -76,7 +77,7 @@ src/
 accounts           -- Merchant accounts
 api_keys           -- API key hashes
 webhooks           -- Webhook configurations
-subscriptions      -- Succesfully Registered Subscriptions
+subscriptions      -- Succesfully Registered Subscriptions (with provider_id)
 orders             -- Payment orders
 transactions       -- Blockchain transactions
 ```
@@ -85,8 +86,14 @@ transactions       -- Blockchain transactions
 
 - `GET /api/health` - Health check
 - `PUT /api/account` - Create account or rotate API key
+  - Requires: `account_address`
 - `POST /api/subscriptions` - Register subscription (Bind Onchain Permission to Offchain Infra)
+  - Requires API key authentication
+  - Requires: `subscription_id`
+  - Requires: `provider` (currently supports: "base")
 - `PUT /api/webhook` - Set webhook URL for events
+  - Requires API key authentication
+  - Requires: `url`
 
 ## Error Codes
 
@@ -125,7 +132,7 @@ transactions       -- Blockchain transactions
 ### 2b. Subscribe using the SDK directly
 
 3. `import { subscribe } from @base-org/account/payment`
-4. Sign subscription `subscription_id = subscribe()` and register it via `api/subscriptions` endpoint
+4. Sign subscription `subscription_id = subscribe()` and register it via `api/subscriptions` endpoint with `provider: "base"`
 
 ### 3. Process recurring orders
 
