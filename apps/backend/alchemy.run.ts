@@ -171,7 +171,7 @@ export const orderScheduler = await Worker(ORDER_SCHEDULER_NAME, {
 // QUEUE CONSUMERS
 // -----------------------------------------------------------------------------
 
-// order-processor: Processes orders
+// order.consumer: Processes orders
 const ORDER_PROCESSOR_NAME = "order-processor"
 export const orderProcessor = await Worker(ORDER_PROCESSOR_NAME, {
   name: `${NAME_PREFIX}-${ORDER_PROCESSOR_NAME}`,
@@ -179,7 +179,7 @@ export const orderProcessor = await Worker(ORDER_PROCESSOR_NAME, {
     import.meta.dirname,
     "src",
     "consumers",
-    "order-processor.ts",
+    "order.consumer.ts",
   ),
   eventSources: [
     {
@@ -202,7 +202,7 @@ export const orderProcessor = await Worker(ORDER_PROCESSOR_NAME, {
   dev: { port: 3200 },
 })
 
-// webhook-delivery: Delivers webhooks to merchant endpoints
+// webhook.consumer: Delivers webhooks to merchant endpoints
 const WEBHOOK_DELIVERY_NAME = "webhook-delivery"
 export const webhookDelivery = await Worker(WEBHOOK_DELIVERY_NAME, {
   name: `${NAME_PREFIX}-${WEBHOOK_DELIVERY_NAME}`,
@@ -210,7 +210,7 @@ export const webhookDelivery = await Worker(WEBHOOK_DELIVERY_NAME, {
     import.meta.dirname,
     "src",
     "consumers",
-    "webhook-delivery.ts",
+    "webhook.consumer.ts",
   ),
   eventSources: [
     {

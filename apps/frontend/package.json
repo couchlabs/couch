@@ -3,7 +3,7 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "dev": "alchemy dev --adopt --app frontend",
+    "dev": "alchemy dev --stage dev --adopt --app frontend",
     "deploy": "alchemy deploy --adopt --app frontend",
     "destroy": "alchemy destroy --app frontend"
   },
@@ -12,7 +12,8 @@
     "@base-org/account": "catalog:coinbase",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
-    "tailwindcss": "^4.1.13"
+    "tailwindcss": "^4.1.13",
+    "hono": "^4.9.8"
   },
   "devDependencies": {
     "alchemy": "catalog:",

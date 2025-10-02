@@ -1,7 +1,8 @@
 import alchemy from "alchemy"
 import { Vite } from "alchemy/cloudflare"
-import { spenderSmartAccount } from "backend/alchemy"
-import { Stage } from "backend/constants"
+import { api, spenderSmartAccount } from "backend/alchemy"
+
+// import { Stage } from "backend/constants"
 
 // =============================================================================
 // CONFIGURATION & CONVENTIONS
@@ -33,7 +34,6 @@ import { Stage } from "backend/constants"
 
 const app = { name: "couch" }
 export const scope = await alchemy("frontend", {
-  stage: Stage.DEV,
   password: process.env.ALCHEMY_PASSWORD,
 })
 const NAME_PREFIX = `${app.name}-${scope.name}-${scope.stage}`
@@ -45,17 +45,20 @@ const NAME_PREFIX = `${app.name}-${scope.name}-${scope.stage}`
 const WEBSITE_NAME = "demo"
 export const website = await Vite(WEBSITE_NAME, {
   name: `${NAME_PREFIX}-${WEBSITE_NAME}`,
+  entrypoint: "src/worker.ts",
   dev: {
-    command: "bun run vite dev", // this should be optional https://github.com/sam-goodwin/alchemy/pull/1014
+    // Envs to bundle in frontend code.
+    // Need to be prefixed with `VITE_` to be included.
+    // Can be reach via `import.meta.env`
     env: {
-      VITE_SPENDER_ADDRESS: spenderSmartAccount.address,
+      VITE_COUCH_SPENDER_ADDRESS: spenderSmartAccount.address,
     },
   },
-  build: {
-    command: "bun run vite build", // this should be optional https://github.com/sam-goodwin/alchemy/pull/1014
-    env: {
-      VITE_SPENDER_ADDRESS: spenderSmartAccount.address,
-    },
+  // Envs exposed to worker only
+  bindings: {
+    COUCH_WEBHOOK_SECRET: alchemy.secret(process.env.COUCH_WEBHOOK_SECRET),
+    COUCH_API_KEY: alchemy.secret(process.env.COUCH_API_KEY),
+    COUCH_API_URL: api.url ?? "http://localhost:3000",
   },
 })
 
