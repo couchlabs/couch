@@ -10,48 +10,48 @@ import {
 import type { Provider } from "@/providers/provider.interface"
 
 export interface Subscription {
-  subscription_id: Hash
+  subscriptionId: Hash
   status: SubscriptionStatus
-  owner_address: Address
-  account_address: Address // Merchant account that receives payments
-  provider_id: Provider
-  created_at?: string
-  modified_at?: string
+  ownerAddress: Address
+  accountAddress: Address // Merchant account that receives payments
+  providerId: Provider
+  createdAt?: string
+  modifiedAt?: string
 }
 
 export interface Order {
   id?: number
-  subscription_id: string
-  order_number: number // Sequential number per subscription (1, 2, 3...)
+  subscriptionId: string
+  orderNumber: number // Sequential number per subscription (1, 2, 3...)
   type: OrderType
-  due_at: string
+  dueAt: string
   amount: string
   status: OrderStatus
   attempts?: number
-  parent_order_id?: number
-  failure_reason?: string
-  processing_lock?: string
-  locked_by?: string
-  created_at?: string
+  parentOrderId?: number
+  failureReason?: string
+  processingLock?: string
+  lockedBy?: string
+  createdAt?: string
 }
 
 export interface CreateOrderParams {
-  subscription_id: Hash
+  subscriptionId: Hash
   type: OrderType
-  due_at: string
+  dueAt: string
   amount: string
   status: OrderStatus
 }
 
 export interface Transaction {
-  transaction_hash: Hash
-  order_id: number
-  subscription_id: Hash
+  transactionHash: Hash
+  orderId: number
+  subscriptionId: Hash
   amount: string
   status: TransactionStatus
-  failure_reason?: string
-  gas_used?: string
-  created_at?: string
+  failureReason?: string
+  gasUsed?: string
+  createdAt?: string
 }
 
 // Method parameter interfaces
@@ -81,10 +81,10 @@ export interface DueOrder {
 
 export interface OrderDetails {
   id: number
-  subscription_id: Hash
-  account_address: Address
+  subscriptionId: Hash
+  accountAddress: Address
   amount: string
-  order_number: number
+  orderNumber: number
   status: string
 }
 
@@ -223,10 +223,10 @@ export class SubscriptionRepository {
 
     return {
       id: result.id,
-      subscription_id: result.subscription_id as Hash,
-      account_address: result.account_address as Address,
+      subscriptionId: result.subscription_id as Hash,
+      accountAddress: result.account_address as Address,
       amount: result.amount,
-      order_number: result.order_number,
+      orderNumber: result.order_number,
       status: result.status,
     }
   }
@@ -248,13 +248,13 @@ export class SubscriptionRepository {
     if (!result) return null
 
     return {
-      subscription_id: result.subscription_id as Hash,
+      subscriptionId: result.subscription_id as Hash,
       status: result.status,
-      owner_address: result.owner_address as Address,
-      account_address: result.account_address as Address,
-      provider_id: result.provider_id as Provider,
-      created_at: result.created_at,
-      modified_at: result.modified_at,
+      ownerAddress: result.owner_address as Address,
+      accountAddress: result.account_address as Address,
+      providerId: result.provider_id as Provider,
+      createdAt: result.created_at,
+      modifiedAt: result.modified_at,
     }
   }
 
@@ -271,10 +271,10 @@ export class SubscriptionRepository {
         RETURNING id`,
       )
       .bind(
-        order.subscription_id,
-        order.subscription_id, // For the subquery
+        order.subscriptionId,
+        order.subscriptionId, // For the subquery
         order.type,
-        order.due_at,
+        order.dueAt,
         order.amount,
         order.status || OrderStatus.PROCESSING,
       )
@@ -307,7 +307,7 @@ export class SubscriptionRepository {
     params: GetSuccessfulTransactionParams,
   ): Promise<Transaction | null> {
     const { subscriptionId, orderId } = params
-    const transaction = await this.db
+    const result = await this.db
       .prepare(
         `SELECT * FROM transactions
          WHERE subscription_id = ?
@@ -316,13 +316,27 @@ export class SubscriptionRepository {
          LIMIT 1`,
       )
       .bind(subscriptionId, orderId, TransactionStatus.CONFIRMED)
-      .first<Transaction>()
+      .first<{
+        transaction_hash: string
+        order_id: number
+        subscription_id: string
+        amount: string
+        status: string
+        failure_reason?: string
+        gas_used?: string
+        created_at?: string
+      }>()
 
-    return transaction
+    return result
       ? {
-          ...transaction,
-          subscription_id: transaction.subscription_id as Hash,
-          transaction_hash: transaction.transaction_hash as Hash,
+          transactionHash: result.transaction_hash as Hash,
+          orderId: result.order_id,
+          subscriptionId: result.subscription_id as Hash,
+          amount: result.amount,
+          status: result.status as TransactionStatus,
+          failureReason: result.failure_reason,
+          gasUsed: result.gas_used,
+          createdAt: result.created_at,
         }
       : null
   }
@@ -394,10 +408,10 @@ export class SubscriptionRepository {
           RETURNING id, order_number`,
         )
         .bind(
-          order.subscription_id,
-          order.subscription_id, // For the subquery
+          order.subscriptionId,
+          order.subscriptionId, // For the subquery
           order.type,
-          order.due_at,
+          order.dueAt,
           order.amount,
           order.status || OrderStatus.PROCESSING,
         )

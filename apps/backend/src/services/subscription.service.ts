@@ -204,9 +204,9 @@ export class SubscriptionService {
           accountAddress, // Link to merchant's account
           providerId,
           order: {
-            subscription_id: subscriptionId,
+            subscriptionId: subscriptionId,
             type: OrderType.INITIAL,
-            due_at: new Date().toISOString(),
+            dueAt: new Date().toISOString(),
             amount: String(subscription.remainingChargeInPeriod),
             status: OrderStatus.PROCESSING,
           },
@@ -232,10 +232,10 @@ export class SubscriptionService {
       let transaction: ChargeResult
       if (existingTransaction) {
         log.info("Found existing successful transaction, skipping charge", {
-          transactionHash: existingTransaction.transaction_hash,
+          transactionHash: existingTransaction.transactionHash,
         })
         transaction = {
-          transactionHash: existingTransaction.transaction_hash, // Already Hash from repository
+          transactionHash: existingTransaction.transactionHash, // Already Hash from repository
           gasUsed: undefined,
         }
       } else {
