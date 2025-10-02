@@ -100,6 +100,9 @@ ALTER TABLE subscriptions ADD COLUMN account_address TEXT REFERENCES accounts(ad
 -- Add order sequence tracking for webhook events
 ALTER TABLE orders ADD COLUMN order_number INTEGER;
 
+-- Add provider support for multi-provider subscriptions
+ALTER TABLE subscriptions ADD COLUMN provider_id TEXT NOT NULL CHECK(provider_id IN ('base'));
+
 -- -----------------------------------------------------------------------------
 -- Indexes for Account System
 -- -----------------------------------------------------------------------------

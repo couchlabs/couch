@@ -2,7 +2,7 @@ import { env } from "cloudflare:workers"
 import type { WebhookQueueMessage } from "@alchemy.run"
 import type { Queue } from "@cloudflare/workers-types"
 import type { Address, Hash } from "viem"
-import type {
+import {
   OrderType,
   SubscriptionStatus,
 } from "@/constants/subscription.constants"
@@ -196,10 +196,10 @@ export class WebhookService {
     await this.emitSubscriptionUpdated({
       accountAddress: result.accountAddress,
       subscriptionId: result.subscriptionId,
-      subscriptionStatus: "active",
+      subscriptionStatus: SubscriptionStatus.ACTIVE,
       currentPeriodEnd: new Date(result.nextOrder.date),
       orderNumber: result.order.number, // Use actual order number from database
-      orderType: "initial",
+      orderType: OrderType.INITIAL,
       amount: result.transaction.amount,
       transactionHash: result.transaction.hash,
       success: true,
@@ -220,9 +220,9 @@ export class WebhookService {
     await this.emitSubscriptionUpdated({
       accountAddress: params.accountAddress,
       subscriptionId: params.subscriptionId,
-      subscriptionStatus: "active",
+      subscriptionStatus: SubscriptionStatus.ACTIVE,
       orderNumber: params.orderNumber,
-      orderType: "recurring",
+      orderType: OrderType.RECURRING,
       amount: params.amount,
       transactionHash: params.transactionHash,
       success: true,
@@ -243,9 +243,9 @@ export class WebhookService {
     await this.emitSubscriptionUpdated({
       accountAddress: params.accountAddress,
       subscriptionId: params.subscriptionId,
-      subscriptionStatus: "inactive",
+      subscriptionStatus: SubscriptionStatus.INACTIVE,
       orderNumber: params.orderNumber,
-      orderType: "recurring",
+      orderType: OrderType.RECURRING,
       amount: params.amount,
       success: false,
       errorCode: "payment_failed",

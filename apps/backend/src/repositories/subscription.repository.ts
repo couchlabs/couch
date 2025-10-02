@@ -7,12 +7,14 @@ import {
   SubscriptionStatus,
   TransactionStatus,
 } from "@/constants/subscription.constants"
+import type { Provider } from "@/providers/provider.interface"
 
 export interface Subscription {
   subscription_id: Hash
   status: SubscriptionStatus
   owner_address: Address
   account_address: Address // Merchant account that receives payments
+  provider_id: Provider
   created_at?: string
   modified_at?: string
 }
@@ -56,6 +58,7 @@ export interface Transaction {
 export interface CreateSubscriptionParams {
   subscriptionId: Hash
   ownerAddress: Address
+  providerId: Provider
 }
 
 interface SubscriptionExistsParams {
@@ -69,10 +72,11 @@ export interface GetSuccessfulTransactionParams {
 
 export interface DueOrder {
   id: number
-  subscription_id: Hash
-  account_address: Address
+  subscriptionId: Hash
+  accountAddress: Address
   amount: string
   attempts: number
+  providerId: Provider
 }
 
 export interface OrderDetails {
@@ -112,6 +116,7 @@ export interface CreateSubscriptionWithOrderParams {
   subscriptionId: Hash
   ownerAddress: Address // Couch's smart wallet (the spender)
   accountAddress: Address // Merchant's account address (from auth)
+  providerId: Provider
   order: CreateOrderParams
 }
 
@@ -155,15 +160,20 @@ export class SubscriptionRepository {
    * This is atomic - prevents race conditions
    */
   async createSubscription(params: CreateSubscriptionParams): Promise<boolean> {
-    const { subscriptionId, ownerAddress } = params
+    const { subscriptionId, ownerAddress, providerId } = params
     // Use INSERT OR IGNORE to handle race conditions atomically
     // This ensures only one request can create the subscription
     const result = await this.db
       .prepare(
-        `INSERT OR IGNORE INTO subscriptions (subscription_id, owner_address, status)
-         VALUES (?, ?, ?)`,
+        `INSERT OR IGNORE INTO subscriptions (subscription_id, owner_address, status, provider_id)
+         VALUES (?, ?, ?, ?)`,
       )
-      .bind(subscriptionId, ownerAddress, SubscriptionStatus.PROCESSING)
+      .bind(
+        subscriptionId,
+        ownerAddress,
+        SubscriptionStatus.PROCESSING,
+        providerId,
+      )
       .run()
 
     return result.meta.changes > 0
@@ -230,6 +240,7 @@ export class SubscriptionRepository {
         status: SubscriptionStatus
         owner_address: string
         account_address: string
+        provider_id: string
         created_at?: string
         modified_at?: string
       }>()
@@ -241,6 +252,7 @@ export class SubscriptionRepository {
       status: result.status,
       owner_address: result.owner_address as Address,
       account_address: result.account_address as Address,
+      provider_id: result.provider_id as Provider,
       created_at: result.created_at,
       modified_at: result.modified_at,
     }
@@ -339,7 +351,8 @@ export class SubscriptionRepository {
   async createSubscriptionWithOrder(
     params: CreateSubscriptionWithOrderParams,
   ): Promise<CreateSubscriptionWithOrderResult> {
-    const { subscriptionId, ownerAddress, accountAddress, order } = params
+    const { subscriptionId, ownerAddress, accountAddress, providerId, order } =
+      params
     try {
       // D1 supports transactions via batch
       // First, check if subscription exists
@@ -351,14 +364,15 @@ export class SubscriptionRepository {
       // Create subscription linked to merchant account
       const subResult = await this.db
         .prepare(
-          `INSERT INTO subscriptions (subscription_id, owner_address, status, account_address)
-           VALUES (?, ?, ?, ?)`,
+          `INSERT INTO subscriptions (subscription_id, owner_address, status, account_address, provider_id)
+           VALUES (?, ?, ?, ?, ?)`,
         )
         .bind(
           subscriptionId,
           ownerAddress,
           SubscriptionStatus.PROCESSING,
           accountAddress,
+          providerId,
         )
         .run()
 
@@ -506,6 +520,7 @@ export class SubscriptionRepository {
          )
          RETURNING id, subscription_id,
                   (SELECT account_address FROM subscriptions WHERE subscription_id = orders.subscription_id) as account_address,
+                  (SELECT provider_id FROM subscriptions WHERE subscription_id = orders.subscription_id) as provider_id,
                   amount, attempts`,
       )
       .bind(OrderStatus.PROCESSING, OrderStatus.PENDING, "active", limit)
@@ -513,16 +528,18 @@ export class SubscriptionRepository {
         id: number
         subscription_id: string
         account_address: string
+        provider_id: string
         amount: string
         attempts: number
       }>()
 
     return (result.results || []).map((entry) => ({
       id: entry.id,
-      subscription_id: entry.subscription_id as Hash,
-      account_address: entry.account_address as Address,
+      subscriptionId: entry.subscription_id as Hash,
+      accountAddress: entry.account_address as Address,
       amount: entry.amount,
       attempts: entry.attempts,
+      providerId: entry.provider_id as Provider,
     }))
   }
 

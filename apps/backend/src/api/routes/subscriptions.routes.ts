@@ -1,14 +1,16 @@
 import { Hono } from "hono"
-import type { Hash } from "viem"
 import { type AuthContext, apiKeyAuth } from "@/api/middleware/auth.middleware"
-import { ErrorCode, HTTPError } from "@/errors/http.errors"
+import {
+  type SubscriptionContext,
+  subscriptionBody,
+} from "@/api/middleware/subscription.middleware"
 import { SubscriptionService } from "@/services/subscription.service"
 import { WebhookService } from "@/services/webhook.service"
 import type { WorkerEnv } from "@/types/api.env"
 
 export const subscriptionRoutes = new Hono<{
   Bindings: WorkerEnv
-  Variables: { auth: AuthContext }
+  Variables: { auth: AuthContext; subscription: SubscriptionContext }
 }>()
 
 // Require auth for all routes
@@ -19,19 +21,9 @@ subscriptionRoutes.use(apiKeyAuth())
  * Creates and activates a subscription with initial charge
  * Returns the activated subscription details containing first onchain trnsaction
  */
-subscriptionRoutes.post("/", async (ctx) => {
+subscriptionRoutes.post("/", subscriptionBody(), async (ctx) => {
   const { accountAddress } = ctx.get("auth")
-
-  const body = await ctx.req.json<{ subscription_id?: Hash }>()
-  const subscriptionId = body.subscription_id
-
-  if (!subscriptionId) {
-    throw new HTTPError(
-      400,
-      ErrorCode.MISSING_FIELD,
-      "subscription_id is required",
-    )
-  }
+  const { subscriptionId, providerId } = ctx.get("subscription")
 
   const subscriptionService = new SubscriptionService()
 
@@ -39,6 +31,7 @@ subscriptionRoutes.post("/", async (ctx) => {
   const activation = await subscriptionService.activate({
     subscriptionId,
     accountAddress,
+    providerId,
   })
 
   // Complete database operations and emit webhook in the background

@@ -39,11 +39,14 @@ export default {
         dueOrders.map((order) => {
           log.info("Sending order to queue", {
             orderId: order.id,
-            subscriptionId: order.subscription_id,
-            accountAddress: order.account_address,
+            subscriptionId: order.subscriptionId,
+            accountAddress: order.accountAddress,
           })
 
-          return env.ORDER_QUEUE.send({ orderId: order.id })
+          return env.ORDER_QUEUE.send({
+            orderId: order.id,
+            providerId: order.providerId,
+          })
         }),
       )
 

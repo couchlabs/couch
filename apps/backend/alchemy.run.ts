@@ -4,6 +4,7 @@ import alchemy from "alchemy"
 import { D1Database, Queue, Worker } from "alchemy/cloudflare"
 import { EvmAccount, EvmSmartAccount } from "alchemy/coinbase"
 import { Stage } from "@/constants/env.constants"
+import type { Provider } from "@/providers/provider.interface"
 import type { WebhookEvent } from "@/services/webhook.service"
 
 // =============================================================================
@@ -97,6 +98,7 @@ const db = await D1Database(DB_NAME, {
 const ORDER_QUEUE_NAME = "order-queue"
 export interface OrderQueueMessage {
   orderId: number
+  providerId: Provider
 }
 export const orderQueue = await Queue<OrderQueueMessage>(ORDER_QUEUE_NAME, {
   name: `${NAME_PREFIX}-${ORDER_QUEUE_NAME}`,

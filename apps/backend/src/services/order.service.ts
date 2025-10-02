@@ -2,11 +2,13 @@ import type { Hash } from "viem"
 import { OrderStatus, OrderType } from "@/constants/subscription.constants"
 import { getPaymentErrorCode } from "@/errors/subscription.errors"
 import { logger } from "@/lib/logger"
+import type { Provider } from "@/providers/provider.interface"
 import { OnchainRepository } from "@/repositories/onchain.repository"
 import { SubscriptionRepository } from "@/repositories/subscription.repository"
 
 export interface ProcessOrderParams {
-  orderId: number // Everything else will be fetched from the database
+  orderId: number
+  providerId: Provider
 }
 
 export interface ProcessOrderResult {
@@ -54,7 +56,7 @@ export class OrderService {
    * Creates next order on success, marks subscription inactive on failure
    */
   async processOrder(params: ProcessOrderParams): Promise<ProcessOrderResult> {
-    const { orderId } = params
+    const { orderId, providerId } = params
 
     const log = logger.with({ orderId })
     const op = log.operation("processOrder")
@@ -84,17 +86,18 @@ export class OrderService {
         subscriptionId: order.subscription_id,
         amount: order.amount,
         recipient: order.account_address, // Send USDC to merchant account
+        providerId,
       })
 
       // Step 3: Record successful transaction
       log.info("Recording transaction", {
-        transactionHash: chargeResult.hash,
+        transactionHash: chargeResult.transactionHash,
       })
       await this.subscriptionRepository.recordTransaction({
-        transactionHash: chargeResult.hash,
+        transactionHash: chargeResult.transactionHash,
         orderId,
         subscriptionId: order.subscription_id,
-        amount: chargeResult.amount,
+        amount: order.amount,
         status: "confirmed",
       })
 
@@ -106,37 +109,38 @@ export class OrderService {
 
       // Step 5: Get next period from onchain (source of truth)
       log.info("Fetching next order period from onchain")
-      const { subscription } =
+      const { subscription: onchainStatus } =
         await this.onchainRepository.getSubscriptionStatus({
           subscriptionId: order.subscription_id,
+          providerId,
         })
 
       // Step 5: Create next order
       let nextOrderCreated = false
-      if (subscription.isSubscribed && subscription.nextPeriodStart) {
+      if (onchainStatus.isSubscribed && onchainStatus.nextPeriodStart) {
         log.info("Creating next order", {
-          dueAt: subscription.nextPeriodStart,
-          amount: subscription.recurringCharge,
+          dueAt: onchainStatus.nextPeriodStart,
+          amount: onchainStatus.recurringCharge,
         })
 
         await this.subscriptionRepository.createOrder({
           subscription_id: order.subscription_id,
           type: OrderType.RECURRING,
-          due_at: subscription.nextPeriodStart.toISOString(),
-          amount: String(subscription.recurringCharge),
+          due_at: onchainStatus.nextPeriodStart.toISOString(),
+          amount: String(onchainStatus.recurringCharge),
           status: OrderStatus.PENDING,
         })
         nextOrderCreated = true
       }
 
       op.success({
-        transactionHash: chargeResult.hash,
+        transactionHash: chargeResult.transactionHash,
         nextOrderCreated,
       })
 
       return {
         success: true,
-        transactionHash: chargeResult.hash,
+        transactionHash: chargeResult.transactionHash,
         orderNumber: orderResult.order_number, // Always defined - updateOrder throws if not found
         nextOrderCreated,
       }
