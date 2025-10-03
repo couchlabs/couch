@@ -3,8 +3,9 @@ import path from "node:path"
 import alchemy from "alchemy"
 import { D1Database, Queue, Worker } from "alchemy/cloudflare"
 import { EvmAccount, EvmSmartAccount } from "alchemy/coinbase"
-import { Stage } from "@/constants/env.constants"
-import type { WebhookEvent } from "@/types/webhook.types"
+import type { Stage } from "@/constants/env.constants"
+import type { Provider } from "@/providers/provider.interface"
+import type { WebhookEvent } from "@/services/webhook.service"
 
 // =============================================================================
 // CONFIGURATION & CONVENTIONS
@@ -38,7 +39,6 @@ import type { WebhookEvent } from "@/types/webhook.types"
 
 const app = { name: "couch" }
 export const scope = await alchemy("backend", {
-  stage: Stage.DEV,
   password: process.env.ALCHEMY_PASSWORD,
 })
 const NAME_PREFIX = `${app.name}-${scope.name}-${scope.stage}`
@@ -97,6 +97,7 @@ const db = await D1Database(DB_NAME, {
 const ORDER_QUEUE_NAME = "order-queue"
 export interface OrderQueueMessage {
   orderId: number
+  providerId: Provider
 }
 export const orderQueue = await Queue<OrderQueueMessage>(ORDER_QUEUE_NAME, {
   name: `${NAME_PREFIX}-${ORDER_QUEUE_NAME}`,
@@ -170,7 +171,7 @@ export const orderScheduler = await Worker(ORDER_SCHEDULER_NAME, {
 // QUEUE CONSUMERS
 // -----------------------------------------------------------------------------
 
-// order-processor: Processes orders
+// order.consumer: Processes orders
 const ORDER_PROCESSOR_NAME = "order-processor"
 export const orderProcessor = await Worker(ORDER_PROCESSOR_NAME, {
   name: `${NAME_PREFIX}-${ORDER_PROCESSOR_NAME}`,
@@ -178,7 +179,7 @@ export const orderProcessor = await Worker(ORDER_PROCESSOR_NAME, {
     import.meta.dirname,
     "src",
     "consumers",
-    "order-processor.ts",
+    "order.consumer.ts",
   ),
   eventSources: [
     {
@@ -201,7 +202,7 @@ export const orderProcessor = await Worker(ORDER_PROCESSOR_NAME, {
   dev: { port: 3200 },
 })
 
-// webhook-delivery: Delivers webhooks to merchant endpoints
+// webhook.consumer: Delivers webhooks to merchant endpoints
 const WEBHOOK_DELIVERY_NAME = "webhook-delivery"
 export const webhookDelivery = await Worker(WEBHOOK_DELIVERY_NAME, {
   name: `${NAME_PREFIX}-${WEBHOOK_DELIVERY_NAME}`,
@@ -209,7 +210,7 @@ export const webhookDelivery = await Worker(WEBHOOK_DELIVERY_NAME, {
     import.meta.dirname,
     "src",
     "consumers",
-    "webhook-delivery.ts",
+    "webhook.consumer.ts",
   ),
   eventSources: [
     {

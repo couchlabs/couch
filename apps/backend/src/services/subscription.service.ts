@@ -1,10 +1,11 @@
-import { type Address, type Hash, isAddressEqual, isHash } from "viem"
+import { type Address, type Hash, isAddressEqual } from "viem"
 import { OrderStatus, OrderType } from "@/constants/subscription.constants"
 import { ErrorCode, HTTPError } from "@/errors/http.errors"
 import { getPaymentErrorCode } from "@/errors/subscription.errors"
-import { logger } from "@/lib/logger"
+import { createLogger } from "@/lib/logger"
+import type { Provider } from "@/providers/provider.interface"
 import {
-  type ChargeSubscriptionResult,
+  type ChargeResult,
   OnchainRepository,
 } from "@/repositories/onchain.repository"
 import { SubscriptionRepository } from "@/repositories/subscription.repository"
@@ -12,10 +13,12 @@ import { SubscriptionRepository } from "@/repositories/subscription.repository"
 export interface ActivateSubscriptionParams {
   subscriptionId: Hash
   accountAddress: Address // Merchant's account address from auth
+  providerId: Provider
 }
 
 export interface ValidateSubscriptionIdParams {
   subscriptionId: Hash
+  providerId: Provider
 }
 
 export interface ActivationResult {
@@ -28,12 +31,17 @@ export interface ActivationResult {
   order: {
     id: number
     number: number // Sequential order number from database
+    dueAt: string // ISO datetime
+    periodInSeconds: number
   }
   nextOrder: {
     date: string
     amount: string
+    periodInSeconds: number
   }
 }
+
+const logger = createLogger("subscription.service")
 
 export class SubscriptionService {
   private subscriptionRepository: SubscriptionRepository
@@ -65,6 +73,7 @@ export class SubscriptionService {
         nextOrder: {
           dueAt: result.nextOrder.date,
           amount: result.nextOrder.amount,
+          periodInSeconds: result.nextOrder.periodInSeconds,
         },
       })
 
@@ -76,13 +85,20 @@ export class SubscriptionService {
     }
   }
 
-  static validateId(params: ValidateSubscriptionIdParams): void {
-    const { subscriptionId } = params
-    if (!isHash(subscriptionId)) {
+  async validateId(params: ValidateSubscriptionIdParams): Promise<void> {
+    const { subscriptionId, providerId } = params
+
+    // Use provider-specific validation
+    const isValid = await this.onchainRepository.validateSubscriptionId({
+      subscriptionId,
+      providerId,
+    })
+
+    if (!isValid) {
       throw new HTTPError(
         400,
         ErrorCode.INVALID_FORMAT,
-        "Invalid subscription_id format. Must be a 32-byte hash",
+        "Invalid subscription_id format for the specified provider",
       )
     }
   }
@@ -94,10 +110,10 @@ export class SubscriptionService {
   async activate(
     params: ActivateSubscriptionParams,
   ): Promise<ActivationResult> {
-    const { subscriptionId, accountAddress } = params
+    const { subscriptionId, accountAddress, providerId } = params
 
     // Validate domain constraints
-    SubscriptionService.validateId({ subscriptionId })
+    await this.validateId({ subscriptionId, providerId })
 
     const log = logger.with({ subscriptionId })
     const op = log.operation("activate")
@@ -121,7 +137,10 @@ export class SubscriptionService {
       // Step 2: Get onchain subscription status
       log.info("Fetching onchain subscription status")
       const { subscription, context } =
-        await this.onchainRepository.getSubscriptionStatus({ subscriptionId })
+        await this.onchainRepository.getSubscriptionStatus({
+          subscriptionId,
+          providerId,
+        })
 
       if (!subscription.isSubscribed) {
         throw new HTTPError(
@@ -163,6 +182,13 @@ export class SubscriptionService {
         )
       }
 
+      if (!subscription.currentPeriodStart) {
+        logger.error("Missing current period start", { subscriptionId })
+        throw new Error(
+          "Invalid subscription configuration: missing currentPeriodStart",
+        )
+      }
+
       if (!subscription.nextPeriodStart) {
         logger.error("Missing next period start", { subscriptionId })
         throw new Error(
@@ -177,9 +203,17 @@ export class SubscriptionService {
         )
       }
 
+      if (!subscription.periodInSeconds) {
+        logger.error("Missing period in seconds", { subscriptionId })
+        throw new Error(
+          "Invalid subscription configuration: missing periodInSeconds",
+        )
+      }
+
       log.info("Subscription active onchain", {
         remainingCharge: subscription.remainingChargeInPeriod,
         nextPeriod: subscription.nextPeriodStart,
+        periodInSeconds: subscription.periodInSeconds,
       })
 
       // Step 2-3: Create subscription and order atomically
@@ -189,11 +223,13 @@ export class SubscriptionService {
           subscriptionId,
           ownerAddress: subscription.subscriptionOwner,
           accountAddress, // Link to merchant's account
+          providerId,
           order: {
-            subscription_id: subscriptionId,
+            subscriptionId: subscriptionId,
             type: OrderType.INITIAL,
-            due_at: new Date().toISOString(),
+            dueAt: new Date().toISOString(),
             amount: String(subscription.remainingChargeInPeriod),
+            periodInSeconds: subscription.periodInSeconds,
             status: OrderStatus.PROCESSING,
           },
         })
@@ -215,16 +251,14 @@ export class SubscriptionService {
           orderId: orderId,
         })
 
-      let transaction: ChargeSubscriptionResult
+      let transaction: ChargeResult
       if (existingTransaction) {
         log.info("Found existing successful transaction, skipping charge", {
-          transactionHash: existingTransaction.transaction_hash,
+          transactionHash: existingTransaction.transactionHash,
         })
         transaction = {
-          hash: existingTransaction.transaction_hash, // Already Hash from repository
-          amount: existingTransaction.amount,
-          success: true,
-          subscriptionId,
+          transactionHash: existingTransaction.transactionHash, // Already Hash from repository
+          gasUsed: undefined,
         }
       } else {
         // Step 5: Execute charge (only if no successful transaction exists)
@@ -238,6 +272,7 @@ export class SubscriptionService {
             subscriptionId,
             amount: subscription.remainingChargeInPeriod,
             recipient: accountAddress,
+            providerId,
           })
         } catch (chargeError) {
           log.error("Charge failed", chargeError)
@@ -287,29 +322,32 @@ export class SubscriptionService {
       }
 
       log.info("Charge successful", {
-        transactionHash: transaction.hash,
-        amount: transaction.amount,
+        transactionHash: transaction.transactionHash,
+        amount: subscription.remainingChargeInPeriod,
       })
 
       const result: ActivationResult = {
         subscriptionId,
         accountAddress,
         transaction: {
-          hash: transaction.hash,
-          amount: transaction.amount,
+          hash: transaction.transactionHash,
+          amount: subscription.remainingChargeInPeriod,
         },
         order: {
           id: orderId,
           number: orderNumber,
+          dueAt: new Date().toISOString(),
+          periodInSeconds: subscription.periodInSeconds,
         },
         nextOrder: {
           date: subscription.nextPeriodStart.toISOString(),
           amount: String(subscription.recurringCharge),
+          periodInSeconds: subscription.periodInSeconds,
         },
       }
 
       op.success({
-        transactionHash: transaction.hash,
+        transactionHash: transaction.transactionHash,
         nextOrderDate: subscription.nextPeriodStart,
       })
 

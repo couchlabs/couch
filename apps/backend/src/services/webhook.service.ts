@@ -2,17 +2,84 @@ import { env } from "cloudflare:workers"
 import type { WebhookQueueMessage } from "@alchemy.run"
 import type { Queue } from "@cloudflare/workers-types"
 import type { Address, Hash } from "viem"
-import { ErrorCode, HTTPError } from "@/errors/http.errors"
-import { logger } from "@/lib/logger"
-import { WebhookRepository } from "@/repositories/webhook.repository"
-import type { ActivationResult } from "@/services/subscription.service"
 import {
-  type OrderType,
-  type SubscriptionStatus,
-  type SubscriptionUpdatedEventData,
-  WEBHOOK_EVENT_TYPE,
-  type WebhookEvent,
-} from "@/types/webhook.types"
+  OrderType,
+  SubscriptionStatus,
+} from "@/constants/subscription.constants"
+import { ErrorCode, HTTPError } from "@/errors/http.errors"
+import { createLogger } from "@/lib/logger"
+import {
+  type Webhook,
+  WebhookRepository,
+} from "@/repositories/webhook.repository"
+import type { ActivationResult } from "@/services/subscription.service"
+
+/**
+ * Webhook event types for v1
+ * Following spec: "Single event type with domain-aligned structure"
+ */
+export const WEBHOOK_EVENT_TYPE = "subscription.updated" as const
+
+/**
+ * Order status in webhook events (subset of OrderStatus for external API)
+ */
+export type WebhookOrderStatus = "paid" | "failed"
+
+/**
+ * Subscription data in webhook event
+ */
+export interface WebhookSubscriptionData {
+  id: Hash
+  status: SubscriptionStatus
+}
+
+/**
+ * Order data in webhook event (present if event relates to a payment)
+ */
+export interface WebhookOrderData {
+  number: number // Sequential number relative to subscription
+  type: OrderType
+  amount: string
+  status: WebhookOrderStatus
+  current_period_start?: number // Unix timestamp
+  current_period_end?: number // Unix timestamp
+}
+
+/**
+ * Transaction data in webhook event (present if payment was successful)
+ */
+export interface WebhookTransactionData {
+  hash: Hash
+  amount: string
+  processed_at: number // Unix timestamp
+}
+
+/**
+ * Error data in webhook event (present if payment failed)
+ */
+export interface WebhookErrorData {
+  code: string
+  message: string
+}
+
+/**
+ * Event data structure for subscription.updated
+ */
+export interface SubscriptionUpdatedEventData {
+  subscription: WebhookSubscriptionData
+  order?: WebhookOrderData
+  transaction?: WebhookTransactionData
+  error?: WebhookErrorData
+}
+
+/**
+ * Complete webhook event structure
+ */
+export interface WebhookEvent {
+  type: typeof WEBHOOK_EVENT_TYPE
+  created_at: number // Unix timestamp
+  data: SubscriptionUpdatedEventData
+}
 
 export interface SetWebhookParams {
   accountAddress: Address
@@ -31,7 +98,6 @@ export interface EmitWebhookEventParams {
   accountAddress: Address // From auth context
   subscriptionId: Hash
   subscriptionStatus: SubscriptionStatus
-  currentPeriodEnd?: Date
   orderNumber?: number
   orderType?: OrderType
   amount?: string
@@ -39,7 +105,11 @@ export interface EmitWebhookEventParams {
   success?: boolean
   errorCode?: string
   errorMessage?: string
+  orderDueAt?: Date // Order's due_at (period start)
+  orderPeriodInSeconds?: number // Order's period length
 }
+
+const logger = createLogger("webhook.service")
 
 export class WebhookService {
   private webhookRepository: WebhookRepository
@@ -121,7 +191,7 @@ export class WebhookService {
   /**
    * Gets webhook with secret (for internal use only - webhook delivery)
    */
-  async getWebhookWithSecret(accountAddress: Address) {
+  async getWebhookWithSecret(accountAddress: Address): Promise<Webhook | null> {
     return await this.webhookRepository.getWebhook({ accountAddress })
   }
 
@@ -133,13 +203,14 @@ export class WebhookService {
     await this.emitSubscriptionUpdated({
       accountAddress: result.accountAddress,
       subscriptionId: result.subscriptionId,
-      subscriptionStatus: "active",
-      currentPeriodEnd: new Date(result.nextOrder.date),
+      subscriptionStatus: SubscriptionStatus.ACTIVE,
       orderNumber: result.order.number, // Use actual order number from database
-      orderType: "initial",
+      orderType: OrderType.INITIAL,
       amount: result.transaction.amount,
       transactionHash: result.transaction.hash,
       success: true,
+      orderDueAt: new Date(result.order.dueAt),
+      orderPeriodInSeconds: result.order.periodInSeconds,
     })
   }
 
@@ -157,9 +228,9 @@ export class WebhookService {
     await this.emitSubscriptionUpdated({
       accountAddress: params.accountAddress,
       subscriptionId: params.subscriptionId,
-      subscriptionStatus: "active",
+      subscriptionStatus: SubscriptionStatus.ACTIVE,
       orderNumber: params.orderNumber,
-      orderType: "recurring",
+      orderType: OrderType.RECURRING,
       amount: params.amount,
       transactionHash: params.transactionHash,
       success: true,
@@ -180,9 +251,9 @@ export class WebhookService {
     await this.emitSubscriptionUpdated({
       accountAddress: params.accountAddress,
       subscriptionId: params.subscriptionId,
-      subscriptionStatus: "inactive",
+      subscriptionStatus: SubscriptionStatus.INACTIVE,
       orderNumber: params.orderNumber,
-      orderType: "recurring",
+      orderType: OrderType.RECURRING,
       amount: params.amount,
       success: false,
       errorCode: "payment_failed",
@@ -197,7 +268,6 @@ export class WebhookService {
   async emitSubscriptionUpdated(params: EmitWebhookEventParams): Promise<void> {
     const { accountAddress, subscriptionId } = params
     const log = logger.with({
-      service: "webhook-event",
       accountAddress,
       subscriptionId,
     })
@@ -222,13 +292,6 @@ export class WebhookService {
         },
       }
 
-      // Add current period end if provided
-      if (params.currentPeriodEnd) {
-        eventData.subscription.current_period_end = Math.floor(
-          params.currentPeriodEnd.getTime() / 1000,
-        )
-      }
-
       // Add order data if we have payment info
       if (
         params.orderNumber &&
@@ -240,6 +303,19 @@ export class WebhookService {
           type: params.orderType,
           amount: params.amount,
           status: params.success ? "paid" : "failed",
+        }
+
+        // Calculate and add period timestamps from due_at + period_in_seconds
+        // TODO abstract such thing into helper function
+        if (params.orderDueAt && params.orderPeriodInSeconds) {
+          const periodStartTimestamp = Math.floor(
+            params.orderDueAt.getTime() / 1000,
+          )
+          const periodEndTimestamp =
+            periodStartTimestamp + params.orderPeriodInSeconds
+
+          eventData.order.current_period_start = periodStartTimestamp
+          eventData.order.current_period_end = periodEndTimestamp
         }
       }
 

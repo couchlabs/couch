@@ -1,238 +1,55 @@
 # Couch Backend Service
 
-A stablecoin subscription payment system built on Cloudflare Workers, using Coinbase CDP for payment processing and Base network for blockchain operations.
+A stablecoin subscription payment system built on Cloudflare Edge Infrastructure.
 
 > **Getting Started**: See the [Getting Started guide](../../README.md#getting-started) in the main README for initial setup instructions.
 
-## Architecture Overview
+## Subscription Lifecycle
+
+**Initial Activation (First Charge):**
 
 ```
-┌─────────────┐     ┌──────────────┐     ┌──────────────┐
-│   Client    │────▶│     API      │────▶│ Database(D1) │
-└─────────────┘     └──────────────┘     └──────────────┘
-                           │                     ▲
-                           │                     │
-                           │              ┌──────────────┐
-                           │              │    Order     │
-                           │              │  Scheduler   │
-                           │              └──────────────┘
-                           │                     │
-                           │                     ▼
-                           │              ┌──────────────┐
-                           │              │    Order     │
-                           │              │    Queue     │
-                           │              └──────────────┘
-                           │                     │
-                           │                     ▼
-                           │              ┌──────────────┐
-                           └─────────────▶│    Order     │
-                                          │  Processor   │
-                                          └──────────────┘
-                                                 │
-                                                 ▼
-                                          ┌──────────────┐
-                                          │  Blockchain  │
-                                          │    (Base)    │
-                                          └──────────────┘
-
-Note: API accesses Blockchain directly for initial activation
-      Order Processor handles recurring payments
-      All components share the same D1 database
+  ┌──────────────┐      ┌──────────────┐      ┌──────────────┐
+  │    Client    │─────▶│  Couch API   │─────▶│  Blockchain  │
+  └──────────────┘      └──────────────┘      └──────────────┘
+         │                      │                      │
+         │ 1. Sign              │ 2. Initial           │ 3. Transfer
+         │    Permission        │    Charge            │    USDC
+         │                      │                      ▼
+         │                      │              ┌──────────────┐
+         │                      │              │   Merchant   │
+         │                      │              │    Wallet    │
+         │                      │              └──────────────┘
+         │                      │ 4. Webhook
+         │                      │    Event
+         │                      ▼
+         │               ┌──────────────┐
+         │               │   Merchant   │
+         │               │   Webhook    │
+         │               └──────────────┘
 ```
 
-## API Overview (V1)
+**Recurring Payments (every 15 mins):**
 
-The V1 API provides the minimum viable functionality with just **3 endpoints**:
-
-1. **Account Management** - Get API key
-2. **Webhook Configuration** - Set webhook URL for events
-3. **Subscription Activation** - Activate and process subscriptions
-
-All subscription-related endpoints require authentication via API key.
-
-## Testing Guide
-
-### Step 1: Create an Account & Get API Key
-
-First, you need to create an account to get an API key:
-
-```bash
-curl -X PUT http://localhost:3000/api/account \
-  -H "Content-Type: application/json" \
-  -d '{
-    "address": "0x123abc..."
-  }'
 ```
-
-Response:
-```json
-{
-  "api_key": "ck_dev_456def..."  // Save this! Only shown once
-}
+  ┌──────────────┐      ┌──────────────┐      ┌──────────────┐
+  │  Scheduler   │─────▶│    Queue     │─────▶│  Processor   │
+  └──────────────┘      └──────────────┘      └──────────────┘
+         │                      │                     │
+         │ Find due             │ Pass                │ Charge via
+         │ orders               │ orderId             │ Blockchain
+         ▼                      ▼                     ▼
+  ┌──────────────┐                            ┌──────────────┐
+  │   Database   │                            │  Blockchain  │
+  └──────────────┘                            └──────────────┘
+                                                      │
+                                         ┌────────────┴────────────┐
+                                         ▼                         ▼
+                                  ┌──────────────┐         ┌──────────────┐
+                                  │   Merchant   │         │   Merchant   │
+                                  │    Wallet    │         │   Webhook    │
+                                  └──────────────┘         └──────────────┘
 ```
-
-> **Important**: Save the API key immediately. It's only shown once and cannot be retrieved later. You can rotate it by calling the same endpoint again.
-
-### Step 2: Set Webhook URL (Optional)
-
-Configure a webhook to receive subscription events:
-
-```bash
-curl -X PUT http://localhost:3000/api/webhook \
-  -H "Content-Type: application/json" \
-  -H "X-API-Key: ck_dev_YOUR_API_KEY" \
-  -d '{
-    "url": "https://your-domain.com/webhooks/couch"
-  }'
-```
-
-Response:
-```json
-{
-  "secret": "whsec_abc123..."  // Use this to verify webhook signatures
-}
-```
-
-### Step 3: Create a Test Subscription
-
-#### Option A: Using the Frontend App (Recommended)
-
-```bash
-# Navigate to http://localhost:8000
-# The frontend handles subscription creation automatically
-# Clear localStorage to create new subscriptions
-```
-
-#### Option B: Using the SDK Directly
-
-```javascript
-import { subscribe } from "@base-org/account/payment"
-
-const subscription = await subscribe({
-  recurringCharge: "0.0009",
-  subscriptionOwner: "0x...",  // Couch's smart wallet address
-  periodInDays: 30,
-  overridePeriodInSeconds: 60,  // 1-minute period for testing
-  testnet: true,
-})
-
-console.log("Subscription ID:", subscription.id)
-```
-
-### Step 4: Activate the Subscription
-
-Using the subscription ID from step 3:
-
-```bash
-curl -X POST http://localhost:3000/api/subscriptions \
-  -H "Content-Type: application/json" \
-  -H "X-API-Key: ck_dev_YOUR_API_KEY" \
-  -d '{
-    "subscription_id": "0xa123..."
-  }'
-```
-
-Expected response:
-```json
-{
-  "data": {
-    "subscription_id": "0xa123...",
-    "transaction_hash": "0x456...",
-    "next_order_date": "2025-09-25T17:25:26.000Z"
-  }
-}
-```
-
-### Step 5: Trigger Scheduler Manually (Dev Only)
-
-In development, trigger the scheduler manually:
-
-```bash
-curl http://localhost:3100/__scheduled
-```
-
-### Step 6: Monitor Recurring Payments
-
-Watch the logs to see the complete flow:
-
-```bash
-# Scheduler finds due orders
-INFO: Found 1 due orders
-INFO: Sending order to queue
-
-# Processor processes payment
-INFO: Processing recurring payment
-INFO: Onchain charge successful
-INFO: Creating next order
-```
-
-## API Reference
-
-### Postman Collection
-
-📥 **[Import Collection](./src/api/postman/collection.json)** - Pre-configured collection with all endpoints, authentication, and examples.
-
-### Endpoints
-
-#### Health Check
-```http
-GET /api/health
-```
-Returns API health status.
-
-#### Create/Rotate Account API Key
-```http
-PUT /api/account
-Content-Type: application/json
-
-{
-  "address": "0x..."  // Your EVM address
-}
-```
-
-Returns:
-```json
-{
-  "api_key": "ck_{stage}_..."  // Full API key - save it!
-}
-```
-
-**API Key Format:**
-- `ck_dev_...` - Development
-- `ck_staging_...` - Staging
-- `ck_sandbox_...` - Sandbox
-- `ck_prod_...` - Production
-
-#### Set Webhook URL
-```http
-PUT /api/webhook
-Content-Type: application/json
-X-API-Key: ck_dev_...
-
-{
-  "url": "https://your-domain.com/webhooks"
-}
-```
-
-Returns:
-```json
-{
-  "secret": "whsec_..."  // HMAC secret for signature verification
-}
-```
-
-#### Activate Subscription
-```http
-POST /api/subscriptions
-Content-Type: application/json
-X-API-Key: ck_dev_...
-
-{
-  "subscription_id": "0x..."
-}
-```
-
-Returns subscription details and transaction hash.
 
 ## Project Structure
 
@@ -241,107 +58,95 @@ src/
 ├── api/              # HTTP API endpoints
 │   ├── routes/       # Route handlers
 │   └── middleware/   # Auth middleware
-├── constants/        # Shared constants
-│   ├── env.constants.ts
-│   └── subscription.constants.ts
-├── errors/           # Error handling
-│   ├── http.errors.ts
-│   └── subscription.errors.ts
 ├── services/         # Business logic
 ├── repositories/     # Data access layer
+├── providers/        # Payment provider abstractions
 ├── consumers/        # Queue consumers
-└── schedulers/       # Cron job schedulers
+├── schedulers/       # Cron job schedulers
+├── errors/           # Error handling
+├── lib/              # Shared utils (ie logger)
+├── constants/        # Shared constants
+├── types/            # Infra types
+└── alchemy.run.ts    # IaC configuration for provisioning and deploying the whole system
 ```
 
 ## Database Schema
 
 ```sql
 -- Core tables
-accounts            -- Merchant accounts
+accounts           -- Merchant accounts
 api_keys           -- API key hashes
 webhooks           -- Webhook configurations
-subscriptions      -- Active subscriptions
+subscriptions      -- Succesfully Registered Subscriptions (with provider_id)
 orders             -- Payment orders
 transactions       -- Blockchain transactions
 ```
 
+## API Endpoints
+
+- `GET /api/health` - Health check
+- `PUT /api/account` - Create account or rotate API key
+  - Requires: `account_address`
+- `POST /api/subscriptions` - Register subscription (Bind Onchain Permission to Offchain Infra)
+  - Requires API key authentication
+  - Requires: `subscription_id`
+  - Requires: `provider` (currently supports: "base")
+- `PUT /api/webhook` - Set webhook URL for events
+  - Requires API key authentication
+  - Requires: `url`
+
 ## Error Codes
 
-The API uses consistent error codes:
+**Request Errors:**
+- `INVALID_REQUEST` - Missing required field
+- `MISSING_FIELD` - Required field not provided
+- `INVALID_FORMAT` - Invalid format (address, URL, subscription_id)
 
-- `INVALID_REQUEST` - Invalid request format
+**Authentication Errors:**
+- `UNAUTHORIZED` - Missing API key
 - `INVALID_API_KEY` - Authentication failed
-- `NOT_FOUND` - Resource not found
-- `SUBSCRIPTION_EXISTS` - Subscription already activated
-- `INSUFFICIENT_BALANCE` - User needs to add funds
+- `FORBIDDEN` - Not authorized to perform action
+
+**Subscription/Payment Errors:**
+- `SUBSCRIPTION_EXISTS` - Subscription already registered
+- `SUBSCRIPTION_NOT_ACTIVE` - Subscription is not active
+- `INSUFFICIENT_BALANCE` - User needs to add funds to activate subscription
+- `PERMISSION_EXPIRED` - Onchain permission has expired
 - `PAYMENT_FAILED` - Payment processing failed
 
-## Development Tools
+**System Errors:**
+- `INTERNAL_ERROR` - Internal server error
 
-### Database Inspection
+## Testing Guide
 
-```bash
-# Find your database file
-ls ../../.alchemy/miniflare/v3/d1/miniflare-D1DatabaseObject/
+### 1. Setup Merchant Account
 
-# Query subscriptions
-sqlite3 <path-to-db> "SELECT * FROM subscriptions"
+1. Create an Account & Get API Key via `/api/account` endpoint
+2. Set Webhook URL (Optional) via `/api/webhook` endpoint
 
-# Query orders
-sqlite3 <path-to-db> "SELECT id, status, due_at FROM orders"
+### 2a. Subscribe using the included demo app (Recommended)
 
-# Query accounts
-sqlite3 <path-to-db> "SELECT * FROM accounts"
-```
+3. Set envs required for demo: `COUCH_API_KEY`, `COUCH_WEBHOOK_SECRET`
+4. Open http://localhost:8000 in your browser and follow step to subscribe
 
-### Logs
+### 2b. Subscribe using the SDK directly
 
-Development logs appear in the terminal. Key events to watch:
+3. `import { subscribe } from @base-org/account/payment`
+4. Sign subscription `subscription_id = subscribe()` and register it via `api/subscriptions` endpoint with `provider: "base"`
 
-- Account creation: `"Account API key rotated successfully"`
-- Webhook set: `"Webhook URL set successfully"`
-- Subscription activation: `"Subscription activated"`
-- Order processing: `"Processing recurring payment"`
-- Charge success: `"Onchain charge successful"`
+### 3. Process recurring orders
 
-## Environment Variables
+5. Trigger order scheduler to process recurring payments via `http://localhost:3100/__scheduled`
 
-Required environment variables (see `.env.example`):
+## Monitoring
+- Check Frontend webhook logs in the terminal
+- Check Backend logs in the terminal
+- Inspect sqlite DB file at `.alchemy/miniflare/v3/d1/miniflare-D1DatabaseObject`
 
-```env
-CDP_API_KEY_ID=
-CDP_API_KEY_SECRET=
-CDP_WALLET_SECRET=
-CDP_WALLET_NAME=
-CDP_PAYMASTER_URL=
-```
+## DEV Endpoints
 
-## Troubleshooting
+- `GET http://localhost:3100/__scheduled` - Trigger order schedulers to process due recurring payments
 
-### Common Issues
+## DEV Resources
 
-1. **"Invalid API key"**
-   - Ensure you're using the correct API key from step 1
-   - Check the X-API-Key header format
-
-2. **"Subscription already exists"**
-   - The subscription was already activated
-   - Use a new subscription ID
-
-3. **"Webhook URL must use HTTPS"**
-   - Use HTTPS URLs (except localhost for development)
-
-4. **Payment failures**
-   - Check user's USDC balance
-   - Verify spend permission is active
-   - Ensure CDP credentials are correct
-
-## Future Enhancements (V2+)
-
-Coming in future versions:
-
-- **Account Management**: Signature verification, multiple API keys
-- **Webhook Management**: GET/DELETE endpoints, multiple webhooks
-- **Enhanced Events**: More granular event types
-- **Monitoring**: Webhook delivery tracking, retry logic
-- **Security**: Rate limiting, usage analytics
+- [Postman Collection](./src/api/postman/collection.json) - Pre-configured collection with all endpoints, authentication, and examples.

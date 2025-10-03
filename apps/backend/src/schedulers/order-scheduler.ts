@@ -1,6 +1,8 @@
 import type { orderScheduler } from "@alchemy.run"
-import { logger } from "@/lib/logger"
+import { createLogger } from "@/lib/logger"
 import { SubscriptionRepository } from "@/repositories/subscription.repository"
+
+const logger = createLogger("order.scheduler")
 
 export default {
   /**
@@ -39,11 +41,14 @@ export default {
         dueOrders.map((order) => {
           log.info("Sending order to queue", {
             orderId: order.id,
-            subscriptionId: order.subscription_id,
-            accountAddress: order.account_address,
+            subscriptionId: order.subscriptionId,
+            accountAddress: order.accountAddress,
           })
 
-          return env.ORDER_QUEUE.send({ orderId: order.id })
+          return env.ORDER_QUEUE.send({
+            orderId: order.id,
+            providerId: order.providerId,
+          })
         }),
       )
 

@@ -1,30 +1,22 @@
-import { env } from "cloudflare:workers"
-import { base } from "@base-org/account"
 import type { Address, Hash } from "viem"
-import {
-  getNetwork,
-  isTestnetEnvironment,
-  type Network,
-} from "@/constants/env.constants"
-import { logger } from "@/lib/logger"
-
-interface CdpConfig {
-  apiKeyId: string
-  apiKeySecret: string
-  walletSecret: string
-  walletName: string
-  paymasterUrl: string
-  spenderAddress: Address
-}
+import { createLogger } from "@/lib/logger"
+import { type Provider, providers } from "@/providers"
 
 export interface ChargeSubscriptionParams {
   subscriptionId: Hash
   amount: string
   recipient: Address // Merchant account address to receive the USDC
+  providerId: Provider
 }
 
 export interface GetSubscriptionStatusParams {
   subscriptionId: Hash
+  providerId: Provider
+}
+
+export interface ValidateSubscriptionIdParams {
+  subscriptionId: string
+  providerId: Provider
 }
 
 export interface SubscriptionStatusResult {
@@ -32,81 +24,47 @@ export interface SubscriptionStatusResult {
     isSubscribed: boolean
     subscriptionOwner?: Address
     remainingChargeInPeriod?: string
+    currentPeriodStart?: Date
     nextPeriodStart?: Date
     recurringCharge?: string
+    periodInSeconds?: number // Converted from provider's periodInDays
   }
   context: {
     spenderAddress: Address
   }
 }
 
-export interface ChargeSubscriptionResult {
-  hash: Hash
-  amount: string
-  success: boolean
-  subscriptionId: Hash
+export interface ChargeResult {
+  transactionHash: Hash
+  gasUsed?: string
 }
 
+const logger = createLogger("onchain.repository")
+
 export class OnchainRepository {
-  private cdp: CdpConfig
-  private testnet: boolean
-  private network: Network
-
   constructor() {
-    this.cdp = {
-      apiKeyId: env.CDP_API_KEY_ID,
-      apiKeySecret: env.CDP_API_KEY_SECRET,
-      walletSecret: env.CDP_WALLET_SECRET,
-      walletName: env.CDP_WALLET_NAME,
-      spenderAddress: env.CDP_SPENDER_ADDRESS,
-      paymasterUrl: env.CDP_PAYMASTER_URL,
-    }
-
-    this.testnet = isTestnetEnvironment(env.STAGE)
-    this.network = getNetwork(this.testnet)
-
-    logger.info("OnchainRepository initialized", {
-      spenderAddress: this.cdp.spenderAddress,
-      network: this.network,
-      testnet: this.testnet,
-    })
+    logger.info("OnchainRepository initialized with provider factory")
   }
 
   async chargeSubscription(
     params: ChargeSubscriptionParams,
-  ): Promise<ChargeSubscriptionResult> {
-    const { subscriptionId, amount, recipient } = params
-    const log = logger.with({ subscriptionId, amount, recipient })
+  ): Promise<ChargeResult> {
+    const { subscriptionId, amount, recipient, providerId } = params
+    const log = logger.with({ subscriptionId, amount, recipient, providerId })
 
     try {
-      log.info("Executing onchain charge")
+      log.info("Executing onchain charge via provider")
 
-      const transaction = await base.subscription.charge({
-        cdpApiKeyId: this.cdp.apiKeyId,
-        cdpApiKeySecret: this.cdp.apiKeySecret,
-        cdpWalletSecret: this.cdp.walletSecret,
-        walletName: this.cdp.walletName,
-        paymasterUrl: this.cdp.paymasterUrl,
-        id: subscriptionId,
+      const provider = providers.getProvider(providerId)
+      const { transactionHash, gasUsed } = await provider.chargeSubscription({
+        subscriptionId,
         amount,
         recipient,
-        testnet: this.testnet,
       })
 
-      // subscription.charge rely on `waitForUserOperation()`, should be definitive
-      log.info("Onchain charge successful", {
-        transactionHash: transaction.id,
-        amount: transaction.amount,
-        recipient,
-      })
+      log.info("Onchain charge successful", { transactionHash, providerId })
 
-      // Transform external library result to our domain types
-      return {
-        hash: transaction.id as Hash,
-        amount: transaction.amount,
-        success: transaction.success,
-        subscriptionId: transaction.subscriptionId as Hash,
-      }
+      return { transactionHash, gasUsed }
     } catch (error) {
       log.error("Onchain charge failed", error)
       throw error
@@ -116,42 +74,70 @@ export class OnchainRepository {
   async getSubscriptionStatus(
     params: GetSubscriptionStatusParams,
   ): Promise<SubscriptionStatusResult> {
-    const { subscriptionId } = params
-    const log = logger.with({ subscriptionId })
+    const { subscriptionId, providerId } = params
+    const log = logger.with({ subscriptionId, providerId })
 
-    log.info("Fetching onchain subscription status")
+    try {
+      log.info("Fetching onchain subscription status via provider")
 
-    const subscription = await base.subscription.getStatus({
-      id: subscriptionId,
-      testnet: this.testnet,
-    })
+      const provider = providers.getProvider(providerId)
+      const {
+        isSubscribed,
+        subscriptionOwner,
+        remainingChargeInPeriod,
+        spenderAddress,
+        currentPeriodStart,
+        nextPeriodStart,
+        recurringCharge,
+        periodInDays,
+      } = await provider.getSubscriptionStatus({ subscriptionId })
 
-    log.info("Onchain subscription status retrieved", {
-      isSubscribed: subscription.isSubscribed,
-      remainingCharge: subscription.remainingChargeInPeriod,
-      nextPeriod: subscription.nextPeriodStart,
-      subscriptionOwner: subscription.subscriptionOwner,
-    })
-
-    // Log warning if subscription is active but owner is missing
-    if (subscription.isSubscribed && !subscription.subscriptionOwner) {
-      log.warn("Active subscription has no owner", {
-        subscriptionId,
-        isSubscribed: subscription.isSubscribed,
+      log.info("Onchain subscription status retrieved", {
+        isSubscribed,
+        subscriptionOwner,
+        remainingChargeInPeriod,
+        providerId,
       })
-    }
 
-    // Return subscription with our wallet address for service layer validation
-    return {
-      subscription: {
-        ...subscription,
-        subscriptionOwner: subscription.subscriptionOwner as
-          | Address
-          | undefined,
-      },
-      context: {
-        spenderAddress: this.cdp.spenderAddress,
-      },
+      // Log warning if subscription is active but owner is missing
+      if (isSubscribed && !subscriptionOwner) {
+        log.warn("Active subscription has no owner", {
+          subscriptionId,
+          isSubscribed,
+          providerId,
+        })
+      }
+
+      // Convert period from days to seconds for internal use
+      // TODO: Move into helper function
+      const periodInSeconds =
+        periodInDays !== undefined
+          ? Math.floor(periodInDays * 24 * 60 * 60)
+          : undefined
+
+      // Return subscription data
+      return {
+        subscription: {
+          isSubscribed,
+          subscriptionOwner,
+          remainingChargeInPeriod,
+          currentPeriodStart,
+          nextPeriodStart,
+          recurringCharge,
+          periodInSeconds,
+        },
+        context: { spenderAddress },
+      }
+    } catch (error) {
+      log.error("Failed to get subscription status", error)
+      throw error
     }
+  }
+
+  async validateSubscriptionId(
+    params: ValidateSubscriptionIdParams,
+  ): Promise<boolean> {
+    const provider = providers.getProvider(params.providerId)
+    return provider.validateSubscriptionId(params.subscriptionId)
   }
 }

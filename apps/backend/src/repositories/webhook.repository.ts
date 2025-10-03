@@ -1,7 +1,6 @@
 import { env } from "cloudflare:workers"
 import type { D1Database } from "@cloudflare/workers-types"
 import type { Address } from "viem"
-
 export interface CreateOrUpdateWebhookParams {
   accountAddress: Address
   url: string

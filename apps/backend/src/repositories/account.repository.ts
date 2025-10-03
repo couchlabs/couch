@@ -1,7 +1,6 @@
 import { env } from "cloudflare:workers"
 import type { D1Database } from "@cloudflare/workers-types"
 import { type Address, getAddress } from "viem"
-
 export interface Account {
   address: Address
 }

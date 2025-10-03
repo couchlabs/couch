@@ -3,7 +3,7 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "dev": "alchemy dev --adopt --app backend",
+    "dev": "alchemy dev --stage dev --adopt --app backend",
     "deploy": "alchemy deploy --adopt --app backend",
     "destroy": "alchemy destroy --app backend",
     "check": "tsc --noEmit"

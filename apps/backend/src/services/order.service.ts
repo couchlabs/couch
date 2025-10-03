@@ -1,12 +1,17 @@
 import type { Hash } from "viem"
 import { OrderStatus, OrderType } from "@/constants/subscription.constants"
 import { getPaymentErrorCode } from "@/errors/subscription.errors"
-import { logger } from "@/lib/logger"
+import { createLogger } from "@/lib/logger"
+import type { Provider } from "@/providers/provider.interface"
 import { OnchainRepository } from "@/repositories/onchain.repository"
-import { SubscriptionRepository } from "@/repositories/subscription.repository"
+import {
+  type OrderDetails,
+  SubscriptionRepository,
+} from "@/repositories/subscription.repository"
 
 export interface ProcessOrderParams {
-  orderId: number // Everything else will be fetched from the database
+  orderId: number
+  providerId: Provider
 }
 
 export interface ProcessOrderResult {
@@ -23,6 +28,8 @@ export interface ScheduleNextOrderParams {
   amount: string
 }
 
+const logger = createLogger("order.service")
+
 export class OrderService {
   private subscriptionRepository: SubscriptionRepository
   private onchainRepository: OnchainRepository
@@ -36,7 +43,7 @@ export class OrderService {
    * Get order details for webhook emission
    * Throws if order not found
    */
-  async getOrderDetails(orderId: number) {
+  async getOrderDetails(orderId: number): Promise<OrderDetails> {
     const log = logger.with({ orderId })
 
     const orderDetails =
@@ -54,7 +61,7 @@ export class OrderService {
    * Creates next order on success, marks subscription inactive on failure
    */
   async processOrder(params: ProcessOrderParams): Promise<ProcessOrderResult> {
-    const { orderId } = params
+    const { orderId, providerId } = params
 
     const log = logger.with({ orderId })
     const op = log.operation("processOrder")
@@ -72,29 +79,30 @@ export class OrderService {
     try {
       // Add details to logging context
       log.info("Order details fetched", {
-        subscriptionId: order.subscription_id,
-        accountAddress: order.account_address,
+        subscriptionId: order.subscriptionId,
+        accountAddress: order.accountAddress,
         amount: order.amount,
-        orderNumber: order.order_number,
+        orderNumber: order.orderNumber,
       })
 
       // Step 2: Attempt to charge the subscription
       log.info("Processing recurring charge")
       const chargeResult = await this.onchainRepository.chargeSubscription({
-        subscriptionId: order.subscription_id,
+        subscriptionId: order.subscriptionId,
         amount: order.amount,
-        recipient: order.account_address, // Send USDC to merchant account
+        recipient: order.accountAddress, // Send USDC to merchant account
+        providerId,
       })
 
       // Step 3: Record successful transaction
       log.info("Recording transaction", {
-        transactionHash: chargeResult.hash,
+        transactionHash: chargeResult.transactionHash,
       })
       await this.subscriptionRepository.recordTransaction({
-        transactionHash: chargeResult.hash,
+        transactionHash: chargeResult.transactionHash,
         orderId,
-        subscriptionId: order.subscription_id,
-        amount: chargeResult.amount,
+        subscriptionId: order.subscriptionId,
+        amount: order.amount,
         status: "confirmed",
       })
 
@@ -106,38 +114,39 @@ export class OrderService {
 
       // Step 5: Get next period from onchain (source of truth)
       log.info("Fetching next order period from onchain")
-      const { subscription } =
+      const { subscription: onchainStatus } =
         await this.onchainRepository.getSubscriptionStatus({
-          subscriptionId: order.subscription_id,
+          subscriptionId: order.subscriptionId,
+          providerId,
         })
 
       // Step 5: Create next order
       let nextOrderCreated = false
-      if (subscription.isSubscribed && subscription.nextPeriodStart) {
+      if (onchainStatus.isSubscribed && onchainStatus.nextPeriodStart) {
         log.info("Creating next order", {
-          dueAt: subscription.nextPeriodStart,
-          amount: subscription.recurringCharge,
+          dueAt: onchainStatus.nextPeriodStart,
+          amount: onchainStatus.recurringCharge,
         })
 
         await this.subscriptionRepository.createOrder({
-          subscription_id: order.subscription_id,
+          subscriptionId: order.subscriptionId,
           type: OrderType.RECURRING,
-          due_at: subscription.nextPeriodStart.toISOString(),
-          amount: String(subscription.recurringCharge),
+          dueAt: onchainStatus.nextPeriodStart.toISOString(),
+          amount: String(onchainStatus.recurringCharge),
           status: OrderStatus.PENDING,
         })
         nextOrderCreated = true
       }
 
       op.success({
-        transactionHash: chargeResult.hash,
+        transactionHash: chargeResult.transactionHash,
         nextOrderCreated,
       })
 
       return {
         success: true,
-        transactionHash: chargeResult.hash,
-        orderNumber: orderResult.order_number, // Always defined - updateOrder throws if not found
+        transactionHash: chargeResult.transactionHash,
+        orderNumber: orderResult.orderNumber, // Always defined - updateOrder throws if not found
         nextOrderCreated,
       }
     } catch (error) {
@@ -158,13 +167,13 @@ export class OrderService {
       // Mark subscription as inactive (v1: no retries)
       log.info("Marking subscription as inactive due to payment failure")
       await this.subscriptionRepository.updateSubscription({
-        subscriptionId: order.subscription_id,
+        subscriptionId: order.subscriptionId,
         status: "inactive",
       })
 
       return {
         success: false,
-        orderNumber: orderResult.order_number, // Always defined - updateOrder throws if not found
+        orderNumber: orderResult.orderNumber, // Always defined - updateOrder throws if not found
         failureReason: errorCode,
         nextOrderCreated: false,
       }
@@ -186,9 +195,9 @@ export class OrderService {
     log.info("Scheduling next order")
 
     await this.subscriptionRepository.createOrder({
-      subscription_id: subscriptionId,
+      subscriptionId: subscriptionId,
       type: OrderType.RECURRING,
-      due_at: dueAt.toISOString(),
+      dueAt: dueAt.toISOString(),
       amount,
       status: OrderStatus.PENDING,
     })

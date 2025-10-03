@@ -4,7 +4,6 @@ import type { ContentfulStatusCode } from "hono/utils/http-status"
 // Error codes catalog
 export const ErrorCode = {
   // Request errors (4xx)
-  BAD_REQUEST: "BAD_REQUEST",
   INVALID_REQUEST: "INVALID_REQUEST",
   MISSING_FIELD: "MISSING_FIELD",
   INVALID_FORMAT: "INVALID_FORMAT",
@@ -14,13 +13,7 @@ export const ErrorCode = {
   INVALID_API_KEY: "INVALID_API_KEY",
   FORBIDDEN: "FORBIDDEN",
 
-  // Resource errors (4xx)
-  NOT_FOUND: "NOT_FOUND",
-  ALREADY_EXISTS: "ALREADY_EXISTS",
-  CONFLICT: "CONFLICT",
-
   // Subscription/Payment errors (4xx)
-  SUBSCRIPTION_NOT_FOUND: "SUBSCRIPTION_NOT_FOUND",
   SUBSCRIPTION_EXISTS: "SUBSCRIPTION_EXISTS",
   SUBSCRIPTION_NOT_ACTIVE: "SUBSCRIPTION_NOT_ACTIVE",
   PERMISSION_EXPIRED: "PERMISSION_EXPIRED",
@@ -33,7 +26,6 @@ export const ErrorCode = {
 
   // System errors (5xx)
   INTERNAL_ERROR: "INTERNAL_ERROR",
-  SERVICE_UNAVAILABLE: "SERVICE_UNAVAILABLE",
 } as const
 
 export type ErrorCode = (typeof ErrorCode)[keyof typeof ErrorCode]

@@ -15,17 +15,17 @@
       "apps/*"
     ],
     "catalog": {
-      "alchemy": "https://pkg.pr.new/alchemy-run/alchemy@d0fdfcd",
-      "typescript": "^5.9.2"
+      "alchemy": "^0.70.0",
+      "typescript": "^5.9.3"
     },
     "catalogs": {
       "cloudflare": {
-        "miniflare": "^4.20250917.0",
-        "@cloudflare/workers-types": "^4.20250922.0"
+        "miniflare": "^4.20251001.0",
+        "@cloudflare/workers-types": "^4.20251001.0"
       },
       "coinbase": {
         "@base-org/account": "^2.3.1",
-        "@coinbase/cdp-sdk": "^1.38.1"
+        "@coinbase/cdp-sdk": "^1.38.3"
       }
     }
   },
@@ -33,5 +33,5 @@
     "turbo": "latest",
     "@biomejs/biome": "latest"
   },
-  "packageManager": "bun@1.2.22"
+  "packageManager": "bun@1.2.23"
 }
