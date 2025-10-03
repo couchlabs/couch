@@ -224,6 +224,8 @@ export class WebhookService {
     orderNumber: number
     amount: string
     transactionHash: Hash
+    orderDueAt: Date
+    orderPeriodInSeconds: number
   }): Promise<void> {
     await this.emitSubscriptionUpdated({
       accountAddress: params.accountAddress,
@@ -234,6 +236,8 @@ export class WebhookService {
       amount: params.amount,
       transactionHash: params.transactionHash,
       success: true,
+      orderDueAt: params.orderDueAt,
+      orderPeriodInSeconds: params.orderPeriodInSeconds,
     })
   }
 

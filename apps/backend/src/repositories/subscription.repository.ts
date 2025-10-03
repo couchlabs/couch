@@ -90,6 +90,8 @@ export interface OrderDetails {
   amount: string
   orderNumber: number
   status: string
+  dueAt: string
+  periodInSeconds: number
 }
 
 export interface RecordTransactionParams {
@@ -209,6 +211,8 @@ export class SubscriptionRepository {
           o.amount,
           o.order_number,
           o.status,
+          o.due_at,
+          o.period_length_in_seconds,
           s.account_address
         FROM orders o
         JOIN subscriptions s ON o.subscription_id = s.subscription_id
@@ -221,6 +225,8 @@ export class SubscriptionRepository {
         amount: string
         order_number: number
         status: string
+        due_at: string
+        period_length_in_seconds: number
         account_address: string
       }>()
 
@@ -233,6 +239,8 @@ export class SubscriptionRepository {
       amount: result.amount,
       orderNumber: result.order_number,
       status: result.status,
+      dueAt: result.due_at,
+      periodInSeconds: result.period_length_in_seconds,
     }
   }
 

@@ -26,6 +26,7 @@ export interface ScheduleNextOrderParams {
   subscriptionId: Hash
   dueAt: Date
   amount: string
+  periodInSeconds: number
 }
 
 const logger = createLogger("order.service")
@@ -122,7 +123,11 @@ export class OrderService {
 
       // Step 5: Create next order
       let nextOrderCreated = false
-      if (onchainStatus.isSubscribed && onchainStatus.nextPeriodStart) {
+      if (
+        onchainStatus.isSubscribed &&
+        onchainStatus.nextPeriodStart &&
+        onchainStatus.periodInSeconds
+      ) {
         log.info("Creating next order", {
           dueAt: onchainStatus.nextPeriodStart,
           amount: onchainStatus.recurringCharge,
@@ -133,6 +138,7 @@ export class OrderService {
           type: OrderType.RECURRING,
           dueAt: onchainStatus.nextPeriodStart.toISOString(),
           amount: String(onchainStatus.recurringCharge),
+          periodInSeconds: onchainStatus.periodInSeconds,
           status: OrderStatus.PENDING,
         })
         nextOrderCreated = true
@@ -185,7 +191,7 @@ export class OrderService {
    * Used when we need to create an order outside of payment processing
    */
   async scheduleNextOrder(params: ScheduleNextOrderParams): Promise<void> {
-    const { subscriptionId, dueAt, amount } = params
+    const { subscriptionId, dueAt, amount, periodInSeconds } = params
 
     const log = logger.with({
       subscriptionId,
@@ -199,6 +205,7 @@ export class OrderService {
       type: OrderType.RECURRING,
       dueAt: dueAt.toISOString(),
       amount,
+      periodInSeconds,
       status: OrderStatus.PENDING,
     })
   }

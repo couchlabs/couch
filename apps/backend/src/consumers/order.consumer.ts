@@ -61,6 +61,8 @@ export default {
               orderNumber: result.orderNumber, // Guaranteed to exist
               amount: orderDetails.amount,
               transactionHash: result.transactionHash,
+              orderDueAt: new Date(orderDetails.dueAt),
+              orderPeriodInSeconds: orderDetails.periodInSeconds,
             })
 
             // ACK the message on success
