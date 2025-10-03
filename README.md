@@ -22,6 +22,8 @@ cp .env.example .env
 bun dev
 ```
 
+> **Note:** For backend-specific instructions (testing, endpoints, architecture), see the [Backend README](./apps/backend/README.md).
+
 ## What's in this repo
 
 ```
