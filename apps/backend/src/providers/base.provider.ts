@@ -78,8 +78,10 @@ export class BaseProvider implements SubscriptionProvider {
       subscriptionOwner: subscription.subscriptionOwner as Address,
       remainingChargeInPeriod: subscription.remainingChargeInPeriod,
       spenderAddress: this.cdpConfig.spenderAddress,
+      currentPeriodStart: subscription.currentPeriodStart,
       nextPeriodStart: subscription.nextPeriodStart,
       recurringCharge: subscription.recurringCharge,
+      periodInDays: subscription.periodInDays,
     }
   }
 

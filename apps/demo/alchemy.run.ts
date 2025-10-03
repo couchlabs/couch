@@ -45,7 +45,7 @@ const NAME_PREFIX = `${app.name}-${scope.name}-${scope.stage}`
 // -----------------------------------------------------------------------------
 
 // subscription-db: Main database for subscription and order data
-const DB_NAME = "db"
+const DB_NAME = "demo-db"
 const db = await D1Database(DB_NAME, {
   name: `${NAME_PREFIX}-${DB_NAME}`,
   migrationsDir: path.join(import.meta.dirname, "migrations"),

@@ -6,7 +6,8 @@ CREATE TABLE IF NOT EXISTS subscriptions (
   id TEXT PRIMARY KEY,              -- subscription hash
   status TEXT NOT NULL,             -- 'processing', 'active', 'failed'
   transaction_hash TEXT,            -- from activation response
-  next_order_date TEXT,             -- from activation response
+  period_in_seconds INTEGER,        -- billing period (from first webhook order)
+  amount TEXT,                      -- charge amount (from first webhook order)
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );

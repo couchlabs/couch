@@ -1,36 +1,42 @@
 import { useState } from "react"
-import { Button } from "@/components/ui/button"
+import { BackendSettings } from "@/components/BackendSettings"
+import { SubscriptionCreator } from "@/components/SubscriptionCreator"
+import { SubscriptionDetails } from "@/components/SubscriptionDetails"
+import { SubscriptionsList } from "@/components/SubscriptionsList"
 
 export function App() {
-  const [count, setCount] = useState(0)
+  const [selectedSubscriptionId, setSelectedSubscriptionId] = useState<
+    string | null
+  >(null)
 
   return (
-    <>
-      <h1 className="text-2xl">Couch Demo App</h1>
-      <p style={{ opacity: 0.8 }}>
-        Sketchpad Theme - Testing shadcn/ui components
-      </p>
+    <div className="min-h-screen bg-muted p-6">
+      <div className="mx-auto max-w-7xl">
+        <div className="mb-8">
+          <h1 className="text-3xl font-semibold">Couch Playground</h1>
+          <p className="text-muted-foreground mt-2">
+            Subscription testing tool
+          </p>
+        </div>
 
-      <div>
-        <p>Count: {count}</p>
-        <div>
-          <Button
-            onClick={() => setCount((count) => count + 1)}
-            variant="default"
-          >
-            Increment
-          </Button>
-          <Button
-            onClick={() => setCount((count) => count - 1)}
-            variant="secondary"
-          >
-            Decrement
-          </Button>
-          <Button onClick={() => setCount(0)} variant="outline">
-            Reset
-          </Button>
+        <div className="grid gap-6 lg:grid-cols-[450px_1fr]">
+          {/* Left column - Create subscription + List */}
+          <div className="flex flex-col gap-6">
+            <SubscriptionCreator />
+            <SubscriptionsList
+              selectedId={selectedSubscriptionId}
+              onSelect={setSelectedSubscriptionId}
+            />
+          </div>
+
+          {/* Right column - Subscription Details */}
+          <div>
+            <SubscriptionDetails subscriptionId={selectedSubscriptionId} />
+          </div>
         </div>
       </div>
-    </>
+
+      <BackendSettings />
+    </div>
   )
 }

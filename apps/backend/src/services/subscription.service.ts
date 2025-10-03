@@ -31,10 +31,13 @@ export interface ActivationResult {
   order: {
     id: number
     number: number // Sequential order number from database
+    dueAt: string // ISO datetime
+    periodInSeconds: number
   }
   nextOrder: {
     date: string
     amount: string
+    periodInSeconds: number
   }
 }
 
@@ -70,6 +73,7 @@ export class SubscriptionService {
         nextOrder: {
           dueAt: result.nextOrder.date,
           amount: result.nextOrder.amount,
+          periodInSeconds: result.nextOrder.periodInSeconds,
         },
       })
 
@@ -178,6 +182,13 @@ export class SubscriptionService {
         )
       }
 
+      if (!subscription.currentPeriodStart) {
+        logger.error("Missing current period start", { subscriptionId })
+        throw new Error(
+          "Invalid subscription configuration: missing currentPeriodStart",
+        )
+      }
+
       if (!subscription.nextPeriodStart) {
         logger.error("Missing next period start", { subscriptionId })
         throw new Error(
@@ -192,9 +203,17 @@ export class SubscriptionService {
         )
       }
 
+      if (!subscription.periodInSeconds) {
+        logger.error("Missing period in seconds", { subscriptionId })
+        throw new Error(
+          "Invalid subscription configuration: missing periodInSeconds",
+        )
+      }
+
       log.info("Subscription active onchain", {
         remainingCharge: subscription.remainingChargeInPeriod,
         nextPeriod: subscription.nextPeriodStart,
+        periodInSeconds: subscription.periodInSeconds,
       })
 
       // Step 2-3: Create subscription and order atomically
@@ -210,6 +229,7 @@ export class SubscriptionService {
             type: OrderType.INITIAL,
             dueAt: new Date().toISOString(),
             amount: String(subscription.remainingChargeInPeriod),
+            periodInSeconds: subscription.periodInSeconds,
             status: OrderStatus.PROCESSING,
           },
         })
@@ -316,10 +336,13 @@ export class SubscriptionService {
         order: {
           id: orderId,
           number: orderNumber,
+          dueAt: new Date().toISOString(),
+          periodInSeconds: subscription.periodInSeconds,
         },
         nextOrder: {
           date: subscription.nextPeriodStart.toISOString(),
           amount: String(subscription.recurringCharge),
+          periodInSeconds: subscription.periodInSeconds,
         },
       }
 

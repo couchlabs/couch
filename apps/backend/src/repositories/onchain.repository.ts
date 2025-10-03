@@ -24,8 +24,10 @@ export interface SubscriptionStatusResult {
     isSubscribed: boolean
     subscriptionOwner?: Address
     remainingChargeInPeriod?: string
+    currentPeriodStart?: Date
     nextPeriodStart?: Date
     recurringCharge?: string
+    periodInSeconds?: number // Converted from provider's periodInDays
   }
   context: {
     spenderAddress: Address
@@ -84,8 +86,10 @@ export class OnchainRepository {
         subscriptionOwner,
         remainingChargeInPeriod,
         spenderAddress,
+        currentPeriodStart,
         nextPeriodStart,
         recurringCharge,
+        periodInDays,
       } = await provider.getSubscriptionStatus({ subscriptionId })
 
       log.info("Onchain subscription status retrieved", {
@@ -104,14 +108,23 @@ export class OnchainRepository {
         })
       }
 
+      // Convert period from days to seconds for internal use
+      // TODO: Move into helper function
+      const periodInSeconds =
+        periodInDays !== undefined
+          ? Math.floor(periodInDays * 24 * 60 * 60)
+          : undefined
+
       // Return subscription data
       return {
         subscription: {
           isSubscribed,
           subscriptionOwner,
           remainingChargeInPeriod,
+          currentPeriodStart,
           nextPeriodStart,
           recurringCharge,
+          periodInSeconds,
         },
         context: { spenderAddress },
       }

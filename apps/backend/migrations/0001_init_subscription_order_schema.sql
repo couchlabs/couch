@@ -103,6 +103,12 @@ ALTER TABLE orders ADD COLUMN order_number INTEGER;
 -- Add provider support for multi-provider subscriptions
 ALTER TABLE subscriptions ADD COLUMN provider_id TEXT NOT NULL CHECK(provider_id IN ('base'));
 
+-- Add period tracking to orders (each order is for a specific billing period)
+-- period_length_in_seconds: Duration of the billing period for this order
+-- period_start = due_at
+-- period_end = due_at + period_length_in_seconds
+ALTER TABLE orders ADD COLUMN period_length_in_seconds INTEGER;
+
 -- -----------------------------------------------------------------------------
 -- Indexes for Account System
 -- -----------------------------------------------------------------------------

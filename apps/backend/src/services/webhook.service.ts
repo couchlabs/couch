@@ -31,7 +31,6 @@ export type WebhookOrderStatus = "paid" | "failed"
 export interface WebhookSubscriptionData {
   id: Hash
   status: SubscriptionStatus
-  current_period_end?: number // Unix timestamp, present if active
 }
 
 /**
@@ -42,6 +41,8 @@ export interface WebhookOrderData {
   type: OrderType
   amount: string
   status: WebhookOrderStatus
+  current_period_start?: number // Unix timestamp
+  current_period_end?: number // Unix timestamp
 }
 
 /**
@@ -97,7 +98,6 @@ export interface EmitWebhookEventParams {
   accountAddress: Address // From auth context
   subscriptionId: Hash
   subscriptionStatus: SubscriptionStatus
-  currentPeriodEnd?: Date
   orderNumber?: number
   orderType?: OrderType
   amount?: string
@@ -105,6 +105,8 @@ export interface EmitWebhookEventParams {
   success?: boolean
   errorCode?: string
   errorMessage?: string
+  orderDueAt?: Date // Order's due_at (period start)
+  orderPeriodInSeconds?: number // Order's period length
 }
 
 const logger = createLogger("webhook.service")
@@ -202,12 +204,13 @@ export class WebhookService {
       accountAddress: result.accountAddress,
       subscriptionId: result.subscriptionId,
       subscriptionStatus: SubscriptionStatus.ACTIVE,
-      currentPeriodEnd: new Date(result.nextOrder.date),
       orderNumber: result.order.number, // Use actual order number from database
       orderType: OrderType.INITIAL,
       amount: result.transaction.amount,
       transactionHash: result.transaction.hash,
       success: true,
+      orderDueAt: new Date(result.order.dueAt),
+      orderPeriodInSeconds: result.order.periodInSeconds,
     })
   }
 
@@ -289,13 +292,6 @@ export class WebhookService {
         },
       }
 
-      // Add current period end if provided
-      if (params.currentPeriodEnd) {
-        eventData.subscription.current_period_end = Math.floor(
-          params.currentPeriodEnd.getTime() / 1000,
-        )
-      }
-
       // Add order data if we have payment info
       if (
         params.orderNumber &&
@@ -307,6 +303,19 @@ export class WebhookService {
           type: params.orderType,
           amount: params.amount,
           status: params.success ? "paid" : "failed",
+        }
+
+        // Calculate and add period timestamps from due_at + period_in_seconds
+        // TODO abstract such thing into helper function
+        if (params.orderDueAt && params.orderPeriodInSeconds) {
+          const periodStartTimestamp = Math.floor(
+            params.orderDueAt.getTime() / 1000,
+          )
+          const periodEndTimestamp =
+            periodStartTimestamp + params.orderPeriodInSeconds
+
+          eventData.order.current_period_start = periodStartTimestamp
+          eventData.order.current_period_end = periodEndTimestamp
         }
       }
 

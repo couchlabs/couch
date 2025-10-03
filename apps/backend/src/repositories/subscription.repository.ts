@@ -43,6 +43,7 @@ export interface CreateOrderParams {
   type: OrderType
   dueAt: string
   amount: string
+  periodInSeconds: number // Duration of billing period
   status: OrderStatus
 }
 
@@ -141,6 +142,7 @@ export interface ExecuteSubscriptionActivationParams {
   nextOrder: {
     dueAt: string
     amount: string
+    periodInSeconds: number
   }
 }
 
@@ -265,11 +267,11 @@ export class SubscriptionRepository {
     const result = await this.db
       .prepare(
         `INSERT INTO orders (
-          subscription_id, order_number, type, due_at, amount, status
+          subscription_id, order_number, type, due_at, amount, period_length_in_seconds, status
         ) VALUES (
           ?,
           COALESCE((SELECT MAX(order_number) FROM orders WHERE subscription_id = ?), 0) + 1,
-          ?, ?, ?, ?
+          ?, ?, ?, ?, ?
         )
         RETURNING id`,
       )
@@ -279,6 +281,7 @@ export class SubscriptionRepository {
         order.type,
         order.dueAt,
         order.amount,
+        order.periodInSeconds,
         order.status || OrderStatus.PROCESSING,
       )
       .first<{ id: number }>()
@@ -402,11 +405,11 @@ export class SubscriptionRepository {
       const orderResult = await this.db
         .prepare(
           `INSERT INTO orders (
-            subscription_id, order_number, type, due_at, amount, status
+            subscription_id, order_number, type, due_at, amount, period_length_in_seconds, status
           ) VALUES (
             ?,
             COALESCE((SELECT MAX(order_number) FROM orders WHERE subscription_id = ?), 0) + 1,
-            ?, ?, ?, ?
+            ?, ?, ?, ?, ?
           )
           RETURNING id, order_number`,
         )
@@ -416,6 +419,7 @@ export class SubscriptionRepository {
           order.type,
           order.dueAt,
           order.amount,
+          order.periodInSeconds,
           order.status || OrderStatus.PROCESSING,
         )
         .first<{ id: number; order_number: number }>()
@@ -463,11 +467,11 @@ export class SubscriptionRepository {
       this.db
         .prepare(
           `INSERT INTO orders (
-            subscription_id, order_number, type, due_at, amount, status
+            subscription_id, order_number, type, due_at, amount, period_length_in_seconds, status
           ) VALUES (
             ?,
             COALESCE((SELECT MAX(order_number) FROM orders WHERE subscription_id = ?), 0) + 1,
-            ?, ?, ?, ?
+            ?, ?, ?, ?, ?
           )`,
         )
         .bind(
@@ -476,6 +480,7 @@ export class SubscriptionRepository {
           OrderType.RECURRING,
           nextOrder.dueAt,
           nextOrder.amount,
+          nextOrder.periodInSeconds,
           OrderStatus.PENDING,
         ),
       // Activate subscription

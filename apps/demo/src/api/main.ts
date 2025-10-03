@@ -23,6 +23,40 @@ app.onError((err, c) => {
   }
 })
 
+// Get all subscriptions
+app.get("/api/subscriptions", async (c) => {
+  const result = await c.env.DB.prepare(
+    "SELECT * FROM subscriptions ORDER BY created_at DESC",
+  ).all()
+  return c.json(result.results || [])
+})
+
+// Get single subscription
+app.get("/api/subscriptions/:id", async (c) => {
+  const id = c.req.param("id")
+  const result = await c.env.DB.prepare(
+    "SELECT * FROM subscriptions WHERE id = ?",
+  )
+    .bind(id)
+    .first()
+
+  if (!result) {
+    return c.json({ error: "Subscription not found" }, 404)
+  }
+  return c.json(result)
+})
+
+// Get webhook events for a subscription
+app.get("/api/subscriptions/:id/events", async (c) => {
+  const id = c.req.param("id")
+  const result = await c.env.DB.prepare(
+    "SELECT * FROM webhook_events WHERE subscription_id = ? ORDER BY created_at DESC",
+  )
+    .bind(id)
+    .all()
+  return c.json(result.results || [])
+})
+
 app.post("/api/webhook", async (c) => {
   const body = await c.req.text()
   const signature = c.req.header("X-Webhook-Signature")
@@ -39,12 +73,53 @@ app.post("/api/webhook", async (c) => {
     console.log("Unknown event type:", event.type)
   }
   console.log(JSON.stringify(event, null, 2))
+
+  // Save to database
+  const subscriptionId = event.data.subscription.id
+  const status = event.data.subscription.status
+
+  // Calculate period_in_seconds from order period timestamps (if present)
+  let periodInSeconds: number | null = null
+  if (
+    event.data.order?.current_period_start &&
+    event.data.order?.current_period_end
+  ) {
+    periodInSeconds =
+      event.data.order.current_period_end -
+      event.data.order.current_period_start
+  }
+
+  // Upsert subscription
+  // Only set transaction_hash, amount, and period_in_seconds on INSERT (initial order), never update them
+  await c.env.DB.prepare(
+    `INSERT INTO subscriptions (id, status, transaction_hash, amount, period_in_seconds, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, datetime('now'), datetime('now'))
+     ON CONFLICT(id) DO UPDATE SET
+       status = excluded.status,
+       updated_at = datetime('now')`,
+  )
+    .bind(
+      subscriptionId,
+      status,
+      event.data.transaction?.hash || null,
+      event.data.order?.amount || null,
+      periodInSeconds,
+    )
+    .run()
+
+  // Insert webhook event
+  await c.env.DB.prepare(
+    `INSERT INTO webhook_events (subscription_id, event_type, event_data, created_at)
+     VALUES (?, ?, ?, datetime('now'))`,
+  )
+    .bind(subscriptionId, event.type, body)
+    .run()
+
   return c.text("", 200)
 })
 
 // Simple catch-all proxy that inject X-API-Key headers with COUCH_API_KEY
 app.all("/proxy/*", async (c) => {
-  const url = c.env.COUCH_API_URL.replace(/\/+$/, "")
   const path = c.req.path.replace(/^\/proxy\//, "")
   const clientIp =
     c.req.header("CF-Connecting-IP") ||
@@ -52,7 +127,13 @@ app.all("/proxy/*", async (c) => {
     c.req.header("X-Real-IP") ||
     "127.0.0.1"
 
-  return proxy(`${url}/${path}`, {
+  // Special case: __scheduled endpoint is on port 3100 (order-processor)
+  let baseUrl = c.env.COUCH_API_URL.replace(/\/+$/, "")
+  if (path === "__scheduled") {
+    baseUrl = baseUrl.replace(":3000", ":3100")
+  }
+
+  return proxy(`${baseUrl}/${path}`, {
     ...c.req,
     headers: {
       ...c.req.header(),
@@ -78,13 +159,14 @@ interface WebhookEvent {
     subscription: {
       id: string // subscription ID (hash)
       status: "active" | "inactive" | "processing"
-      current_period_end?: number // Unix timestamp
     }
     order?: {
       number: number
       type: "setup" | "recurring"
       amount: string
       status: "paid" | "failed"
+      current_period_start?: number
+      current_period_end?: number
     }
     transaction?: {
       hash: string

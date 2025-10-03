@@ -38,6 +38,8 @@ export interface StatusResult {
   subscriptionOwner?: Address // Only when permission exists (found in indexer)
   remainingChargeInPeriod?: string // Only when permission exists
   spenderAddress: Address
+  currentPeriodStart?: Date // Only when permission exists
   nextPeriodStart?: Date // Optional - undefined means no future recurring charges
   recurringCharge: string // Always present (defaults to '0' when not found)
+  periodInDays?: number // Period length in days (from permission.period) - only when permission exists
 }
