@@ -8,6 +8,7 @@ import {
   Check,
   ChevronDown,
   ChevronRight,
+  Circle,
   ExternalLink,
   HelpCircle,
   Loader2,
@@ -116,7 +117,12 @@ export function SubscriptionDetails({
         id: subscriptionId,
         testnet: true,
       })
-      setOnchainStatus(status)
+      setOnchainStatus({
+        ...status,
+        nextPeriodStart: status.nextPeriodStart
+          ? new Date(status.nextPeriodStart).getTime()
+          : undefined,
+      })
     } catch (error) {
       console.error("Failed to fetch onchain status:", error)
       setOnchainStatus(null)
@@ -154,7 +160,10 @@ export function SubscriptionDetails({
         permission,
         provider,
       })
-      const hash = typeof result === "string" ? result : result?.hash || result
+      const hash =
+        typeof result === "string"
+          ? result
+          : (result as { hash?: string })?.hash || String(result)
       console.log(`Permission revoked in transaction:`, hash)
 
       // Optimistically update state - revoke was successful
@@ -199,17 +208,20 @@ export function SubscriptionDetails({
 
         // Initial payment (activation charge)
         if (order.type === "initial") {
-          return order.status === "paid"
-            ? "Subscription activated"
-            : "Subscription activation failed"
+          return "Subscription activation"
         }
 
-        // Recurring payments (cannot determine retry attempt without state tracking)
-        return order.status === "paid" ? "Payment successful" : "Payment failed"
+        // Recurring payments
+        return "Subscription renewal"
       }
 
       if (data.data.error) {
         return `Error: ${data.data.error.message}`
+      }
+
+      // Processing state (subscription created but not yet charged)
+      if (data.data.subscription.status === "processing") {
+        return "Subscription creation"
       }
 
       return `Status: ${data.data.subscription.status}`
@@ -337,14 +349,6 @@ export function SubscriptionDetails({
                   >
                     {subscription.transaction_hash}
                   </a>
-                </p>
-              )}
-              {subscription?.next_order_date && (
-                <p className="text-sm">
-                  <span className="font-medium">Next Order Date:</span>{" "}
-                  <span className="text-xs opacity-90">
-                    {new Date(subscription.next_order_date).toLocaleString()}
-                  </span>
                 </p>
               )}
             </div>
@@ -530,7 +534,7 @@ export function SubscriptionDetails({
                               data.data.subscription.status === "processing"
                             ) {
                               return (
-                                <Loader2 className="h-4 w-4 text-yellow-600 animate-spin" />
+                                <Circle className="h-4 w-4 text-yellow-600" />
                               )
                             }
                           } catch {

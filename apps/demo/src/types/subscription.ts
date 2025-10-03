@@ -23,10 +23,12 @@ export interface WebhookEventData {
     subscription: {
       id: string
       status: "active" | "inactive" | "processing"
+      amount: string // Always present - immutable subscription terms
+      period_in_seconds: number // Always present - immutable subscription terms
     }
     order?: {
       number: number
-      type: "setup" | "recurring"
+      type: "initial" | "recurring"
       amount: string
       status: "paid" | "failed"
       current_period_start?: number

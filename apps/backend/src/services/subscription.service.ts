@@ -21,6 +21,29 @@ export interface ValidateSubscriptionIdParams {
   providerId: Provider
 }
 
+export interface CreateSubscriptionParams {
+  subscriptionId: Hash
+  accountAddress: Address
+  providerId: Provider
+}
+
+export interface CreateSubscriptionResult {
+  orderId: number
+  orderNumber: number
+  subscriptionMetadata: {
+    amount: string
+    periodInSeconds: number
+  }
+}
+
+export interface ProcessActivationChargeParams {
+  subscriptionId: Hash
+  accountAddress: Address
+  providerId: Provider
+  orderId: number
+  orderNumber: number
+}
+
 export interface ActivationResult {
   subscriptionId: Hash
   accountAddress: Address // Include this in the result
@@ -85,6 +108,18 @@ export class SubscriptionService {
     }
   }
 
+  /**
+   * Marks a subscription as inactive after a failed charge.
+   * Used in error handling flows.
+   */
+  async markSubscriptionInactive(params: {
+    subscriptionId: Hash
+    orderId: number
+    reason: string
+  }): Promise<void> {
+    await this.subscriptionRepository.markSubscriptionInactive(params)
+  }
+
   async validateId(params: ValidateSubscriptionIdParams): Promise<void> {
     const { subscriptionId, providerId } = params
 
@@ -104,8 +139,228 @@ export class SubscriptionService {
   }
 
   /**
+   * Creates a subscription in the database after validating onchain.
+   * Returns subscription metadata for webhook emission.
+   * Does NOT perform the charge - use processActivationCharge() for that.
+   */
+  async createSubscription(
+    params: CreateSubscriptionParams,
+  ): Promise<CreateSubscriptionResult> {
+    const { subscriptionId, accountAddress, providerId } = params
+
+    // Validate domain constraints
+    await this.validateId({ subscriptionId, providerId })
+
+    const log = logger.with({ subscriptionId })
+
+    // Check if subscription already exists (early exit)
+    const exists = await this.subscriptionRepository.subscriptionExists({
+      subscriptionId,
+    })
+    if (exists) {
+      throw new HTTPError(
+        409,
+        ErrorCode.SUBSCRIPTION_EXISTS,
+        "Subscription already exists",
+        { subscriptionId },
+      )
+    }
+
+    // Get onchain subscription status and validate
+    log.info("Fetching onchain subscription status")
+    const { subscription } = await this.onchainRepository.getSubscriptionStatus(
+      {
+        subscriptionId,
+        providerId,
+      },
+    )
+
+    if (!subscription.isSubscribed) {
+      throw new HTTPError(
+        403,
+        ErrorCode.FORBIDDEN,
+        "Subscription not active onchain",
+        { subscriptionId },
+      )
+    }
+
+    // Validate all required fields are present
+    if (!subscription.remainingChargeInPeriod) {
+      logger.error("Missing remaining charge in period", { subscriptionId })
+      throw new Error(
+        "Invalid subscription configuration: missing remainingChargeInPeriod",
+      )
+    }
+
+    if (!subscription.recurringCharge) {
+      logger.error("Missing recurring charge", { subscriptionId })
+      throw new Error(
+        "Invalid subscription configuration: missing recurringCharge",
+      )
+    }
+
+    if (!subscription.periodInSeconds) {
+      logger.error("Missing period in seconds", { subscriptionId })
+      throw new Error(
+        "Invalid subscription configuration: missing periodInSeconds",
+      )
+    }
+
+    // Create subscription and initial order in DB
+    log.info("Creating subscription and order")
+    const { created, orderId, orderNumber } =
+      await this.subscriptionRepository.createSubscriptionWithOrder({
+        subscriptionId,
+        ownerAddress: subscription.subscriptionOwner,
+        accountAddress,
+        providerId,
+        order: {
+          subscriptionId: subscriptionId,
+          type: OrderType.INITIAL,
+          dueAt: new Date().toISOString(),
+          amount: String(subscription.remainingChargeInPeriod),
+          periodInSeconds: subscription.periodInSeconds,
+          status: OrderStatus.PROCESSING,
+        },
+      })
+
+    if (!created || !orderId || !orderNumber) {
+      throw new HTTPError(
+        409,
+        ErrorCode.SUBSCRIPTION_EXISTS,
+        "Subscription already exists",
+        { subscriptionId },
+      )
+    }
+
+    return {
+      orderId,
+      orderNumber,
+      subscriptionMetadata: {
+        amount: String(subscription.recurringCharge),
+        periodInSeconds: subscription.periodInSeconds,
+      },
+    }
+  }
+
+  /**
+   * Processes the activation charge for a subscription.
+   * Must be called after createSubscription().
+   * Validates onchain, attempts charge, and returns ActivationResult on success.
+   */
+  async processActivationCharge(
+    params: ProcessActivationChargeParams,
+  ): Promise<ActivationResult> {
+    const { subscriptionId, accountAddress, providerId, orderId, orderNumber } =
+      params
+
+    const log = logger.with({ subscriptionId })
+
+    // Get onchain subscription status again (for charge details)
+    const { subscription } = await this.onchainRepository.getSubscriptionStatus(
+      {
+        subscriptionId,
+        providerId,
+      },
+    )
+
+    // Validate required fields are present
+    if (!subscription.remainingChargeInPeriod) {
+      logger.error("Missing remaining charge in period", { subscriptionId })
+      throw new Error(
+        "Invalid subscription configuration: missing remainingChargeInPeriod",
+      )
+    }
+
+    if (!subscription.periodInSeconds) {
+      logger.error("Missing period in seconds", { subscriptionId })
+      throw new Error(
+        "Invalid subscription configuration: missing periodInSeconds",
+      )
+    }
+
+    if (!subscription.currentPeriodStart) {
+      logger.error("Missing current period start", { subscriptionId })
+      throw new Error(
+        "Invalid subscription configuration: missing currentPeriodStart",
+      )
+    }
+
+    if (!subscription.nextPeriodStart) {
+      logger.error("Missing next period start", { subscriptionId })
+      throw new Error(
+        "Invalid subscription configuration: missing nextPeriodStart",
+      )
+    }
+
+    if (!subscription.recurringCharge) {
+      logger.error("Missing recurring charge", { subscriptionId })
+      throw new Error(
+        "Invalid subscription configuration: missing recurringCharge",
+      )
+    }
+
+    // Check for existing successful transaction (idempotency)
+    const existingTransaction =
+      await this.subscriptionRepository.getSuccessfulTransaction({
+        subscriptionId,
+        orderId,
+      })
+
+    let transaction: ChargeResult
+    if (existingTransaction) {
+      log.info("Found existing successful transaction, skipping charge", {
+        transactionHash: existingTransaction.transactionHash,
+      })
+      transaction = {
+        transactionHash: existingTransaction.transactionHash,
+        gasUsed: undefined,
+      }
+    } else {
+      // Execute charge
+      log.info("Processing charge", {
+        amount: subscription.remainingChargeInPeriod,
+        recipient: accountAddress,
+      })
+
+      transaction = await this.onchainRepository.chargeSubscription({
+        subscriptionId,
+        amount: subscription.remainingChargeInPeriod,
+        recipient: accountAddress,
+        providerId,
+      })
+    }
+
+    log.info("Charge successful", {
+      transactionHash: transaction.transactionHash,
+      amount: subscription.remainingChargeInPeriod,
+    })
+
+    return {
+      subscriptionId,
+      accountAddress,
+      transaction: {
+        hash: transaction.transactionHash,
+        amount: subscription.remainingChargeInPeriod,
+      },
+      order: {
+        id: orderId,
+        number: orderNumber,
+        dueAt: subscription.currentPeriodStart.toISOString(),
+        periodInSeconds: subscription.periodInSeconds,
+      },
+      nextOrder: {
+        date: subscription.nextPeriodStart.toISOString(),
+        amount: String(subscription.recurringCharge),
+        periodInSeconds: subscription.periodInSeconds,
+      },
+    }
+  }
+
+  /**
    * Activates a subscription by validating and charging immediately.
    * Database finalization happens in the background via completeActivation.
+   * @deprecated Use createSubscription() + processActivationCharge() for async flow
    */
   async activate(
     params: ActivateSubscriptionParams,

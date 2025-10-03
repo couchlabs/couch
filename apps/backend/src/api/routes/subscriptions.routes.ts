@@ -26,36 +26,75 @@ subscriptionRoutes.post("/", subscriptionBody(), async (ctx) => {
   const { subscriptionId, providerId } = ctx.get("subscription")
 
   const subscriptionService = new SubscriptionService()
+  const webhookService = new WebhookService()
 
-  // Activate the subscription (validates and process first charge) and link to merchant account
-  const activation = await subscriptionService.activate({
-    subscriptionId,
-    accountAddress,
-    providerId,
-  })
+  // Create subscription in DB and start background activation
+  const { orderId, orderNumber, subscriptionMetadata } =
+    await subscriptionService.createSubscription({
+      subscriptionId,
+      accountAddress,
+      providerId,
+    })
 
-  // Complete database operations and emit webhook in the background
+  // Process activation charge and emit webhooks in background
   ctx.executionCtx.waitUntil(
     (async () => {
-      // Complete activation
-      await subscriptionService.completeActivation(activation)
+      try {
+        // 1. Fire created webhook FIRST
+        await webhookService.emitSubscriptionCreated({
+          accountAddress,
+          subscriptionId,
+          amount: subscriptionMetadata.amount,
+          periodInSeconds: subscriptionMetadata.periodInSeconds,
+        })
 
-      // Emit webhook event
-      const webhookService = new WebhookService()
-      await webhookService.emitSubscriptionActivated(activation)
+        // 2. Attempt activation charge
+        const activation = await subscriptionService.processActivationCharge({
+          subscriptionId,
+          accountAddress,
+          providerId,
+          orderId,
+          orderNumber,
+        })
+
+        // 3. Complete activation in DB
+        await subscriptionService.completeActivation(activation)
+
+        // 4. Fire activation success webhook
+        await webhookService.emitSubscriptionActivated(activation)
+      } catch (error) {
+        // 5. Mark subscription as inactive in DB
+        const errorMessage =
+          error instanceof Error ? error.message : "activation_failed"
+        await subscriptionService.markSubscriptionInactive({
+          subscriptionId,
+          orderId,
+          reason: errorMessage,
+        })
+
+        // 6. Fire activation failed webhook
+        await webhookService.emitActivationFailed({
+          accountAddress,
+          subscriptionId,
+          amount: subscriptionMetadata.amount,
+          periodInSeconds: subscriptionMetadata.periodInSeconds,
+          errorCode: "payment_failed",
+          errorMessage,
+        })
+      }
     })(),
   )
 
+  // Return immediately with processing status
   return new Response(
     JSON.stringify({
-      data: {
-        subscription_id: activation.subscriptionId,
-        transaction_hash: activation.transaction.hash,
-        next_order_date: activation.nextOrder.date,
-      },
+      subscription_id: subscriptionId,
+      status: "processing",
+      order_id: orderId,
+      order_number: orderNumber,
     }),
     {
-      status: 202,
+      status: 201,
       headers: {
         "Content-Type": "application/json",
       },

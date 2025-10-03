@@ -83,7 +83,10 @@ export function SubscriptionCreator() {
       })
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}))
+        const errorData = (await response.json().catch(() => ({}))) as {
+          error?: string
+          message?: string
+        }
         throw new Error(
           errorData.error ||
             errorData.message ||
@@ -92,7 +95,7 @@ export function SubscriptionCreator() {
       }
 
       const data = await response.json()
-      console.log("Subscription activated successfully:", data)
+      console.log("Subscription created:", data)
 
       // Success - reset loading state immediately
       setIsSubscribing(false)

@@ -77,17 +77,8 @@ app.post("/api/webhook", async (c) => {
   // Save to database
   const subscriptionId = event.data.subscription.id
   const status = event.data.subscription.status
-
-  // Calculate period_in_seconds from order period timestamps (if present)
-  let periodInSeconds: number | null = null
-  if (
-    event.data.order?.current_period_start &&
-    event.data.order?.current_period_end
-  ) {
-    periodInSeconds =
-      event.data.order.current_period_end -
-      event.data.order.current_period_start
-  }
+  const amount = event.data.subscription.amount
+  const periodInSeconds = event.data.subscription.period_in_seconds
 
   // Upsert subscription
   // Only set transaction_hash, amount, and period_in_seconds on INSERT (initial order), never update them
@@ -102,7 +93,7 @@ app.post("/api/webhook", async (c) => {
       subscriptionId,
       status,
       event.data.transaction?.hash || null,
-      event.data.order?.amount || null,
+      amount,
       periodInSeconds,
     )
     .run()
@@ -159,10 +150,12 @@ interface WebhookEvent {
     subscription: {
       id: string // subscription ID (hash)
       status: "active" | "inactive" | "processing"
+      amount: string // Recurring charge amount (always present)
+      period_in_seconds: number // Billing period (always present)
     }
     order?: {
       number: number
-      type: "setup" | "recurring"
+      type: "initial" | "recurring"
       amount: string
       status: "paid" | "failed"
       current_period_start?: number

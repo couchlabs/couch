@@ -27,10 +27,13 @@ export type WebhookOrderStatus = "paid" | "failed"
 
 /**
  * Subscription data in webhook event
+ * These fields represent immutable subscription terms from the signed permission
  */
 export interface WebhookSubscriptionData {
   id: Hash
   status: SubscriptionStatus
+  amount: string // Recurring charge amount (e.g., "0.0001") - always present
+  period_in_seconds: number // Billing period (e.g., 60) - always present
 }
 
 /**
@@ -92,15 +95,18 @@ export interface WebhookResult {
 }
 
 /**
- * Simplified parameters for webhook events - callers just pass what they have
+ * Parameters for webhook events
+ * subscriptionAmount and subscriptionPeriodInSeconds are REQUIRED - they represent immutable subscription terms
  */
 export interface EmitWebhookEventParams {
   accountAddress: Address // From auth context
   subscriptionId: Hash
   subscriptionStatus: SubscriptionStatus
+  subscriptionAmount: string // Recurring charge amount - REQUIRED
+  subscriptionPeriodInSeconds: number // Billing period - REQUIRED
   orderNumber?: number
   orderType?: OrderType
-  amount?: string
+  amount?: string // Order amount (can differ from subscription amount)
   transactionHash?: Hash
   success?: boolean
   errorCode?: string
@@ -204,6 +210,8 @@ export class WebhookService {
       accountAddress: result.accountAddress,
       subscriptionId: result.subscriptionId,
       subscriptionStatus: SubscriptionStatus.ACTIVE,
+      subscriptionAmount: result.transaction.amount,
+      subscriptionPeriodInSeconds: result.order.periodInSeconds,
       orderNumber: result.order.number, // Use actual order number from database
       orderType: OrderType.INITIAL,
       amount: result.transaction.amount,
@@ -211,6 +219,25 @@ export class WebhookService {
       success: true,
       orderDueAt: new Date(result.order.dueAt),
       orderPeriodInSeconds: result.order.periodInSeconds,
+    })
+  }
+
+  /**
+   * Emits webhook event when subscription is created (before activation charge)
+   * Fires with subscription metadata (amount, period)
+   */
+  async emitSubscriptionCreated(params: {
+    accountAddress: Address
+    subscriptionId: Hash
+    amount: string
+    periodInSeconds: number
+  }): Promise<void> {
+    await this.emitSubscriptionUpdated({
+      accountAddress: params.accountAddress,
+      subscriptionId: params.subscriptionId,
+      subscriptionStatus: SubscriptionStatus.PROCESSING,
+      subscriptionAmount: params.amount,
+      subscriptionPeriodInSeconds: params.periodInSeconds,
     })
   }
 
@@ -231,6 +258,8 @@ export class WebhookService {
       accountAddress: params.accountAddress,
       subscriptionId: params.subscriptionId,
       subscriptionStatus: SubscriptionStatus.ACTIVE,
+      subscriptionAmount: params.amount, // Use order amount as subscription metadata
+      subscriptionPeriodInSeconds: params.orderPeriodInSeconds, // Use order period as subscription metadata
       orderNumber: params.orderNumber,
       orderType: OrderType.RECURRING,
       amount: params.amount,
@@ -250,18 +279,44 @@ export class WebhookService {
     subscriptionId: Hash
     orderNumber: number
     amount: string
+    periodInSeconds: number
     failureReason?: string
   }): Promise<void> {
     await this.emitSubscriptionUpdated({
       accountAddress: params.accountAddress,
       subscriptionId: params.subscriptionId,
       subscriptionStatus: SubscriptionStatus.INACTIVE,
+      subscriptionAmount: params.amount, // Use order amount as subscription metadata
+      subscriptionPeriodInSeconds: params.periodInSeconds, // Use order period as subscription metadata
       orderNumber: params.orderNumber,
       orderType: OrderType.RECURRING,
       amount: params.amount,
       success: false,
       errorCode: "payment_failed",
       errorMessage: params.failureReason || "Payment processing failed",
+    })
+  }
+
+  /**
+   * Emits webhook event when initial activation charge fails
+   */
+  async emitActivationFailed(params: {
+    accountAddress: Address
+    subscriptionId: Hash
+    amount: string
+    periodInSeconds: number
+    errorCode: string
+    errorMessage: string
+  }): Promise<void> {
+    await this.emitSubscriptionUpdated({
+      accountAddress: params.accountAddress,
+      subscriptionId: params.subscriptionId,
+      subscriptionStatus: SubscriptionStatus.INACTIVE,
+      subscriptionAmount: params.amount,
+      subscriptionPeriodInSeconds: params.periodInSeconds,
+      success: false,
+      errorCode: params.errorCode,
+      errorMessage: params.errorMessage,
     })
   }
 
@@ -288,11 +343,13 @@ export class WebhookService {
 
       const timestamp = Math.floor(Date.now() / 1000)
 
-      // Format the event based on what data we have
+      // Format the event - subscription metadata is always present
       const eventData: SubscriptionUpdatedEventData = {
         subscription: {
           id: subscriptionId,
           status: params.subscriptionStatus,
+          amount: params.subscriptionAmount,
+          period_in_seconds: params.subscriptionPeriodInSeconds,
         },
       }
 

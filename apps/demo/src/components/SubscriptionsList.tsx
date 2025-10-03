@@ -140,13 +140,6 @@ export function SubscriptionsList({
                           Status: {subscription.status}
                         </p>
                       )}
-                      {subscription.status === "processing" && (
-                        <p
-                          className={`text-xs mt-1 ${selectedId === subscription.id ? "text-primary-foreground/90" : "text-yellow-600"}`}
-                        >
-                          Creating...
-                        </p>
-                      )}
                     </div>
                   </div>
                 </button>

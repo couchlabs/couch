@@ -83,6 +83,7 @@ export default {
               subscriptionId: orderDetails.subscriptionId,
               orderNumber: result.orderNumber, // Guaranteed to exist
               amount: orderDetails.amount,
+              periodInSeconds: orderDetails.periodInSeconds,
               failureReason: result.failureReason,
             })
 
