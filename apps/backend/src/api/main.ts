@@ -10,13 +10,13 @@ import { logger } from "@/lib/logger"
 
 import type { WorkerEnv } from "@/types/api.env"
 
-const api = new Hono<{ Bindings: WorkerEnv }>().basePath("/api")
+const app = new Hono<{ Bindings: WorkerEnv }>().basePath("/api")
 
 // CORS middleware
-api.use(cors())
+app.use(cors())
 
 // Error handler middleware
-api.onError((error, ctx) => {
+app.onError((error, ctx) => {
   logger.error("Request error", {
     path: ctx.req.path,
     method: ctx.req.method,
@@ -40,9 +40,9 @@ api.onError((error, ctx) => {
 })
 
 // Mount routes
-api.route("/health", healthRoutes)
-api.route("/account", accountRoutes)
-api.route("/webhook", webhookRoutes)
-api.route("/subscriptions", subscriptionRoutes)
+app.route("/health", healthRoutes)
+app.route("/account", accountRoutes)
+app.route("/webhook", webhookRoutes)
+app.route("/subscriptions", subscriptionRoutes)
 
-export default api
+export default app

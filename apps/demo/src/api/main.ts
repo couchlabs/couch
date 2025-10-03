@@ -1,7 +1,7 @@
 import { Hono } from "hono"
 import { cors } from "hono/cors"
 import { proxy } from "hono/proxy"
-import type { WorkerEnv } from "../types/env"
+import type { WorkerEnv } from "../../types/env"
 
 export const app = new Hono<{ Bindings: WorkerEnv }>()
 

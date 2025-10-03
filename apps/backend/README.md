@@ -124,9 +124,9 @@ transactions       -- Blockchain transactions
 1. Create an Account & Get API Key via `/api/account` endpoint
 2. Set Webhook URL (Optional) via `/api/webhook` endpoint
 
-### 2a. Subscribe using the included frontend app (Recommended)
+### 2a. Subscribe using the included demo app (Recommended)
 
-3. Set envs required for frontend: `COUCH_API_KEY`, `COUCH_WEBHOOK_SECRET`
+3. Set envs required for demo: `COUCH_API_KEY`, `COUCH_WEBHOOK_SECRET`
 4. Open http://localhost:8000 in your browser and follow step to subscribe
 
 ### 2b. Subscribe using the SDK directly

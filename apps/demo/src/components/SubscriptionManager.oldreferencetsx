@@ -1,9 +1,9 @@
-import { useState, useEffect } from "react"
 import { base, createBaseAccountSDK } from "@base-org/account"
 import {
   fetchPermission,
   requestRevoke,
 } from "@base-org/account/spend-permission"
+import { useEffect, useState } from "react"
 import { createPublicClient, http } from "viem"
 import { baseSepolia } from "viem/chains"
 
@@ -49,6 +49,7 @@ export function SubscriptionManager() {
   const showBackendControl = false
 
   useEffect(() => {
+    console.log("ENV_____", import.meta.env)
     // Load subscriptions from localStorage
     const storedSubscriptions = localStorage.getItem("bbq-subscriptions")
     if (storedSubscriptions) {
@@ -89,7 +90,7 @@ export function SubscriptionManager() {
   // Create Subscription
   const handleCreateSubscription = async () => {
     // get CDP Wallet
-    const accountAddress = import.meta.env.VITE_SPENDER_ADDRESS
+    const accountAddress = import.meta.env.VITE_COUCH_SPENDER_ADDRESS
 
     if (!accountAddress) {
       throw new Error("SERVER ADDRESS NOT SET")
@@ -336,13 +337,14 @@ export function SubscriptionManager() {
     // Only clear if user manually clicks charge button
 
     try {
-      const response = await fetch(`http://localhost:3000/api/subscriptions`, {
+      const response = await fetch(`/proxy/api/subscriptions`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
           subscription_id: id,
+          provider: "base",
         }),
       })
 
@@ -654,9 +656,6 @@ export function SubscriptionManager() {
           <h1 className="text-6xl font-bold text-white mb-4 drop-shadow-2xl">
             Premium Subscription
           </h1>
-          <p className="text-xl text-white/90 max-w-2xl mx-auto drop-shadow-lg">
-            Experience the future of decentralized subscriptions on Base
-          </p>
         </div>
 
         <div className="grid md:grid-cols-2 gap-8 max-w-5xl w-full">

@@ -1,5 +1,7 @@
+import path from "node:path"
+
 import alchemy from "alchemy"
-import { Vite } from "alchemy/cloudflare"
+import { D1Database, Vite } from "alchemy/cloudflare"
 import { api, spenderSmartAccount } from "backend/alchemy"
 
 // import { Stage } from "backend/constants"
@@ -33,19 +35,34 @@ import { api, spenderSmartAccount } from "backend/alchemy"
 // =============================================================================
 
 const app = { name: "couch" }
-export const scope = await alchemy("frontend", {
+export const scope = await alchemy("demo", {
   password: process.env.ALCHEMY_PASSWORD,
 })
 const NAME_PREFIX = `${app.name}-${scope.name}-${scope.stage}`
 
-// =============================================================================
-// Web App
-// =============================================================================
+// -----------------------------------------------------------------------------
+// DATABASES
+// -----------------------------------------------------------------------------
 
-const WEBSITE_NAME = "demo"
+// subscription-db: Main database for subscription and order data
+const DB_NAME = "db"
+const db = await D1Database(DB_NAME, {
+  name: `${NAME_PREFIX}-${DB_NAME}`,
+  migrationsDir: path.join(import.meta.dirname, "migrations"),
+  primaryLocationHint: "wnam",
+  readReplication: {
+    mode: "auto",
+  },
+})
+
+// -----------------------------------------------------------------------------
+// Web App
+// -----------------------------------------------------------------------------
+
+const WEBSITE_NAME = "website"
 export const website = await Vite(WEBSITE_NAME, {
   name: `${NAME_PREFIX}-${WEBSITE_NAME}`,
-  entrypoint: "src/worker.ts",
+  entrypoint: path.join(import.meta.dirname, "src", "api", "main.ts"),
   dev: {
     // Envs to bundle in frontend code.
     // Need to be prefixed with `VITE_` to be included.
@@ -59,6 +76,7 @@ export const website = await Vite(WEBSITE_NAME, {
     COUCH_WEBHOOK_SECRET: alchemy.secret(process.env.COUCH_WEBHOOK_SECRET),
     COUCH_API_KEY: alchemy.secret(process.env.COUCH_API_KEY),
     COUCH_API_URL: api.url ?? "http://localhost:3000",
+    DB: db,
   },
 })
 
