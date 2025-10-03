@@ -11,13 +11,7 @@ export default defineConfig({
     react(),
     tailwindcss(),
     tsconfigPaths(),
-    nodePolyfills({
-      // Optional: Configure which polyfills to include/exclude
-      // For example, to only polyfill Buffer:
-      include: ["buffer"],
-      // Or to exclude specific ones:
-      // exclude: ['fs', 'path'],
-    }),
+    nodePolyfills({ include: ["buffer"] }),
   ],
   envDir: "../",
   server: {

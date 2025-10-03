@@ -28,7 +28,7 @@ bun dev
 couch-poc/
 ├── apps/
 │ ├── backend/      Offchain infra handling stablecoins subscriptions
-│ └── demo/.        Web application that rely on backend
+│ └── demo/         Web application that rely on backend
 └── ...             Monorepo configuration files
 ```
 

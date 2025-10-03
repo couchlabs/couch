@@ -145,7 +145,7 @@ transactions       -- Blockchain transactions
 
 ## DEV Endpoints
 
-- `GET http://localhost:3100/__scheduled` - Trigger order schedulers to process due recurring payments
+- `GET http://localhost:3100/__scheduled` - Trigger order schedulers to process due recurring payments (Demo app include usufel setting UI to manually or automatically trigger)
 
 ## DEV Resources
 

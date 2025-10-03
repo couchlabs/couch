@@ -59,6 +59,8 @@ const db = await D1Database(DB_NAME, {
 // Web App
 // -----------------------------------------------------------------------------
 
+if (!api.url) throw new Error(`${api.name} didn't expose url`)
+
 const WEBSITE_NAME = "website"
 export const website = await Vite(WEBSITE_NAME, {
   name: `${NAME_PREFIX}-${WEBSITE_NAME}`,
@@ -75,7 +77,7 @@ export const website = await Vite(WEBSITE_NAME, {
   bindings: {
     COUCH_WEBHOOK_SECRET: alchemy.secret(process.env.COUCH_WEBHOOK_SECRET),
     COUCH_API_KEY: alchemy.secret(process.env.COUCH_API_KEY),
-    COUCH_API_URL: api.url ?? "http://localhost:3000",
+    COUCH_API_URL: api.url,
     DB: db,
   },
 })
