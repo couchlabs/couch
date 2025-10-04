@@ -30,6 +30,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip"
 import { getSubscription, getSubscriptionEvents } from "@/lib/api"
+import { formatPeriod } from "@/lib/formatPeriod"
 import type {
   Subscription,
   WebhookEvent,
@@ -330,9 +331,25 @@ export function SubscriptionDetails({
                   </Tooltip>
                 </TooltipProvider>
               </p>
+              {subscription?.amount && (
+                <p className="text-sm">
+                  <span className="font-medium">Amount:</span>{" "}
+                  <span className="text-xs opacity-90">
+                    {subscription.amount} USDC
+                  </span>
+                </p>
+              )}
+              {subscription?.period_in_seconds && (
+                <p className="text-sm">
+                  <span className="font-medium">Renewal:</span>{" "}
+                  <span className="text-xs opacity-90">
+                    Every {formatPeriod(subscription.period_in_seconds)}
+                  </span>
+                </p>
+              )}
               {subscriptionId && (
                 <p className="text-sm">
-                  <span className="font-medium">Subscription ID:</span>{" "}
+                  <span className="font-medium">ID:</span>{" "}
                   <span className="text-xs font-mono opacity-90 break-all">
                     {subscriptionId}
                   </span>
