@@ -11,7 +11,6 @@ couch/
 ├── apps/
 │ ├── backend/      Offchain orchestrator for recurring payments
 │ └── demo/         Playground application for testing
-└── ...             Monorepo configuration files
 ```
 
 ## Getting started
