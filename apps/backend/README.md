@@ -33,11 +33,11 @@ A stablecoin subscription payment system built on Cloudflare Edge Infrastructure
 
 ```
   ┌──────────────┐      ┌──────────────┐      ┌──────────────┐
-  │  Scheduler   │─────▶│    Queue     │─────▶│  Processor   │
+  │  Scheduler   │─────▶│    Queue     │─────▶│   Consumer   │
   └──────────────┘      └──────────────┘      └──────────────┘
          │                      │                     │
-         │ Find due             │ Pass                │ Charge via
-         │ orders               │ orderId             │ Blockchain
+         │ Find due             │ Pass                │ Execute
+         │ orders               │ orderId             │ charge
          ▼                      ▼                     ▼
   ┌──────────────┐                            ┌──────────────┐
   │   Database   │                            │  Blockchain  │
@@ -60,7 +60,7 @@ src/
 │   └── middleware/   # Auth middleware
 ├── services/         # Business logic
 ├── repositories/     # Data access layer
-├── providers/        # Payment provider abstractions
+├── providers/        # Onchain provider abstractions
 ├── consumers/        # Queue consumers
 ├── schedulers/       # Cron job schedulers
 ├── errors/           # Error handling

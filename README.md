@@ -1,6 +1,8 @@
 # Couch
 
-[Subscriptions for a new era of payments](https://cou.ch).
+Stablecoin recurring billing made easy.
+
+Couch is an offchain orchestrator for SpendPermission-based recurring payments. While SpendPermissions provide onchain authorization primitives, Couch handles the coordination layer: scheduling charges, managing subscription state, processing payments and delivering webhooks to merchants. 
 
 ## Getting started
 
@@ -27,10 +29,10 @@ bun dev
 ## What's in this repo
 
 ```
-couch-poc/
+couch/
 ├── apps/
 │ ├── backend/      Offchain infra handling stablecoins subscriptions
-│ └── demo/         Web application that rely on backend
+│ └── demo/         Playground application for testing
 └── ...             Monorepo configuration files
 ```
 
@@ -47,3 +49,8 @@ bun faucet
 - Offchain: [Cloudflare](https://www.cloudflare.com/developer-platform/products/)
 - Onchain: [Coinbase](https://www.coinbase.com/developer-platform)
 - IAC: [Alchemy](https://alchemy.run/)
+
+## Resources
+
+  - [Couch](https://cou.ch) - Join the waitlist to be among the first to accept stablecoin subscriptions
+  - [SpendPermission Smart Contract](https://github.com/coinbase/spend-permissions) - Onchain authorization primitives powering Couch
