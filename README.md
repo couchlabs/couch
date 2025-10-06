@@ -2,7 +2,17 @@
 
 Stablecoin recurring billing made easy.
 
-Couch is an offchain orchestrator for SpendPermission-based recurring payments. While SpendPermissions provide onchain authorization primitives, Couch handles the coordination layer: scheduling charges, managing subscription state, processing payments and delivering webhooks to merchants. 
+Couch is an offchain orchestrator for SpendPermission-based recurring payments. While SpendPermissions provide onchain authorization primitives, Couch handles the coordination layer: scheduling charges, managing subscription state, processing payments and delivering webhooks to merchants.
+
+## What's in this repo
+
+```
+couch/
+├── apps/
+│ ├── backend/      Offchain orchestrator for recurring payments
+│ └── demo/         Playground application for testing
+└── ...             Monorepo configuration files
+```
 
 ## Getting started
 
@@ -26,9 +36,9 @@ Configure your backend `CDP_*` environment variables
 bun dev --filter=backend
 ```
 
-4. **Create an account**
+4. **Create an account and register webhook**
 
-Register your wallet address to get an API key:
+First, create your account and get an API key:
 
 ```bash
 curl -X PUT http://localhost:3000/api/account \
@@ -36,13 +46,7 @@ curl -X PUT http://localhost:3000/api/account \
   -d '{"address": "YOUR_WALLET_ADDRESS"}'
 ```
 
-Copy the returned API key and add it to your `.env`:
-
-```
-COUCH_API_KEY=your_api_key_here
-```
-
-5. **Register the demo webhook**
+Use the returned `api_key` to register the webhook:
 
 ```bash
 curl -X PUT http://localhost:3000/api/webhook \
@@ -51,9 +55,12 @@ curl -X PUT http://localhost:3000/api/webhook \
   -d '{"url": "http://localhost:8000/api/webhook"}'
 ```
 
-Copy the returned webhook secret and add it to your `.env`:
+5. **Update your environment**
+
+Add both values to your `.env`:
 
 ```
+COUCH_API_KEY=your_api_key_here
 COUCH_WEBHOOK_SECRET=your_webhook_secret_here
 ```
 
@@ -68,16 +75,6 @@ Your demo should now be fully functional at `http://localhost:8000`
 **Notes:**
 > - You can start both backend and demo together with just `bun dev`
 > - For backend-specific instructions (testing, endpoints, architecture), see the [Backend README](./apps/backend/README.md).
-
-## What's in this repo
-
-```
-couch/
-├── apps/
-│ ├── backend/      Offchain infra handling stablecoins subscriptions
-│ └── demo/         Playground application for testing
-└── ...             Monorepo configuration files
-```
 
 ## Scripts
 
