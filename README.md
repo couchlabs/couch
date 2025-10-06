@@ -6,25 +6,68 @@ Couch is an offchain orchestrator for SpendPermission-based recurring payments. 
 
 ## Getting started
 
-1. Install dependencies
+1. **Install dependencies**
 
 ```bash
 bun install
 ```
 
-2. Add your secrets & envs
+2. **Add your secrets & envs**
 
 ```bash
 cp .env.example .env
 ```
 
-3. Run dev
+Configure your backend `CDP_*` environment variables
+
+3. **Start the backend**
 
 ```bash
-bun dev
+bun dev --filter=backend
 ```
 
-> **Note:** For backend-specific instructions (testing, endpoints, architecture), see the [Backend README](./apps/backend/README.md).
+4. **Create an account**
+
+Register your wallet address to get an API key:
+
+```bash
+curl -X PUT http://localhost:3000/api/account \
+  -H "Content-Type: application/json" \
+  -d '{"address": "YOUR_WALLET_ADDRESS"}'
+```
+
+Copy the returned API key and add it to your `.env`:
+
+```
+COUCH_API_KEY=your_api_key_here
+```
+
+5. **Register the demo webhook**
+
+```bash
+curl -X PUT http://localhost:3000/api/webhook \
+  -H "Content-Type: application/json" \
+  -H "X-API-Key: YOUR_API_KEY" \
+  -d '{"url": "http://localhost:8000/api/webhook"}'
+```
+
+Copy the returned webhook secret and add it to your `.env`:
+
+```
+COUCH_WEBHOOK_SECRET=your_webhook_secret_here
+```
+
+6. **Start the demo**
+
+```bash
+bun dev --filter=demo
+```
+
+Your demo should now be fully functional at `http://localhost:8000`
+
+**Notes:**
+> - You can start both backend and demo together with just `bun dev`
+> - For backend-specific instructions (testing, endpoints, architecture), see the [Backend README](./apps/backend/README.md).
 
 ## What's in this repo
 
