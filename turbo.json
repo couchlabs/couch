@@ -2,18 +2,14 @@
   "$schema": "https://turborepo.com/schema.json",
   "ui": "tui",
   "tasks": {
-    "deploy": {
-      "dependsOn": ["^deploy"],
-      "cache": false
-    },
-    "dev": {
+    "infra:dev": {
       "persistent": true,
       "cache": false
     },
-    "backend#destroy": {
+    "infra:destroy": {
       "cache": false
     },
-    "frontend#destroy": {
+    "db:generate": {
       "cache": false
     }
   }

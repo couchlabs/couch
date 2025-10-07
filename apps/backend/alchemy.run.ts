@@ -1,11 +1,11 @@
 import path from "node:path"
-
 import alchemy from "alchemy"
 import { D1Database, Queue, Worker } from "alchemy/cloudflare"
 import { EvmAccount, EvmSmartAccount } from "alchemy/coinbase"
 import type { Stage } from "@/constants/env.constants"
 import type { Provider } from "@/providers/provider.interface"
 import type { WebhookEvent } from "@/services/webhook.service"
+import drizzleConfig from "./drizzle.config"
 
 // =============================================================================
 // CONFIGURATION & CONVENTIONS
@@ -82,7 +82,8 @@ const compatibilityFlags = ["nodejs_compat"]
 const DB_NAME = "db"
 const db = await D1Database(DB_NAME, {
   name: `${NAME_PREFIX}-${DB_NAME}`,
-  migrationsDir: path.join(import.meta.dirname, "migrations"),
+  migrationsDir: path.join(import.meta.dirname, drizzleConfig.out),
+  migrationsTable: drizzleConfig.migrations?.table,
   primaryLocationHint: "wnam",
   readReplication: {
     mode: "auto",

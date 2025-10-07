@@ -1,5 +1,11 @@
 {
-  "include": ["alchemy.run.ts", "src/**/*.ts", "types/**/*.ts"],
+  "include": [
+    "alchemy.run.ts",
+    "drizzle.config.ts",
+    "database/**/*.ts",
+    "src/**/*.ts",
+    "types/**/*.ts"
+  ],
   "exclude": ["node_modules", "lib"],
   "compilerOptions": {
     "rootDir": ".",

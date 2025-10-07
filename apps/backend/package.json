@@ -3,10 +3,9 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "dev": "alchemy dev --stage dev --adopt --app backend",
-    "deploy": "alchemy deploy --adopt --app backend",
-    "destroy": "alchemy destroy --app backend",
-    "check": "tsc --noEmit"
+    "infra:dev": "alchemy dev --stage dev --adopt --app backend",
+    "infra:destroy": "alchemy destroy --app backend",
+    "db:generate": "drizzle-kit generate"
   },
   "exports": {
     "./alchemy": {
@@ -21,14 +20,16 @@
   "dependencies": {
     "@base-org/account": "catalog:coinbase",
     "@coinbase/cdp-sdk": "catalog:coinbase",
-    "viem": "^2.37.8",
-    "hono": "^4.9.8"
+    "viem": "^2.38.0",
+    "hono": "^4.9.10",
+    "drizzle-orm": "^0.44.6"
   },
   "devDependencies": {
     "alchemy": "catalog:",
     "typescript": "catalog:",
     "miniflare": "catalog:cloudflare",
     "@cloudflare/workers-types": "catalog:cloudflare",
-    "@types/node": "^24.5.2"
+    "@types/node": "catalog:cloudflare",
+    "drizzle-kit": "^0.31.5"
   }
 }

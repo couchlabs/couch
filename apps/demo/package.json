@@ -3,9 +3,8 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "dev": "alchemy dev --stage dev --adopt --app demo",
-    "deploy": "alchemy deploy --adopt --app frontend",
-    "destroy": "alchemy destroy --app frontend"
+    "infra:dev": "alchemy dev --stage dev --adopt --app demo",
+    "infra:destroy": "alchemy destroy --app demo"
   },
   "dependencies": {
     "@base-org/account": "catalog:coinbase",
