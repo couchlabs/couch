@@ -1,6 +1,6 @@
 # Couch
 
-Stablecoin recurring billing made easy.
+Stablecoin recurring billing infrastructure.
 
 Couch is an offchain orchestrator for SpendPermission-based recurring payments. While SpendPermissions provide onchain authorization primitives, Couch handles the coordination layer: scheduling charges, managing subscription state, processing payments and delivering webhooks to merchants.
 
