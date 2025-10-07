@@ -285,7 +285,7 @@ export class WebhookService {
     await this.emitSubscriptionUpdated({
       accountAddress: params.accountAddress,
       subscriptionId: params.subscriptionId,
-      subscriptionStatus: SubscriptionStatus.INACTIVE,
+      subscriptionStatus: SubscriptionStatus.UNPAID,
       subscriptionAmount: params.amount, // Use order amount as subscription metadata
       subscriptionPeriodInSeconds: params.periodInSeconds, // Use order period as subscription metadata
       orderNumber: params.orderNumber,
@@ -311,7 +311,7 @@ export class WebhookService {
     await this.emitSubscriptionUpdated({
       accountAddress: params.accountAddress,
       subscriptionId: params.subscriptionId,
-      subscriptionStatus: SubscriptionStatus.INACTIVE,
+      subscriptionStatus: SubscriptionStatus.INCOMPLETE,
       subscriptionAmount: params.amount,
       subscriptionPeriodInSeconds: params.periodInSeconds,
       success: false,

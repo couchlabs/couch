@@ -170,11 +170,12 @@ export class OrderService {
         rawError: rawError,
       })
 
-      // Mark subscription as inactive (v1: no retries)
-      log.info("Marking subscription as inactive due to payment failure")
+      // Mark subscription as unpaid (Phase 1: no retries, terminal state)
+      // Phase 2 will change this to PAST_DUE with retry logic
+      log.info("Marking subscription as unpaid due to payment failure")
       await this.subscriptionRepository.updateSubscription({
         subscriptionId: order.subscriptionId,
-        status: "inactive",
+        status: SubscriptionStatus.UNPAID,
       })
 
       return {

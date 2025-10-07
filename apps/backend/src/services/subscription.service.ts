@@ -109,15 +109,15 @@ export class SubscriptionService {
   }
 
   /**
-   * Marks a subscription as inactive after a failed charge.
+   * Marks a subscription as incomplete after a failed charge.
    * Used in error handling flows.
    */
-  async markSubscriptionInactive(params: {
+  async markSubscriptionIncomplete(params: {
     subscriptionId: Hash
     orderId: number
     reason: string
   }): Promise<void> {
-    await this.subscriptionRepository.markSubscriptionInactive(params)
+    await this.subscriptionRepository.markSubscriptionIncomplete(params)
   }
 
   async validateId(params: ValidateSubscriptionIdParams): Promise<void> {
@@ -541,14 +541,17 @@ export class SubscriptionService {
             amount: chargeAmount,
           })
 
-          // COMPENSATING ACTION: Mark subscription and order as inactive/failed
-          log.info("Marking subscription as inactive due to payment failure", {
-            subscriptionId,
-            errorCode,
-            orderId: orderId,
-          })
+          // COMPENSATING ACTION: Mark subscription and order as incomplete/failed
+          log.info(
+            "Marking subscription as incomplete due to payment failure",
+            {
+              subscriptionId,
+              errorCode,
+              orderId: orderId,
+            },
+          )
 
-          await this.subscriptionRepository.markSubscriptionInactive({
+          await this.subscriptionRepository.markSubscriptionIncomplete({
             subscriptionId,
             orderId: orderId,
             reason: chargeError.message,
@@ -610,7 +613,7 @@ export class SubscriptionService {
     } catch (error) {
       op.failure(error)
 
-      // No cleanup needed - subscription already marked as inactive
+      // No cleanup needed - subscription already marked as incomplete
       // On-chain permission will orphan (harmless)
 
       throw error

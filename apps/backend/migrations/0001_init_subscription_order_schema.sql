@@ -8,7 +8,7 @@
 -- Core subscription state (minimal - onchain is source of truth)
 CREATE TABLE IF NOT EXISTS subscriptions (
   subscription_id TEXT PRIMARY KEY,  -- This IS the permission hash from onchain
-  status TEXT NOT NULL CHECK(status IN ('processing', 'active', 'inactive')),
+  status TEXT NOT NULL CHECK(status IN ('processing', 'active', 'incomplete', 'past_due', 'canceled', 'unpaid')),
   owner_address TEXT NOT NULL,  -- Couch's smart wallet address (the spender)
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   modified_at DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -21,9 +21,10 @@ CREATE TABLE IF NOT EXISTS orders (
   type TEXT NOT NULL CHECK(type IN ('initial', 'recurring', 'retry')),
   due_at DATETIME NOT NULL,
   amount TEXT NOT NULL,  -- In USDC base units
-  status TEXT NOT NULL CHECK(status IN ('pending', 'processing', 'paid', 'failed')),
+  status TEXT NOT NULL CHECK(status IN ('pending', 'processing', 'paid', 'failed', 'pending_retry')),
   attempts INTEGER DEFAULT 0,
   parent_order_id INTEGER,  -- Links retry orders to original failed order
+  next_retry_at DATETIME,  -- For retry orders: when to attempt next retry
   failure_reason TEXT,  -- Mapped error code: 'INSUFFICIENT_SPENDING_ALLOWANCE', 'PERMISSION_EXPIRED', etc.
   raw_error TEXT,  -- Original error message from the blockchain/service for debugging
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -68,6 +69,9 @@ CREATE INDEX idx_orders_parent ON orders(parent_order_id);
 CREATE INDEX idx_subscriptions_status ON subscriptions(status);
 CREATE INDEX idx_orders_status ON orders(status);
 CREATE INDEX idx_transactions_status ON transactions(status);
+
+-- Dunning scheduler (for retry orders)
+CREATE INDEX idx_orders_retry_due ON orders(next_retry_at, status) WHERE next_retry_at IS NOT NULL;
 
 -- Account lookup
 CREATE INDEX idx_subscriptions_owner ON subscriptions(owner_address);

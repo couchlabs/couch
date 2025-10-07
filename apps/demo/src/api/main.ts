@@ -149,7 +149,13 @@ interface WebhookEvent {
   data: {
     subscription: {
       id: string // subscription ID (hash)
-      status: "active" | "inactive" | "processing"
+      status:
+        | "processing"
+        | "active"
+        | "incomplete"
+        | "past_due"
+        | "canceled"
+        | "unpaid"
       amount: string // Recurring charge amount (always present)
       period_in_seconds: number // Billing period (always present)
     }

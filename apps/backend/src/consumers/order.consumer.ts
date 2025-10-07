@@ -88,7 +88,7 @@ export default {
             })
 
             // ACK the message even on payment failure (v1: no retries)
-            // The subscription has been marked as inactive
+            // The subscription has been marked as unpaid
             message.ack()
 
             op.success({

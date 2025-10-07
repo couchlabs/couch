@@ -193,8 +193,14 @@ export function SubscriptionDetails({
         return <Check className="h-4 w-4 text-green-600" />
       case "processing":
         return <Loader2 className="h-4 w-4 text-yellow-600 animate-spin" />
-      case "inactive":
+      case "incomplete":
         return <X className="h-4 w-4 text-red-600" />
+      case "past_due":
+        return <X className="h-4 w-4 text-orange-600" />
+      case "unpaid":
+        return <X className="h-4 w-4 text-red-600" />
+      case "canceled":
+        return <X className="h-4 w-4 text-gray-600" />
       default:
         return null
     }
@@ -324,7 +330,7 @@ export function SubscriptionDetails({
                         Indicates whether the subscription charge was
                         successfully executed for the current period. If the
                         onchain permission is revoked by the user, the
-                        subscription will become inactive at the next period
+                        subscription will become canceled at the next period
                         when it attempts to charge.
                       </p>
                     </TooltipContent>

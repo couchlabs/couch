@@ -54,7 +54,12 @@ export function SubscriptionsList({
           return (
             <Loader2 className="h-4 w-4 text-primary-foreground animate-spin" />
           )
-        case "inactive":
+        case "incomplete":
+        case "unpaid":
+          return <X className="h-4 w-4 text-primary-foreground" />
+        case "past_due":
+          return <X className="h-4 w-4 text-primary-foreground" />
+        case "canceled":
           return <X className="h-4 w-4 text-primary-foreground" />
         default:
           return <Circle className="h-4 w-4 text-primary-foreground/60" />
@@ -66,8 +71,14 @@ export function SubscriptionsList({
         return <Check className="h-4 w-4 text-green-600" />
       case "processing":
         return <Loader2 className="h-4 w-4 text-yellow-600 animate-spin" />
-      case "inactive":
+      case "incomplete":
         return <X className="h-4 w-4 text-red-600" />
+      case "past_due":
+        return <X className="h-4 w-4 text-orange-600" />
+      case "unpaid":
+        return <X className="h-4 w-4 text-red-600" />
+      case "canceled":
+        return <X className="h-4 w-4 text-gray-600" />
       default:
         return <Circle className="h-4 w-4 text-gray-400" />
     }

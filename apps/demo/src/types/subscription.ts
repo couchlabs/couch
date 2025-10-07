@@ -1,6 +1,12 @@
 export interface Subscription {
   id: string
-  status: "processing" | "active" | "inactive"
+  status:
+    | "processing"
+    | "active"
+    | "incomplete"
+    | "past_due"
+    | "canceled"
+    | "unpaid"
   transaction_hash: string | null
   period_in_seconds: number | null
   amount: string | null
@@ -22,7 +28,13 @@ export interface WebhookEventData {
   data: {
     subscription: {
       id: string
-      status: "active" | "inactive" | "processing"
+      status:
+        | "processing"
+        | "active"
+        | "incomplete"
+        | "past_due"
+        | "canceled"
+        | "unpaid"
       amount: string // Always present - immutable subscription terms
       period_in_seconds: number // Always present - immutable subscription terms
     }

@@ -63,10 +63,10 @@ subscriptionRoutes.post("/", subscriptionBody(), async (ctx) => {
         // 4. Fire activation success webhook
         await webhookService.emitSubscriptionActivated(activation)
       } catch (error) {
-        // 5. Mark subscription as inactive in DB
+        // 5. Mark subscription as incomplete in DB
         const errorMessage =
           error instanceof Error ? error.message : "activation_failed"
-        await subscriptionService.markSubscriptionInactive({
+        await subscriptionService.markSubscriptionIncomplete({
           subscriptionId,
           orderId,
           reason: errorMessage,

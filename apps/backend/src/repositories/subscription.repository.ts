@@ -148,7 +148,7 @@ export interface ExecuteSubscriptionActivationParams {
   }
 }
 
-export interface MarkSubscriptionInactiveParams {
+export interface MarkSubscriptionIncompleteParams {
   subscriptionId: Hash
   orderId: number
   reason: string
@@ -502,22 +502,22 @@ export class SubscriptionRepository {
   }
 
   /**
-   * COMPENSATING ACTION: Mark subscription as inactive
+   * COMPENSATING ACTION: Mark subscription as incomplete
    * Used when charge fails after subscription creation
    */
-  async markSubscriptionInactive(
-    params: MarkSubscriptionInactiveParams,
+  async markSubscriptionIncomplete(
+    params: MarkSubscriptionIncompleteParams,
   ): Promise<void> {
     const { subscriptionId, orderId, reason } = params
     await this.db.batch([
-      // Mark subscription as inactive
+      // Mark subscription as incomplete
       this.db
         .prepare(
           `UPDATE subscriptions
            SET status = ?, modified_at = CURRENT_TIMESTAMP
            WHERE subscription_id = ?`,
         )
-        .bind(SubscriptionStatus.INACTIVE, subscriptionId),
+        .bind(SubscriptionStatus.INCOMPLETE, subscriptionId),
       // Mark order as failed
       this.db
         .prepare(
