@@ -109,7 +109,7 @@ app.post("/api/webhook", async (c) => {
   return c.text("", 200)
 })
 
-// Simple catch-all proxy that inject X-API-Key headers with COUCH_API_KEY
+// Simple catch-all proxy that injects Authorization: Bearer header with COUCH_API_KEY
 app.all("/proxy/*", async (c) => {
   const path = c.req.path.replace(/^\/proxy\//, "")
   const clientIp =
@@ -130,8 +130,7 @@ app.all("/proxy/*", async (c) => {
       ...c.req.header(),
       "X-Forwarded-For": clientIp,
       "X-Forwarded-Host": c.req.header("host"),
-      "X-API-Key": c.env.COUCH_API_KEY,
-      Authorization: undefined,
+      Authorization: `Bearer ${c.env.COUCH_API_KEY}`,
     },
   })
 })

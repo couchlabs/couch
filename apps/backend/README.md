@@ -88,11 +88,11 @@ transactions       -- Blockchain transactions
 - `PUT /api/account` - Create account or rotate API key
   - Requires: `account_address`
 - `POST /api/subscriptions` - Register subscription (Bind Onchain Permission to Offchain Infra)
-  - Requires API key authentication
+  - Requires: `Authorization: Bearer <api_key>` header
   - Requires: `subscription_id`
   - Requires: `provider` (currently supports: "base")
 - `PUT /api/webhook` - Set webhook URL for events
-  - Requires API key authentication
+  - Requires: `Authorization: Bearer <api_key>` header
   - Requires: `url`
 
 ## Error Codes

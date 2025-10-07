@@ -123,8 +123,8 @@
                 "value": "application/json"
               },
               {
-                "key": "X-API-Key",
-                "value": "{{apiKey}}",
+                "key": "Authorization",
+                "value": "Bearer {{apiKey}}",
                 "description": "API key from account creation"
               }
             ],
@@ -155,8 +155,8 @@
                 "value": "application/json"
               },
               {
-                "key": "X-API-Key",
-                "value": "{{apiKey}}",
+                "key": "Authorization",
+                "value": "Bearer {{apiKey}}",
                 "description": "API key from account creation"
               }
             ],

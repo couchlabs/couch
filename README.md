@@ -50,7 +50,7 @@ Use the returned `api_key` to register the webhook:
 ```bash
 curl -X PUT http://localhost:3000/api/webhook \
   -H "Content-Type: application/json" \
-  -H "X-API-Key: YOUR_API_KEY" \
+  -H "Authorization: Bearer YOUR_API_KEY" \
   -d '{"url": "http://localhost:8000/api/webhook"}'
 ```
 
