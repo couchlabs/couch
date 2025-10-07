@@ -13,14 +13,15 @@ export interface AuthContext {
 
 /**
  * API Key authentication middleware
- * Validates X-API-Key header and adds account address to context
+ * Validates Authorization: Bearer header and adds account address to context
  */
 export const apiKeyAuth = (): MiddlewareHandler<{
   Bindings: WorkerEnv
   Variables: { auth: AuthContext }
 }> => {
   return async function apiKeyAuthHandler(c, next) {
-    const apiKey = c.req.header("X-API-Key")
+    const authHeader = c.req.header("Authorization")
+    const apiKey = authHeader?.replace("Bearer ", "")
 
     if (!apiKey) {
       throw new HTTPError(401, ErrorCode.UNAUTHORIZED, "Missing API key")
