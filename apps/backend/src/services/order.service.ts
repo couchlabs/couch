@@ -1,5 +1,9 @@
 import type { Hash } from "viem"
-import { OrderStatus, OrderType } from "@/constants/subscription.constants"
+import {
+  OrderStatus,
+  OrderType,
+  SubscriptionStatus,
+} from "@/constants/subscription.constants"
 import { getPaymentErrorCode } from "@/errors/subscription.errors"
 import { createLogger } from "@/lib/logger"
 import type { Provider } from "@/providers/provider.interface"

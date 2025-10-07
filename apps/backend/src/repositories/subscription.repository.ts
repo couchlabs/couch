@@ -553,7 +553,12 @@ export class SubscriptionRepository {
                   (SELECT provider_id FROM subscriptions WHERE subscription_id = orders.subscription_id) as provider_id,
                   amount, attempts`,
       )
-      .bind(OrderStatus.PROCESSING, OrderStatus.PENDING, "active", limit)
+      .bind(
+        OrderStatus.PROCESSING,
+        OrderStatus.PENDING,
+        SubscriptionStatus.ACTIVE,
+        limit,
+      )
       .all<{
         id: number
         subscription_id: string

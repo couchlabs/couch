@@ -9,6 +9,7 @@ import {
   ChevronDown,
   ChevronRight,
   Circle,
+  Copy,
   ExternalLink,
   HelpCircle,
   Loader2,
@@ -60,6 +61,7 @@ export function SubscriptionDetails({
   } | null>(null)
   const [onchainLoading, setOnchainLoading] = useState(false)
   const [revokeLoading, setRevokeLoading] = useState(false)
+  const [copiedEventId, setCopiedEventId] = useState<number | null>(null)
 
   useEffect(() => {
     if (!subscriptionId) {
@@ -186,6 +188,19 @@ export function SubscriptionDetails({
       setRevokeLoading(false)
     }
   }, [subscriptionId, fetchOnchainStatus, onchainStatus])
+
+  const handleCopyPayload = useCallback(
+    async (eventId: number, payload: string) => {
+      try {
+        await navigator.clipboard.writeText(payload)
+        setCopiedEventId(eventId)
+        setTimeout(() => setCopiedEventId(null), 2000)
+      } catch (error) {
+        console.error("Failed to copy to clipboard:", error)
+      }
+    },
+    [],
+  )
 
   const _getStatusIcon = (status: Subscription["status"]) => {
     switch (status) {
@@ -590,29 +605,90 @@ export function SubscriptionDetails({
                             const txHash = data.data.transaction?.hash
 
                             return (
-                              <div>
+                              <div className="space-y-3">
                                 <pre className="text-xs font-mono overflow-x-auto whitespace-pre-wrap break-all">
                                   {JSON.stringify(data, null, 2)}
                                 </pre>
-                                {txHash && (
-                                  <a
-                                    href={`https://sepolia.basescan.org/tx/${txHash}`}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="inline-flex items-center gap-1 text-xs text-primary hover:underline mt-2 cursor-pointer"
-                                    onClick={(e) => e.stopPropagation()}
+                                {/* Action Bar */}
+                                <div className="flex items-center gap-2 pt-2 border-t">
+                                  <Button
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      handleCopyPayload(
+                                        event.id,
+                                        event.event_data,
+                                      )
+                                    }}
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-8"
                                   >
-                                    View on BaseScan
-                                    <ExternalLink className="h-3 w-3" />
-                                  </a>
-                                )}
+                                    {copiedEventId === event.id ? (
+                                      <>
+                                        <Check className="h-3.5 w-3.5 mr-1.5" />
+                                        Copied
+                                      </>
+                                    ) : (
+                                      <>
+                                        <Copy className="h-3.5 w-3.5 mr-1.5" />
+                                        Copy
+                                      </>
+                                    )}
+                                  </Button>
+                                  {txHash && (
+                                    <Button
+                                      onClick={(e) => {
+                                        e.stopPropagation()
+                                        window.open(
+                                          `https://sepolia.basescan.org/tx/${txHash}`,
+                                          "_blank",
+                                        )
+                                      }}
+                                      variant="outline"
+                                      size="sm"
+                                      className="h-8"
+                                    >
+                                      View on BaseScan
+                                      <ExternalLink className="h-3 w-3 ml-1.5" />
+                                    </Button>
+                                  )}
+                                </div>
                               </div>
                             )
                           } catch {
                             return (
-                              <pre className="text-xs font-mono overflow-x-auto whitespace-pre-wrap break-all">
-                                {event.event_data}
-                              </pre>
+                              <div className="space-y-3">
+                                <pre className="text-xs font-mono overflow-x-auto whitespace-pre-wrap break-all">
+                                  {event.event_data}
+                                </pre>
+                                {/* Action Bar */}
+                                <div className="flex items-center gap-2 pt-2 border-t">
+                                  <Button
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      handleCopyPayload(
+                                        event.id,
+                                        event.event_data,
+                                      )
+                                    }}
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-8"
+                                  >
+                                    {copiedEventId === event.id ? (
+                                      <>
+                                        <Check className="h-3.5 w-3.5 mr-1.5" />
+                                        Copied
+                                      </>
+                                    ) : (
+                                      <>
+                                        <Copy className="h-3.5 w-3.5 mr-1.5" />
+                                        Copy
+                                      </>
+                                    )}
+                                  </Button>
+                                </div>
+                              </div>
                             )
                           }
                         })()}
