@@ -170,6 +170,35 @@ export class WebhookService {
   }
 
   /**
+   * Generates HMAC signature for webhook payload
+   * Uses SHA-256 HMAC to sign the payload with the webhook secret
+   */
+  private async generateHMACSignature(
+    secret: string,
+    payload: string,
+  ): Promise<string> {
+    const encoder = new TextEncoder()
+    const key = await crypto.subtle.importKey(
+      "raw",
+      encoder.encode(secret),
+      { name: "HMAC", hash: "SHA-256" },
+      false,
+      ["sign"],
+    )
+
+    const signature = await crypto.subtle.sign(
+      "HMAC",
+      key,
+      encoder.encode(payload),
+    )
+
+    // Convert to hex string
+    return Array.from(new Uint8Array(signature))
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join("")
+  }
+
+  /**
    * Sets or updates the webhook URL for an account
    * Generates a new secret each time
    */
@@ -434,19 +463,28 @@ export class WebhookService {
         data: eventData,
       }
 
-      // Queue the webhook for delivery
+      // Pre-serialize and sign the webhook payload
+      const payload = JSON.stringify(event)
+      const signature = await this.generateHMACSignature(
+        webhook.secret,
+        payload,
+      )
+
+      // Queue the pre-signed webhook for delivery
       const message: WebhookQueueMessage = {
         url: webhook.url,
-        secret: webhook.secret,
-        event,
+        payload,
+        signature,
+        timestamp: event.created_at,
       }
 
       await this.webhookQueue.send(message)
 
-      log.info("Webhook event queued for delivery", {
+      log.info("Webhook event queued for delivery (pre-signed)", {
         eventType: event.type,
         url: webhook.url,
         accountAddress,
+        signaturePreview: `${signature.slice(0, 8)}...`,
       })
     } catch (error) {
       log.error("Failed to emit webhook event", { error })

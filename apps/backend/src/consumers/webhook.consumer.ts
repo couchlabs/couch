@@ -5,53 +5,21 @@ import type { WorkerEnv } from "@/types/api.env"
 const logger = createLogger("webhook.consumer")
 
 /**
- * Generates HMAC signature for webhook payload
- */
-async function generateHMACSignature(
-  secret: string,
-  payload: string,
-): Promise<string> {
-  const encoder = new TextEncoder()
-  const key = await crypto.subtle.importKey(
-    "raw",
-    encoder.encode(secret),
-    { name: "HMAC", hash: "SHA-256" },
-    false,
-    ["sign"],
-  )
-
-  const signature = await crypto.subtle.sign(
-    "HMAC",
-    key,
-    encoder.encode(payload),
-  )
-
-  // Convert to hex string
-  return Array.from(new Uint8Array(signature))
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("")
-}
-
-/**
  * Delivers a webhook to the specified URL
  */
 async function deliverWebhook(
   message: WebhookQueueMessage,
 ): Promise<{ success: boolean; status?: number; error?: string }> {
-  const { url, secret, event } = message
-  const payload = JSON.stringify(event)
+  const { url, payload, signature, timestamp } = message
 
   try {
-    // Generate HMAC signature
-    const signature = await generateHMACSignature(secret, payload)
-
-    // Attempt delivery
+    // Deliver pre-signed webhook
     const response = await fetch(url, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         "X-Webhook-Signature": `sha256=${signature}`,
-        "X-Webhook-Timestamp": event.created_at.toString(),
+        "X-Webhook-Timestamp": timestamp.toString(),
       },
       body: payload,
       signal: AbortSignal.timeout(10000), // 10 second timeout
@@ -86,14 +54,13 @@ export default {
     const log = logger.with({ consumer: "webhook-delivery" })
 
     for (const message of batch.messages) {
-      const { url, event } = message.body
+      const { url } = message.body
       const messageLog = log.with({
         messageId: message.id,
-        eventType: event.type,
         url,
       })
 
-      messageLog.info("Processing webhook delivery")
+      messageLog.info("Processing pre-signed webhook delivery")
 
       const result = await deliverWebhook(message.body)
 

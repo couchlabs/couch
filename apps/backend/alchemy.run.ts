@@ -4,7 +4,6 @@ import { D1Database, Queue, Worker } from "alchemy/cloudflare"
 import { EvmAccount, EvmSmartAccount } from "alchemy/coinbase"
 import type { Stage } from "@/constants/env.constants"
 import type { Provider } from "@/providers/provider.interface"
-import type { WebhookEvent } from "@/services/webhook.service"
 import drizzleConfig from "./drizzle.config"
 
 // =============================================================================
@@ -109,8 +108,9 @@ export const orderQueue = await Queue<OrderQueueMessage>(ORDER_QUEUE_NAME, {
 const WEBHOOK_QUEUE_NAME = "webhook-queue"
 export interface WebhookQueueMessage {
   url: string
-  secret: string
-  event: WebhookEvent
+  payload: string // Pre-serialized JSON
+  signature: string // Pre-computed sha256 HMAC hex
+  timestamp: number // Unix timestamp for header
 }
 export const webhookQueue = await Queue<WebhookQueueMessage>(
   WEBHOOK_QUEUE_NAME,
