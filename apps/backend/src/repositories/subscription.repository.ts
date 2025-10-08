@@ -63,6 +63,7 @@ export interface OrderDetails {
   status: string
   dueAt: string
   periodInSeconds: number
+  attempts: number
 }
 
 export interface RecordTransactionParams {
@@ -87,6 +88,28 @@ export interface UpdateSubscriptionParams {
 
 export interface DeleteSubscriptionDataParams {
   subscriptionId: Hash
+}
+
+export interface ScheduleRetryParams {
+  orderId: number
+  subscriptionId: Hash
+  nextRetryAt: string
+  failureReason?: string
+  rawError?: string
+}
+
+export interface ReactivateSubscriptionParams {
+  orderId: number
+  subscriptionId: Hash
+}
+
+export interface DueRetry {
+  id: number
+  subscriptionId: Hash
+  accountAddress: Address
+  amount: string
+  attempts: number
+  providerId: Provider
 }
 
 export interface CreateSubscriptionWithOrderParams {
@@ -215,6 +238,7 @@ export class SubscriptionRepository {
         status: schema.orders.status,
         dueAt: schema.orders.dueAt,
         periodInSeconds: schema.orders.periodLengthInSeconds,
+        attempts: schema.orders.attempts,
         accountAddress: schema.subscriptions.accountAddress,
       })
       .from(schema.orders)
@@ -237,6 +261,7 @@ export class SubscriptionRepository {
       status: result.status,
       dueAt: result.dueAt,
       periodInSeconds: result.periodInSeconds,
+      attempts: result.attempts,
     }
   }
 
@@ -545,5 +570,105 @@ export class SubscriptionRepository {
       })
       .where(eq(schema.subscriptions.subscriptionId, subscriptionId))
       .run()
+  }
+
+  /**
+   * TRANSACTION: Schedule payment retry atomically
+   * Updates order with next retry date and marks subscription as PAST_DUE
+   */
+  async scheduleRetry(params: ScheduleRetryParams): Promise<void> {
+    const { orderId, subscriptionId, nextRetryAt, failureReason, rawError } =
+      params
+
+    await this.db.batch([
+      // Increment attempts and set next retry date
+      this.db
+        .update(schema.orders)
+        .set({
+          attempts: sql`${schema.orders.attempts} + 1`,
+          nextRetryAt,
+          status: OrderStatus.FAILED,
+          failureReason: failureReason || null,
+          rawError: rawError || null,
+        })
+        .where(eq(schema.orders.id, orderId)),
+      // Mark subscription as past due
+      this.db
+        .update(schema.subscriptions)
+        .set({
+          status: SubscriptionStatus.PAST_DUE,
+          modifiedAt: sql`CURRENT_TIMESTAMP`,
+        })
+        .where(eq(schema.subscriptions.subscriptionId, subscriptionId)),
+    ])
+  }
+
+  /**
+   * TRANSACTION: Reactivate subscription after successful retry
+   * Clears next retry date and marks subscription as ACTIVE
+   */
+  async reactivateSubscription(
+    params: ReactivateSubscriptionParams,
+  ): Promise<void> {
+    const { orderId, subscriptionId } = params
+
+    await this.db.batch([
+      // Clear next retry date
+      this.db
+        .update(schema.orders)
+        .set({
+          nextRetryAt: null,
+        })
+        .where(eq(schema.orders.id, orderId)),
+      // Reactivate subscription
+      this.db
+        .update(schema.subscriptions)
+        .set({
+          status: SubscriptionStatus.ACTIVE,
+          modifiedAt: sql`CURRENT_TIMESTAMP`,
+        })
+        .where(eq(schema.subscriptions.subscriptionId, subscriptionId)),
+    ])
+  }
+
+  /**
+   * Get orders due for payment retry
+   * Uses Drizzle query builder for type safety
+   */
+  async getDueRetries(limit: number = 100): Promise<DueRetry[]> {
+    const result = await this.db
+      .select({
+        id: schema.orders.id,
+        subscriptionId: schema.orders.subscriptionId,
+        accountAddress: schema.subscriptions.accountAddress,
+        providerId: schema.subscriptions.providerId,
+        amount: schema.orders.amount,
+        attempts: schema.orders.attempts,
+      })
+      .from(schema.orders)
+      .innerJoin(
+        schema.subscriptions,
+        eq(schema.orders.subscriptionId, schema.subscriptions.subscriptionId),
+      )
+      .where(
+        and(
+          eq(schema.orders.status, OrderStatus.FAILED),
+          eq(schema.subscriptions.status, SubscriptionStatus.PAST_DUE),
+          sql`datetime(substr(${schema.orders.nextRetryAt}, 1, 19)) <= datetime('now', 'utc')`,
+        ),
+      )
+      .orderBy(sql`datetime(substr(${schema.orders.nextRetryAt}, 1, 19))`)
+      .limit(limit)
+      .all()
+
+    // Transform DB strings to domain types
+    return result.map((entry) => ({
+      id: entry.id,
+      subscriptionId: entry.subscriptionId as Hash,
+      accountAddress: entry.accountAddress as Address,
+      amount: entry.amount,
+      attempts: entry.attempts,
+      providerId: entry.providerId as Provider,
+    }))
   }
 }

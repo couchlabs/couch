@@ -1,5 +1,7 @@
 import type { Hash } from "viem"
 import {
+  calculateNextRetryDate,
+  DUNNING_CONFIG,
   OrderStatus,
   OrderType,
   SubscriptionStatus,
@@ -112,6 +114,15 @@ export class OrderService {
         status: OrderStatus.PAID,
       })
 
+      // Step 4.5: If this was a retry, reactivate subscription
+      if (order.status === OrderStatus.FAILED) {
+        log.info("Successful retry - reactivating subscription")
+        await this.subscriptionRepository.reactivateSubscription({
+          orderId,
+          subscriptionId: order.subscriptionId,
+        })
+      }
+
       // Step 5: Get next period from onchain (source of truth)
       log.info("Fetching next order period from onchain")
       const { subscription: onchainStatus } =
@@ -161,28 +172,72 @@ export class OrderService {
       const errorCode = getPaymentErrorCode(error)
       const rawError = error instanceof Error ? error.message : String(error)
 
-      // Mark order as failed with both mapped code and raw error
-      const orderResult = await this.subscriptionRepository.updateOrder({
-        id: orderId,
-        status: OrderStatus.FAILED,
-        failureReason: errorCode,
-        rawError: rawError,
-      })
+      // Dunning logic: Check if we should retry or mark as terminal failure
+      const currentAttempts = order.attempts || 0
 
-      // Mark subscription as unpaid (Phase 1: no retries, terminal state)
-      // Phase 2 will change this to PAST_DUE with retry logic
-      log.info("Marking subscription as unpaid due to payment failure")
-      await this.subscriptionRepository.updateSubscription({
-        subscriptionId: order.subscriptionId,
-        status: SubscriptionStatus.UNPAID,
-      })
+      if (currentAttempts < DUNNING_CONFIG.MAX_ATTEMPTS) {
+        // Schedule retry
+        const nextRetryDate = calculateNextRetryDate(
+          currentAttempts,
+          new Date(),
+        )
+        const attemptLabel =
+          DUNNING_CONFIG.RETRY_INTERVALS[currentAttempts]?.label ||
+          "retry attempt"
 
-      return {
-        success: false,
-        orderNumber: orderResult.orderNumber, // Always defined - updateOrder throws if not found
-        failureReason: errorCode,
-        failureMessage: rawError, // Include original SDK error message
-        nextOrderCreated: false,
+        log.info(
+          `Payment failed (attempt ${currentAttempts + 1}/${DUNNING_CONFIG.MAX_ATTEMPTS}) - scheduling ${attemptLabel}`,
+          {
+            nextRetryAt: nextRetryDate.toISOString(),
+          },
+        )
+
+        await this.subscriptionRepository.scheduleRetry({
+          orderId,
+          subscriptionId: order.subscriptionId,
+          nextRetryAt: nextRetryDate.toISOString(),
+          failureReason: errorCode,
+          rawError: rawError,
+        })
+
+        // Get updated order number after scheduleRetry
+        const orderDetails =
+          await this.subscriptionRepository.getOrderDetails(orderId)
+
+        return {
+          success: false,
+          orderNumber: orderDetails?.orderNumber || order.orderNumber,
+          failureReason: errorCode,
+          failureMessage: rawError,
+          nextOrderCreated: false,
+        }
+      } else {
+        // Max retries exhausted - mark as terminal failure
+        log.info(
+          `Payment failed after max retries (${DUNNING_CONFIG.MAX_ATTEMPTS}) - marking as unpaid`,
+        )
+
+        // Mark order as failed with both mapped code and raw error
+        const orderResult = await this.subscriptionRepository.updateOrder({
+          id: orderId,
+          status: OrderStatus.FAILED,
+          failureReason: errorCode,
+          rawError: rawError,
+        })
+
+        // Mark subscription as unpaid (terminal state)
+        await this.subscriptionRepository.updateSubscription({
+          subscriptionId: order.subscriptionId,
+          status: SubscriptionStatus.UNPAID,
+        })
+
+        return {
+          success: false,
+          orderNumber: orderResult.orderNumber,
+          failureReason: errorCode,
+          failureMessage: rawError,
+          nextOrderCreated: false,
+        }
       }
     }
   }

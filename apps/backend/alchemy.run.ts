@@ -168,6 +168,24 @@ export const orderScheduler = await Worker(ORDER_SCHEDULER_NAME, {
   dev: { port: 3100 },
 })
 
+// dunning-scheduler: Schedules payment retries for past_due subscriptions
+const DUNNING_SCHEDULER_NAME = "dunning-scheduler"
+export const dunningScheduler = await Worker(DUNNING_SCHEDULER_NAME, {
+  name: `${NAME_PREFIX}-${DUNNING_SCHEDULER_NAME}`,
+  entrypoint: path.join(
+    import.meta.dirname,
+    "src",
+    "schedulers",
+    "dunning-scheduler.ts",
+  ),
+  crons: ["0 * * * *"], // Run every hour
+  bindings: {
+    DB: db,
+    ORDER_QUEUE: orderQueue,
+  },
+  dev: { port: 3101 },
+})
+
 // -----------------------------------------------------------------------------
 // QUEUE CONSUMERS
 // -----------------------------------------------------------------------------
@@ -236,6 +254,7 @@ console.log({
   [API_NAME]: api,
   [DB_NAME]: db,
   [ORDER_SCHEDULER_NAME]: orderScheduler,
+  [DUNNING_SCHEDULER_NAME]: dunningScheduler,
   [ORDER_QUEUE_NAME]: orderQueue,
   [ORDER_PROCESSOR_NAME]: orderProcessor,
   [WEBHOOK_QUEUE_NAME]: webhookQueue,
