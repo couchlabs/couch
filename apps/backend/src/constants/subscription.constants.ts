@@ -10,6 +10,16 @@
  * 3. Ensure all values are lowercase to match DB constraints
  */
 
+/**
+ * Subscription lifecycle statuses
+ *
+ * PROCESSING: Initial subscription created, activation charge pending
+ * ACTIVE: Subscription is active and payments are processing successfully
+ * PAST_DUE: Payment failed, retrying via dunning (recoverable)
+ * INCOMPLETE: Activation charge failed (recoverable - user can retry)
+ * CANCELED: Subscription terminated (non-recoverable - permission revoked/expired)
+ * UNPAID: Max dunning retries exhausted (recoverable - user can add funds and merchant can retry)
+ */
 export enum SubscriptionStatus {
   PROCESSING = "processing",
   ACTIVE = "active",

@@ -7,11 +7,7 @@ import {
   SubscriptionStatus,
 } from "@/constants/subscription.constants"
 import { ErrorCode, HTTPError } from "@/errors/http.errors"
-import {
-  getErrorMessage,
-  getPaymentErrorCode,
-  isExposableError,
-} from "@/errors/subscription.errors"
+import { getErrorMessage, isExposableError } from "@/errors/subscription.errors"
 import { createLogger } from "@/lib/logger"
 import { WebhookRepository } from "@/repositories/webhook.repository"
 import type { ActivationResult } from "@/services/subscription.service"
@@ -48,6 +44,7 @@ export interface WebhookOrderData {
   status: WebhookOrderStatus
   current_period_start?: number // Unix timestamp
   current_period_end?: number // Unix timestamp
+  next_retry_at?: number // Unix timestamp - when next payment retry is scheduled (only present when retrying)
 }
 
 /**
@@ -115,6 +112,7 @@ export interface EmitWebhookEventParams {
   errorMessage?: string
   orderDueAt?: Date // Order's due_at (period start)
   orderPeriodInSeconds?: number // Order's period length
+  nextRetryAt?: Date // When next payment retry is scheduled (only for failed payments with retries)
 }
 
 const logger = createLogger("webhook.service")
@@ -301,11 +299,13 @@ export class WebhookService {
   async emitPaymentFailed(params: {
     accountAddress: Address
     subscriptionId: Hash
+    subscriptionStatus: SubscriptionStatus // Pass correct status based on error type
     orderNumber: number
     amount: string
     periodInSeconds: number
     failureReason?: string // Error code (e.g., INSUFFICIENT_BALANCE)
     failureMessage?: string // Original SDK error message
+    nextRetryAt?: Date // When next payment retry is scheduled
   }): Promise<void> {
     // Use error code, fallback to generic PAYMENT_FAILED
     const errorCode = params.failureReason || ErrorCode.PAYMENT_FAILED
@@ -317,7 +317,7 @@ export class WebhookService {
     await this.emitSubscriptionUpdated({
       accountAddress: params.accountAddress,
       subscriptionId: params.subscriptionId,
-      subscriptionStatus: SubscriptionStatus.UNPAID,
+      subscriptionStatus: params.subscriptionStatus, // Use passed status
       subscriptionAmount: params.amount, // Use order amount as subscription metadata
       subscriptionPeriodInSeconds: params.periodInSeconds, // Use order period as subscription metadata
       orderNumber: params.orderNumber,
@@ -326,6 +326,7 @@ export class WebhookService {
       success: false,
       errorCode,
       errorMessage,
+      nextRetryAt: params.nextRetryAt,
     })
   }
 
@@ -340,31 +341,16 @@ export class WebhookService {
     periodInSeconds: number
     error: unknown
   }): Promise<void> {
-    // Convert raw SDK errors to HTTPError for proper error classification
-    let processedError = params.error
-
-    // If it's a raw Error (from SDK), map payment errors to HTTPError(402)
-    if (params.error instanceof Error && !(params.error instanceof HTTPError)) {
-      const errorCode = getPaymentErrorCode(params.error)
-
-      // Payment errors should be exposed (402) with original SDK message
-      // Others remain as raw Error (will be sanitized to internal_error)
-      if (
-        errorCode === ErrorCode.INSUFFICIENT_BALANCE ||
-        errorCode === ErrorCode.PERMISSION_EXPIRED
-      ) {
-        // Keep original SDK error message for specificity
-        processedError = new HTTPError(402, errorCode, params.error.message)
-      }
-    }
-
     // Sanitize error for webhook exposure
+    // Not all errors come from provider - could be DB, validation, or webhook errors
+    // Only expose payment errors (402) to merchants, hide internal errors
     let errorCode = "internal_error"
     let errorMessage = "An internal error occurred"
 
-    if (isExposableError(processedError)) {
-      errorCode = processedError.code
-      errorMessage = processedError.message
+    if (isExposableError(params.error)) {
+      // Payment errors (402) are exposed with details
+      errorCode = params.error.code
+      errorMessage = params.error.message
     }
 
     await this.emitSubscriptionUpdated({
@@ -436,6 +422,13 @@ export class WebhookService {
 
           eventData.order.current_period_start = periodStartTimestamp
           eventData.order.current_period_end = periodEndTimestamp
+        }
+
+        // Add next retry timestamp if scheduled (only for failed payments with retries)
+        if (params.nextRetryAt) {
+          eventData.order.next_retry_at = Math.floor(
+            params.nextRetryAt.getTime() / 1000,
+          )
         }
       }
 

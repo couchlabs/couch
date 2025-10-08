@@ -7,7 +7,11 @@ import {
   SubscriptionStatus,
   TransactionStatus,
 } from "@/constants/subscription.constants"
-import { getPaymentErrorCode } from "@/errors/subscription.errors"
+import { ErrorCode, HTTPError } from "@/errors/http.errors"
+import {
+  isRetryablePaymentError,
+  isTerminalSubscriptionError,
+} from "@/errors/subscription.errors"
 import { createLogger } from "@/lib/logger"
 import type { Provider } from "@/providers/provider.interface"
 import { OnchainRepository } from "@/repositories/onchain.repository"
@@ -28,6 +32,8 @@ export interface ProcessOrderResult {
   failureReason?: string // Error code (e.g., INSUFFICIENT_BALANCE)
   failureMessage?: string // Original error message from SDK
   nextOrderCreated: boolean
+  subscriptionStatus: SubscriptionStatus // Actual subscription status after processing
+  nextRetryAt?: Date // When next payment retry is scheduled (only for failed payments with retries)
 }
 
 const logger = createLogger("order.service")
@@ -164,80 +170,151 @@ export class OrderService {
         transactionHash: chargeResult.transactionHash,
         orderNumber: orderResult.orderNumber, // Always defined - updateOrder throws if not found
         nextOrderCreated,
+        subscriptionStatus: SubscriptionStatus.ACTIVE,
       }
     } catch (error) {
       op.failure(error)
       log.error("Recurring payment failed", error)
 
-      const errorCode = getPaymentErrorCode(error)
-      const rawError = error instanceof Error ? error.message : String(error)
+      const errorCode =
+        error instanceof HTTPError ? error.code : ErrorCode.PAYMENT_FAILED
+      const errorMessage =
+        error instanceof Error ? error.message : "Payment failed"
 
-      // Dunning logic: Check if we should retry or mark as terminal failure
-      const currentAttempts = order.attempts || 0
+      // Mark order as failed
+      const orderResult = await this.subscriptionRepository.updateOrder({
+        id: orderId,
+        status: OrderStatus.FAILED,
+        failureReason: errorCode,
+        rawError: errorMessage,
+      })
 
-      if (currentAttempts < DUNNING_CONFIG.MAX_ATTEMPTS) {
-        // Schedule retry
-        const nextRetryDate = calculateNextRetryDate(
-          currentAttempts,
-          new Date(),
-        )
-        const attemptLabel =
-          DUNNING_CONFIG.RETRY_INTERVALS[currentAttempts]?.label ||
-          "retry attempt"
+      // ================================================================
+      // CASE 1: TERMINAL (revoked/expired) - mark CANCELED, no next order
+      // ================================================================
+      if (isTerminalSubscriptionError(error)) {
+        log.info(`Terminal subscription error: ${errorCode}`)
 
-        log.info(
-          `Payment failed (attempt ${currentAttempts + 1}/${DUNNING_CONFIG.MAX_ATTEMPTS}) - scheduling ${attemptLabel}`,
-          {
-            nextRetryAt: nextRetryDate.toISOString(),
-          },
-        )
-
-        await this.subscriptionRepository.scheduleRetry({
-          orderId,
-          subscriptionId: order.subscriptionId,
-          nextRetryAt: nextRetryDate.toISOString(),
-          failureReason: errorCode,
-          rawError: rawError,
-        })
-
-        // Get updated order number after scheduleRetry
-        const orderDetails =
-          await this.subscriptionRepository.getOrderDetails(orderId)
-
-        return {
-          success: false,
-          orderNumber: orderDetails?.orderNumber || order.orderNumber,
-          failureReason: errorCode,
-          failureMessage: rawError,
-          nextOrderCreated: false,
-        }
-      } else {
-        // Max retries exhausted - mark as terminal failure
-        log.info(
-          `Payment failed after max retries (${DUNNING_CONFIG.MAX_ATTEMPTS}) - marking as unpaid`,
-        )
-
-        // Mark order as failed with both mapped code and raw error
-        const orderResult = await this.subscriptionRepository.updateOrder({
-          id: orderId,
-          status: OrderStatus.FAILED,
-          failureReason: errorCode,
-          rawError: rawError,
-        })
-
-        // Mark subscription as unpaid (terminal state)
         await this.subscriptionRepository.updateSubscription({
           subscriptionId: order.subscriptionId,
-          status: SubscriptionStatus.UNPAID,
+          status: SubscriptionStatus.CANCELED,
         })
 
         return {
           success: false,
           orderNumber: orderResult.orderNumber,
           failureReason: errorCode,
-          failureMessage: rawError,
+          failureMessage: errorMessage,
           nextOrderCreated: false,
+          subscriptionStatus: SubscriptionStatus.CANCELED,
         }
+      }
+
+      // ================================================================
+      // CASE 2: RETRYABLE (insufficient balance) - schedule retry
+      // ================================================================
+      if (isRetryablePaymentError(error)) {
+        const currentAttempts = order.attempts || 0
+
+        if (currentAttempts < DUNNING_CONFIG.MAX_ATTEMPTS) {
+          // Schedule retry
+          const nextRetryDate = calculateNextRetryDate(
+            currentAttempts,
+            new Date(),
+          )
+          const attemptLabel =
+            DUNNING_CONFIG.RETRY_INTERVALS[currentAttempts]?.label || "retry"
+
+          log.info(
+            `Insufficient balance (attempt ${currentAttempts + 1}/${DUNNING_CONFIG.MAX_ATTEMPTS}) - scheduling ${attemptLabel}`,
+            { nextRetryAt: nextRetryDate.toISOString() },
+          )
+
+          await this.subscriptionRepository.scheduleRetry({
+            orderId,
+            subscriptionId: order.subscriptionId,
+            nextRetryAt: nextRetryDate.toISOString(),
+            failureReason: errorCode,
+            rawError: errorMessage,
+          })
+
+          const orderDetails =
+            await this.subscriptionRepository.getOrderDetails(orderId)
+
+          return {
+            success: false,
+            orderNumber: orderDetails?.orderNumber || order.orderNumber,
+            failureReason: errorCode,
+            failureMessage: errorMessage,
+            nextOrderCreated: false,
+            subscriptionStatus: SubscriptionStatus.PAST_DUE,
+            nextRetryAt: nextRetryDate,
+          }
+        } else {
+          // Max retries exhausted
+          log.info(`Max retries exhausted (${DUNNING_CONFIG.MAX_ATTEMPTS})`)
+
+          await this.subscriptionRepository.updateSubscription({
+            subscriptionId: order.subscriptionId,
+            status: SubscriptionStatus.UNPAID,
+          })
+
+          return {
+            success: false,
+            orderNumber: orderResult.orderNumber,
+            failureReason: errorCode,
+            failureMessage: errorMessage,
+            nextOrderCreated: false,
+            subscriptionStatus: SubscriptionStatus.UNPAID,
+          }
+        }
+      }
+
+      // ================================================================
+      // CASE 3: OTHER ERRORS - log, keep subscription ACTIVE
+      // ================================================================
+      // Could be our bugs, system errors, etc.
+      // Keep subscription ACTIVE and create next order - let it recover
+      log.warn(
+        `Non-retryable error: ${errorCode} - keeping subscription active`,
+      )
+
+      // Get onchain state for next order
+      const { subscription: onchainStatus } =
+        await this.onchainRepository.getSubscriptionStatus({
+          subscriptionId: order.subscriptionId,
+          providerId,
+        })
+
+      // Create next order if subscription still active
+      let nextOrderCreated = false
+      if (
+        onchainStatus.isSubscribed &&
+        onchainStatus.nextPeriodStart &&
+        onchainStatus.periodInSeconds
+      ) {
+        log.info("Creating next order despite failure", {
+          reason: "Keep subscription active for recovery",
+        })
+
+        await this.subscriptionRepository.createOrder({
+          subscriptionId: order.subscriptionId,
+          type: OrderType.RECURRING,
+          dueAt: onchainStatus.nextPeriodStart.toISOString(),
+          amount: String(onchainStatus.recurringCharge),
+          periodInSeconds: onchainStatus.periodInSeconds,
+          status: OrderStatus.PENDING,
+        })
+        nextOrderCreated = true
+      }
+
+      return {
+        success: false,
+        orderNumber: orderResult.orderNumber,
+        failureReason: errorCode,
+        failureMessage: errorMessage,
+        nextOrderCreated,
+        subscriptionStatus: SubscriptionStatus.ACTIVE,
       }
     }
   }

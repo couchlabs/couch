@@ -2,6 +2,7 @@ import { env } from "cloudflare:workers"
 import { base } from "@base-org/account/node"
 import type { Address, Hash } from "viem"
 import { isHash } from "viem"
+import { ErrorCode, HTTPError } from "@/errors/http.errors"
 import {
   type ChargeParams,
   type ChargeResult,
@@ -36,22 +37,26 @@ export class BaseProvider implements SubscriptionProvider {
   }
 
   async chargeSubscription(params: ChargeParams): Promise<ChargeResult> {
-    const result = await base.subscription.charge({
-      cdpApiKeyId: this.cdpConfig.apiKeyId,
-      cdpApiKeySecret: this.cdpConfig.apiKeySecret,
-      cdpWalletSecret: this.cdpConfig.walletSecret,
-      walletName: this.cdpConfig.walletName,
-      paymasterUrl: this.cdpConfig.paymasterUrl,
-      id: params.subscriptionId as Hash,
-      amount: params.amount,
-      recipient: params.recipient,
-      testnet: this.testnet,
-    })
+    try {
+      const result = await base.subscription.charge({
+        cdpApiKeyId: this.cdpConfig.apiKeyId,
+        cdpApiKeySecret: this.cdpConfig.apiKeySecret,
+        cdpWalletSecret: this.cdpConfig.walletSecret,
+        walletName: this.cdpConfig.walletName,
+        paymasterUrl: this.cdpConfig.paymasterUrl,
+        id: params.subscriptionId as Hash,
+        amount: params.amount,
+        recipient: params.recipient,
+        testnet: this.testnet,
+      })
 
-    return {
-      transactionHash: result.id as Hash, // Base SDK returns transaction hash as 'id'
-      success: result.success,
-      gasUsed: undefined, // Base SDK doesn't provide gas usage in the response
+      return {
+        transactionHash: result.id as Hash, // Base SDK returns transaction hash as 'id'
+        success: result.success,
+        gasUsed: undefined, // Base SDK doesn't provide gas usage in the response
+      }
+    } catch (error) {
+      throw this.translateChargeError(error)
     }
   }
 
@@ -87,5 +92,55 @@ export class BaseProvider implements SubscriptionProvider {
 
   validateSubscriptionId(id: string): boolean {
     return isHash(id)
+  }
+
+  /**
+   * Translates Base SDK errors to domain HTTPError.
+   * Only INSUFFICIENT_BALANCE is retryable - everything else logs & continues.
+   */
+  private translateChargeError(error: unknown): HTTPError {
+    if (!(error instanceof Error)) {
+      return new HTTPError(
+        500,
+        ErrorCode.INTERNAL_ERROR,
+        "Unknown error during charge",
+      )
+    }
+
+    const message = error.message.toLowerCase()
+
+    // RETRYABLE: User needs to add funds
+    if (message.includes("erc20: transfer amount exceeds balance")) {
+      return new HTTPError(
+        402,
+        ErrorCode.INSUFFICIENT_BALANCE,
+        "Insufficient balance in wallet to complete payment",
+        { originalError: error.message },
+      )
+    }
+
+    // TERMINAL: User cancelled subscription
+    if (message.includes("revoked")) {
+      return new HTTPError(
+        402,
+        ErrorCode.PERMISSION_REVOKED,
+        "Subscription permission has been revoked",
+        { originalError: error.message },
+      )
+    }
+
+    if (message.includes("expired")) {
+      return new HTTPError(
+        402,
+        ErrorCode.PERMISSION_EXPIRED,
+        "Subscription permission has expired",
+        { originalError: error.message },
+      )
+    }
+
+    // Everything else: log but don't block subscription
+    return new HTTPError(500, ErrorCode.PAYMENT_FAILED, "Payment failed", {
+      originalError: error.message,
+    })
   }
 }

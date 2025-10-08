@@ -81,15 +81,16 @@ export default {
             await webhookService.emitPaymentFailed({
               accountAddress: orderDetails.accountAddress,
               subscriptionId: orderDetails.subscriptionId,
-              orderNumber: result.orderNumber, // Guaranteed to exist
+              subscriptionStatus: result.subscriptionStatus,
+              orderNumber: result.orderNumber,
               amount: orderDetails.amount,
               periodInSeconds: orderDetails.periodInSeconds,
               failureReason: result.failureReason,
               failureMessage: result.failureMessage,
+              nextRetryAt: result.nextRetryAt,
             })
 
-            // ACK the message even on payment failure (v1: no retries)
-            // The subscription has been marked as unpaid
+            // ACK the message even on payment failure
             message.ack()
 
             op.success({
