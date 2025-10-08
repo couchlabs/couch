@@ -32,6 +32,8 @@ export type ErrorCode = (typeof ErrorCode)[keyof typeof ErrorCode]
 
 // HTTPError class that extends HTTPException with consistent JSON format
 export class HTTPError extends HTTPException {
+  public readonly code: ErrorCode
+
   constructor(
     status: ContentfulStatusCode,
     code: ErrorCode,
@@ -54,5 +56,6 @@ export class HTTPError extends HTTPException {
     // - message: for proper error.message property
     // - res: for custom JSON response body
     super(status, { res, message })
+    this.code = code
   }
 }

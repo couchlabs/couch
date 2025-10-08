@@ -4,11 +4,11 @@
   "private": true,
   "scripts": {
     "faucet": "bun node_modules/alchemy/src/coinbase/faucet.ts",
-    "dev": "turbo infra:dev",
-    "destroy": "turbo infra:destroy --ui=stream",
-    "check": "tsc --noEmit && biome check",
-    "check:fix": "bun check --write",
-    "db:generate": "bun check && turbo db:generate"
+    "dev": "turbo dev --ui=tui",
+    "destroy": "turbo destroy ",
+    "check": "turbo check",
+    "check:fix": "turbo check:fix",
+    "db:generate": "turbo db:generate"
   },
   "workspaces": {
     "packages": [
@@ -25,7 +25,7 @@
         "@types/node": "^24.7.0"
       },
       "coinbase": {
-        "@base-org/account": "^2.3.1",
+        "@base-org/account": "^2.4.0",
         "@coinbase/cdp-sdk": "^1.38.3"
       }
     }

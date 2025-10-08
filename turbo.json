@@ -1,15 +1,24 @@
 {
   "$schema": "https://turborepo.com/schema.json",
-  "ui": "tui",
+  "ui": "stream",
   "tasks": {
-    "infra:dev": {
+    "dev": {
       "persistent": true,
       "cache": false
     },
-    "infra:destroy": {
+    "destroy": {
       "cache": false
     },
     "db:generate": {
+      "cache": false,
+      "dependsOn": [
+        "check"
+      ]
+    },
+    "check": {
+      "cache": false
+    },
+    "check:fix": {
       "cache": false
     }
   }

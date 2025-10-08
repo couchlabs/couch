@@ -85,6 +85,7 @@ export default {
               amount: orderDetails.amount,
               periodInSeconds: orderDetails.periodInSeconds,
               failureReason: result.failureReason,
+              failureMessage: result.failureMessage,
             })
 
             // ACK the message even on payment failure (v1: no retries)

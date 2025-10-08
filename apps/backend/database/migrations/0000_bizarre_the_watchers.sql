@@ -40,7 +40,7 @@ CREATE TABLE `subscriptions` (
 	`subscription_id` text PRIMARY KEY NOT NULL,
 	`status` text NOT NULL,
 	`owner_address` text NOT NULL,
-	`account_address` text,
+	`account_address` text NOT NULL,
 	`provider_id` text NOT NULL,
 	`created_at` text DEFAULT CURRENT_TIMESTAMP,
 	`modified_at` text DEFAULT CURRENT_TIMESTAMP,

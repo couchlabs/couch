@@ -1,8 +1,27 @@
+import { ErrorCode, HTTPError } from "@/errors/http.errors"
+
 /**
  * Payment error mapping utilities for subscription service
  */
 
-import { ErrorCode } from "@/errors/http.errors"
+/**
+ * Error code to user-friendly message mapping
+ */
+const ERROR_MESSAGES: Record<string, string> = {
+  [ErrorCode.INSUFFICIENT_BALANCE]:
+    "Insufficient balance to complete the payment",
+  [ErrorCode.PERMISSION_EXPIRED]: "Subscription permission has expired",
+  [ErrorCode.PAYMENT_FAILED]: "Payment failed",
+}
+
+/**
+ * Checks if an error should be exposed to merchants in webhooks.
+ * Uses HTTP semantics: 402 Payment Required indicates a payment error.
+ * Payment errors are exposed with details, system errors are sanitized.
+ */
+export function isExposableError(error: unknown): error is HTTPError {
+  return error instanceof HTTPError && error.status === 402
+}
 
 /**
  * Gets the appropriate error code for a payment/blockchain error.
@@ -32,4 +51,11 @@ export function getPaymentErrorCode(error: Error): ErrorCode {
   // - revoked permissions (should be handled differently)
   // - generic permission errors (too vague to be actionable)
   return ErrorCode.PAYMENT_FAILED
+}
+
+/**
+ * Gets user-friendly error message for an error code
+ */
+export function getErrorMessage(errorCode: ErrorCode): string {
+  return ERROR_MESSAGES[errorCode] || "An error occurred"
 }

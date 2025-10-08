@@ -3,10 +3,11 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "infra:dev": "alchemy dev --stage dev --adopt --app demo",
-    "infra:destroy": "alchemy destroy --app demo"
+    "dev": "alchemy dev --stage dev --adopt --app demo",
+    "destroy": "alchemy destroy --app demo"
   },
   "dependencies": {
+    "backend": "workspace:*",
     "@base-org/account": "catalog:coinbase",
     "@radix-ui/react-dialog": "^1.1.15",
     "@radix-ui/react-label": "^2.1.7",
@@ -15,7 +16,6 @@
     "@radix-ui/react-slot": "^1.2.3",
     "@radix-ui/react-switch": "^1.2.6",
     "@radix-ui/react-tooltip": "^1.2.8",
-    "backend": "workspace:*",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "hono": "^4.9.8",
@@ -39,10 +39,5 @@
     "@types/react-dom": "19.1.9",
     "@vitejs/plugin-react": "^5.0.3",
     "vite-tsconfig-paths": "^5.1.4"
-  },
-  "paths": {
-    "@/*": [
-      "./src/*"
-    ]
   }
 }

@@ -92,6 +92,30 @@ export function createLogger(module: string): Logger {
   return logger.with({ module })
 }
 
+/**
+ * Drizzle ORM logger implementation
+ * Integrates Drizzle query logging with our existing logger infrastructure
+ */
+export class DrizzleLogger implements DrizzleLoggerInterface {
+  private logger: Logger
+
+  constructor(module = "drizzle") {
+    this.logger = createLogger(module)
+  }
+
+  logQuery(query: string, params: unknown[]): void {
+    this.logger.debug("SQL Query", {
+      sql: query,
+      params: params.length > 0 ? params : undefined,
+    })
+  }
+}
+
+// Drizzle Logger interface (from drizzle-orm/logger)
+interface DrizzleLoggerInterface {
+  logQuery(query: string, params: unknown[]): void
+}
+
 // Auto logger factory that automatically detects type from file path
 // Usage: const logger = createAutoLogger(import.meta.url)
 export function createAutoLogger(url: string): Logger {

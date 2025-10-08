@@ -19,7 +19,8 @@
     "skipLibCheck": true,
     "paths": {
       "@alchemy.run": ["./alchemy.run.ts"],
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@database/*": ["./database/*"]
     }
   }
 }

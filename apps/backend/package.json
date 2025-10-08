@@ -3,9 +3,11 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "infra:dev": "alchemy dev --stage dev --adopt --app backend",
-    "infra:destroy": "alchemy destroy --app backend",
-    "db:generate": "drizzle-kit generate"
+    "dev": "alchemy dev --stage dev --adopt --app backend",
+    "destroy": "alchemy destroy --app backend",
+    "db:generate": "drizzle-kit generate",
+    "check": "tsc --noEmit && biome check",
+    "check:fix": "tsc --noEmit && biome check --write"
   },
   "exports": {
     "./alchemy": {

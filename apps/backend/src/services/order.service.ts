@@ -3,6 +3,7 @@ import {
   OrderStatus,
   OrderType,
   SubscriptionStatus,
+  TransactionStatus,
 } from "@/constants/subscription.constants"
 import { getPaymentErrorCode } from "@/errors/subscription.errors"
 import { createLogger } from "@/lib/logger"
@@ -22,7 +23,8 @@ export interface ProcessOrderResult {
   success: boolean
   transactionHash?: Hash
   orderNumber: number // Always returned - updateOrder throws if order not found
-  failureReason?: string
+  failureReason?: string // Error code (e.g., INSUFFICIENT_BALANCE)
+  failureMessage?: string // Original error message from SDK
   nextOrderCreated: boolean
 }
 
@@ -108,7 +110,7 @@ export class OrderService {
         orderId,
         subscriptionId: order.subscriptionId,
         amount: order.amount,
-        status: "confirmed",
+        status: TransactionStatus.CONFIRMED,
       })
 
       // Step 4: Update order as paid and get order_number
@@ -186,6 +188,7 @@ export class OrderService {
         success: false,
         orderNumber: orderResult.orderNumber, // Always defined - updateOrder throws if not found
         failureReason: errorCode,
+        failureMessage: rawError, // Include original SDK error message
         nextOrderCreated: false,
       }
     }

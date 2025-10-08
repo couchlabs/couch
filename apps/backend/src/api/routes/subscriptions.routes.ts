@@ -72,14 +72,13 @@ subscriptionRoutes.post("/", subscriptionBody(), async (ctx) => {
           reason: errorMessage,
         })
 
-        // 6. Fire activation failed webhook
+        // 6. Fire activation failed webhook (service handles error sanitization)
         await webhookService.emitActivationFailed({
           accountAddress,
           subscriptionId,
           amount: subscriptionMetadata.amount,
           periodInSeconds: subscriptionMetadata.periodInSeconds,
-          errorCode: "payment_failed",
-          errorMessage,
+          error,
         })
       }
     })(),

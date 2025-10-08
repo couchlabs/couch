@@ -1,6 +1,18 @@
 import { env } from "cloudflare:workers"
-import type { D1Database } from "@cloudflare/workers-types"
+import * as schema from "@database/schema"
+import { eq, getTableColumns } from "drizzle-orm"
+import { drizzle } from "drizzle-orm/d1"
 import type { Address } from "viem"
+import { Stage } from "@/constants/env.constants"
+import { DrizzleLogger } from "@/lib/logger"
+
+// Re-export schema type
+export type Webhook = schema.Webhook
+
+// Safe webhook type without secret (for API responses)
+export type WebhookPublic = Omit<Webhook, "secret">
+
+// Custom parameter types
 export interface CreateOrUpdateWebhookParams {
   accountAddress: Address
   url: string
@@ -11,17 +23,17 @@ export interface GetWebhookParams {
   accountAddress: Address
 }
 
-export interface Webhook {
-  accountAddress: Address
-  url: string
-  secret: string
-}
-
 export class WebhookRepository {
-  private db: D1Database
+  private db: ReturnType<typeof drizzle<typeof schema>>
 
   constructor() {
-    this.db = env.DB
+    this.db = drizzle(env.DB, {
+      schema,
+      logger:
+        env.STAGE === Stage.DEV || env.STAGE === Stage.STAGING
+          ? new DrizzleLogger("webhook.repository")
+          : undefined,
+    })
   }
 
   /**
@@ -32,41 +44,67 @@ export class WebhookRepository {
     params: CreateOrUpdateWebhookParams,
   ): Promise<void> {
     await this.db
-      .prepare(
-        `INSERT INTO webhooks (account_address, url, secret)
-         VALUES (?, ?, ?)
-         ON CONFLICT(account_address)
-         DO UPDATE SET url = ?, secret = ?`,
-      )
-      .bind(
-        params.accountAddress,
-        params.url,
-        params.secret,
-        params.url,
-        params.secret,
-      )
+      .insert(schema.webhooks)
+      .values({
+        accountAddress: params.accountAddress,
+        url: params.url,
+        secret: params.secret,
+      })
+      .onConflictDoUpdate({
+        target: schema.webhooks.accountAddress,
+        set: {
+          url: params.url,
+          secret: params.secret,
+        },
+      })
       .run()
   }
 
   /**
-   * Gets webhook configuration for an account
+   * Gets webhook configuration for an account (includes secret)
+   * Use this for internal operations like sending webhooks
    */
   async getWebhook(params: GetWebhookParams): Promise<Webhook | null> {
     const result = await this.db
-      .prepare(
-        "SELECT account_address, url, secret FROM webhooks WHERE account_address = ?",
-      )
-      .bind(params.accountAddress)
-      .first<{ account_address: string; url: string; secret: string }>()
+      .select()
+      .from(schema.webhooks)
+      .where(eq(schema.webhooks.accountAddress, params.accountAddress))
+      .get()
 
     if (!result) {
       return null
     }
 
     return {
-      accountAddress: result.account_address as Address,
+      accountAddress: result.accountAddress as Address,
       url: result.url,
       secret: result.secret,
+    }
+  }
+
+  /**
+   * Gets webhook configuration for an account (excludes secret)
+   * Use this for API responses to prevent exposing the webhook secret
+   */
+  async getWebhookForApi(
+    params: GetWebhookParams,
+  ): Promise<WebhookPublic | null> {
+    // Use getTableColumns to safely exclude the secret field
+    const { secret: _secret, ...safeColumns } = getTableColumns(schema.webhooks)
+
+    const result = await this.db
+      .select(safeColumns)
+      .from(schema.webhooks)
+      .where(eq(schema.webhooks.accountAddress, params.accountAddress))
+      .get()
+
+    if (!result) {
+      return null
+    }
+
+    return {
+      accountAddress: result.accountAddress as Address,
+      url: result.url,
     }
   }
 }

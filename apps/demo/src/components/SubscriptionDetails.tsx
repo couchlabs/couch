@@ -238,7 +238,13 @@ export function SubscriptionDetails({
       }
 
       if (data.data.error) {
-        return `Error: ${data.data.error.message}`
+        if (data.data.subscription.status === "incomplete") {
+          return "Subscription activation"
+        }
+        if (data.data.subscription.status === "unpaid") {
+          return "Subscription renewal"
+        }
+        return "Error"
       }
 
       // Processing state (subscription created but not yet charged)
@@ -566,7 +572,10 @@ export function SubscriptionDetails({
                               return (
                                 <Check className="h-4 w-4 text-green-600" />
                               )
-                            } else if (data.data.order?.status === "failed") {
+                            } else if (
+                              data.data.order?.status === "failed" ||
+                              data.data.error
+                            ) {
                               return <X className="h-4 w-4 text-red-600" />
                             } else if (
                               data.data.subscription.status === "processing"

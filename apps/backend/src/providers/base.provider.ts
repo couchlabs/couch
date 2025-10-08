@@ -1,5 +1,5 @@
 import { env } from "cloudflare:workers"
-import { base } from "@base-org/account"
+import { base } from "@base-org/account/node"
 import type { Address, Hash } from "viem"
 import { isHash } from "viem"
 import {

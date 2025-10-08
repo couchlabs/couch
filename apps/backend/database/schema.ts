@@ -6,6 +6,7 @@ import {
   sqliteTable,
   text,
 } from "drizzle-orm/sqlite-core"
+import type { Address, Hash } from "viem"
 import {
   OrderStatus,
   OrderType,
@@ -80,7 +81,9 @@ export const subscriptions = sqliteTable(
     subscriptionId: text("subscription_id").primaryKey(),
     status: text("status").$type<SubscriptionStatus>().notNull(),
     ownerAddress: text("owner_address").notNull(),
-    accountAddress: text("account_address").references(() => accounts.address),
+    accountAddress: text("account_address")
+      .notNull()
+      .references(() => accounts.address),
     providerId: text("provider_id").notNull(),
     createdAt: text("created_at").default(sql`CURRENT_TIMESTAMP`),
     modifiedAt: text("modified_at").default(sql`CURRENT_TIMESTAMP`),
@@ -173,12 +176,42 @@ export const transactions = sqliteTable(
 // TYPE INFERENCE HELPERS
 // =============================================================================
 
-export type Subscription = typeof subscriptions.$inferSelect
+// Override inferred types to use proper viem types
+export type Subscription = Omit<
+  typeof subscriptions.$inferSelect,
+  "subscriptionId" | "ownerAddress" | "accountAddress"
+> & {
+  subscriptionId: Hash
+  ownerAddress: Address
+  accountAddress: Address
+}
+
 export type NewSubscription = typeof subscriptions.$inferInsert
-export type Order = typeof orders.$inferSelect
+
+export type Order = Omit<typeof orders.$inferSelect, "subscriptionId"> & {
+  subscriptionId: Hash
+}
+
 export type NewOrder = typeof orders.$inferInsert
-export type Transaction = typeof transactions.$inferSelect
+
+export type Transaction = Omit<
+  typeof transactions.$inferSelect,
+  "transactionHash" | "subscriptionId"
+> & {
+  transactionHash: Hash
+  subscriptionId: Hash
+}
+
 export type NewTransaction = typeof transactions.$inferInsert
-export type Account = typeof accounts.$inferSelect
-export type ApiKey = typeof apiKeys.$inferSelect
-export type Webhook = typeof webhooks.$inferSelect
+
+export type Account = Omit<typeof accounts.$inferSelect, "address"> & {
+  address: Address
+}
+
+export type ApiKey = Omit<typeof apiKeys.$inferSelect, "accountAddress"> & {
+  accountAddress: Address
+}
+
+export type Webhook = Omit<typeof webhooks.$inferSelect, "accountAddress"> & {
+  accountAddress: Address
+}

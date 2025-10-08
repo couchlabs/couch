@@ -7,6 +7,11 @@ import {
   SubscriptionStatus,
 } from "@/constants/subscription.constants"
 import { ErrorCode, HTTPError } from "@/errors/http.errors"
+import {
+  getErrorMessage,
+  getPaymentErrorCode,
+  isExposableError,
+} from "@/errors/subscription.errors"
 import { createLogger } from "@/lib/logger"
 import {
   type Webhook,
@@ -280,8 +285,16 @@ export class WebhookService {
     orderNumber: number
     amount: string
     periodInSeconds: number
-    failureReason?: string
+    failureReason?: string // Error code (e.g., INSUFFICIENT_BALANCE)
+    failureMessage?: string // Original SDK error message
   }): Promise<void> {
+    // Use error code, fallback to generic PAYMENT_FAILED
+    const errorCode = params.failureReason || ErrorCode.PAYMENT_FAILED
+
+    // Use original SDK message if available, otherwise use generic message
+    const errorMessage =
+      params.failureMessage || getErrorMessage(errorCode as ErrorCode)
+
     await this.emitSubscriptionUpdated({
       accountAddress: params.accountAddress,
       subscriptionId: params.subscriptionId,
@@ -292,22 +305,49 @@ export class WebhookService {
       orderType: OrderType.RECURRING,
       amount: params.amount,
       success: false,
-      errorCode: "payment_failed",
-      errorMessage: params.failureReason || "Payment processing failed",
+      errorCode,
+      errorMessage,
     })
   }
 
   /**
    * Emits webhook event when initial activation charge fails
+   * Sanitizes error details based on error type (payment vs system)
    */
   async emitActivationFailed(params: {
     accountAddress: Address
     subscriptionId: Hash
     amount: string
     periodInSeconds: number
-    errorCode: string
-    errorMessage: string
+    error: unknown
   }): Promise<void> {
+    // Convert raw SDK errors to HTTPError for proper error classification
+    let processedError = params.error
+
+    // If it's a raw Error (from SDK), map payment errors to HTTPError(402)
+    if (params.error instanceof Error && !(params.error instanceof HTTPError)) {
+      const errorCode = getPaymentErrorCode(params.error)
+
+      // Payment errors should be exposed (402) with original SDK message
+      // Others remain as raw Error (will be sanitized to internal_error)
+      if (
+        errorCode === ErrorCode.INSUFFICIENT_BALANCE ||
+        errorCode === ErrorCode.PERMISSION_EXPIRED
+      ) {
+        // Keep original SDK error message for specificity
+        processedError = new HTTPError(402, errorCode, params.error.message)
+      }
+    }
+
+    // Sanitize error for webhook exposure
+    let errorCode = "internal_error"
+    let errorMessage = "An internal error occurred"
+
+    if (isExposableError(processedError)) {
+      errorCode = processedError.code
+      errorMessage = processedError.message
+    }
+
     await this.emitSubscriptionUpdated({
       accountAddress: params.accountAddress,
       subscriptionId: params.subscriptionId,
@@ -315,8 +355,8 @@ export class WebhookService {
       subscriptionAmount: params.amount,
       subscriptionPeriodInSeconds: params.periodInSeconds,
       success: false,
-      errorCode: params.errorCode,
-      errorMessage: params.errorMessage,
+      errorCode,
+      errorMessage,
     })
   }
 
