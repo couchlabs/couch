@@ -27,7 +27,7 @@ webhookRoutes.put("/", async (c) => {
     throw new HTTPError(400, ErrorCode.INVALID_REQUEST, "url is required")
   }
 
-  const webhookService = new WebhookService()
+  const webhookService = new WebhookService(c.env)
   const webhook = await webhookService.setWebhook({
     accountAddress,
     url,

@@ -1,4 +1,4 @@
-import { env } from "cloudflare:workers"
+import type { D1Database } from "@cloudflare/workers-types"
 import * as schema from "@database/schema"
 import { eq } from "drizzle-orm"
 import { drizzle } from "drizzle-orm/d1"
@@ -10,6 +10,11 @@ import { DrizzleLogger } from "@/lib/logger"
 export type Account = schema.Account
 
 // Custom parameter types
+export interface AccountRepositoryDeps {
+  DB: D1Database
+  STAGE: Stage
+}
+
 export interface CreateAccountParams {
   accountAddress: Address
 }
@@ -26,11 +31,11 @@ export interface GetApiKeyParams {
 export class AccountRepository {
   private db: ReturnType<typeof drizzle<typeof schema>>
 
-  constructor() {
-    this.db = drizzle(env.DB, {
+  constructor(deps: AccountRepositoryDeps) {
+    this.db = drizzle(deps.DB, {
       schema,
       logger:
-        env.STAGE === Stage.DEV || env.STAGE === Stage.STAGING
+        deps.STAGE === Stage.DEV || deps.STAGE === Stage.STAGING
           ? new DrizzleLogger("account.repository")
           : undefined,
     })

@@ -1,7 +1,7 @@
 import { createMiddleware } from "hono/factory"
 import type { Hash } from "viem"
 import { ErrorCode, HTTPError } from "@/errors/http.errors"
-import { Provider } from "@/providers"
+import { Provider } from "@/providers/provider.interface"
 
 export interface SubscriptionContext {
   subscriptionId: Hash

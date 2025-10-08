@@ -1,4 +1,4 @@
-import { env } from "cloudflare:workers"
+import type { D1Database } from "@cloudflare/workers-types"
 import * as schema from "@database/schema"
 import { and, eq, sql } from "drizzle-orm"
 import { drizzle } from "drizzle-orm/d1"
@@ -112,6 +112,11 @@ export interface DueRetry {
   providerId: Provider
 }
 
+export interface SubscriptionRepositoryDeps {
+  DB: D1Database
+  STAGE: Stage
+}
+
 export interface CreateSubscriptionWithOrderParams {
   subscriptionId: Hash
   ownerAddress: Address // Couch's smart wallet (the spender)
@@ -151,11 +156,11 @@ export interface MarkSubscriptionIncompleteParams {
 export class SubscriptionRepository {
   private db: ReturnType<typeof drizzle<typeof schema>>
 
-  constructor() {
-    this.db = drizzle(env.DB, {
+  constructor(deps: SubscriptionRepositoryDeps) {
+    this.db = drizzle(deps.DB, {
       schema,
       logger:
-        env.STAGE === Stage.DEV || env.STAGE === Stage.STAGING
+        deps.STAGE === Stage.DEV || deps.STAGE === Stage.STAGING
           ? new DrizzleLogger("subscription.repository")
           : undefined,
     })

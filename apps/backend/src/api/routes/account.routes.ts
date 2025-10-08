@@ -18,7 +18,7 @@ accountRoutes.put("/", async (c) => {
     throw new HTTPError(400, ErrorCode.INVALID_REQUEST, "address is required")
   }
 
-  const accountService = new AccountService()
+  const accountService = new AccountService(c.env)
   const account = await accountService.createOrRotateAccount({ address })
 
   return c.json({

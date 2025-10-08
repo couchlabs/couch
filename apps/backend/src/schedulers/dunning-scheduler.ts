@@ -28,7 +28,7 @@ export default {
     try {
       op.start()
 
-      const subscriptionRepository = new SubscriptionRepository()
+      const subscriptionRepository = new SubscriptionRepository(env)
 
       // Find orders due for retry
       log.info("Finding orders due for retry")

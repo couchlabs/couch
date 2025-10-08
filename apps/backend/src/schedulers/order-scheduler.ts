@@ -23,7 +23,7 @@ export default {
     try {
       op.start()
 
-      const subscriptionRepository = new SubscriptionRepository()
+      const subscriptionRepository = new SubscriptionRepository(env)
 
       // Claim due orders atomically
       log.info("Claiming due orders")

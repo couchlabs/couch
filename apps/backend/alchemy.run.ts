@@ -71,7 +71,7 @@ export const spenderSmartAccount = await EvmSmartAccount(SPENDER_ACCOUNT_NAME, {
 // =============================================================================
 
 // Cloudflare Worker Flags
-const compatibilityFlags = ["nodejs_compat"]
+const compatibilityFlags = ["nodejs_compat", "disallow_importable_env"]
 
 // -----------------------------------------------------------------------------
 // DATABASES
@@ -164,6 +164,7 @@ export const orderScheduler = await Worker(ORDER_SCHEDULER_NAME, {
   bindings: {
     DB: db,
     ORDER_QUEUE: orderQueue,
+    STAGE: scope.stage as Stage,
   },
   dev: { port: 3100 },
 })
@@ -182,6 +183,7 @@ export const dunningScheduler = await Worker(DUNNING_SCHEDULER_NAME, {
   bindings: {
     DB: db,
     ORDER_QUEUE: orderQueue,
+    STAGE: scope.stage as Stage,
   },
   dev: { port: 3101 },
 })

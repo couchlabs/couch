@@ -1,7 +1,7 @@
-import { env } from "cloudflare:workers"
 import { base } from "@base-org/account/node"
 import type { Address, Hash } from "viem"
 import { isHash } from "viem"
+import { isTestnetEnvironment, type Stage } from "@/constants/env.constants"
 import { ErrorCode, HTTPError } from "@/errors/http.errors"
 import {
   type ChargeParams,
@@ -11,6 +11,16 @@ import {
   type StatusResult,
   type SubscriptionProvider,
 } from "./provider.interface"
+
+export interface BaseProviderDeps {
+  CDP_API_KEY_ID: string
+  CDP_API_KEY_SECRET: string
+  CDP_WALLET_SECRET: string
+  CDP_WALLET_NAME: string
+  CDP_PAYMASTER_URL: string
+  CDP_SPENDER_ADDRESS: Address
+  STAGE: Stage
+}
 
 export class BaseProvider implements SubscriptionProvider {
   readonly providerId = Provider.BASE
@@ -24,15 +34,15 @@ export class BaseProvider implements SubscriptionProvider {
     spenderAddress: Address
   }
 
-  constructor(testnet: boolean) {
-    this.testnet = testnet
+  constructor(deps: BaseProviderDeps) {
+    this.testnet = isTestnetEnvironment(deps.STAGE)
     this.cdpConfig = {
-      apiKeyId: env.CDP_API_KEY_ID,
-      apiKeySecret: env.CDP_API_KEY_SECRET,
-      walletSecret: env.CDP_WALLET_SECRET,
-      walletName: env.CDP_WALLET_NAME,
-      paymasterUrl: env.CDP_PAYMASTER_URL,
-      spenderAddress: env.CDP_SPENDER_ADDRESS,
+      apiKeyId: deps.CDP_API_KEY_ID,
+      apiKeySecret: deps.CDP_API_KEY_SECRET,
+      walletSecret: deps.CDP_WALLET_SECRET,
+      walletName: deps.CDP_WALLET_NAME,
+      paymasterUrl: deps.CDP_PAYMASTER_URL,
+      spenderAddress: deps.CDP_SPENDER_ADDRESS,
     }
   }
 

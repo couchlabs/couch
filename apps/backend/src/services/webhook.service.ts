@@ -1,4 +1,3 @@
-import { env } from "cloudflare:workers"
 import type { WebhookQueueMessage } from "@alchemy.run"
 import type { Queue } from "@cloudflare/workers-types"
 import type { Address, Hash } from "viem"
@@ -121,8 +120,8 @@ export class WebhookService {
   private webhookRepository: WebhookRepository
   private webhookQueue: Queue<WebhookQueueMessage>
 
-  constructor() {
-    this.webhookRepository = new WebhookRepository()
+  constructor(env) {
+    this.webhookRepository = new WebhookRepository(env)
     this.webhookQueue = env.WEBHOOK_QUEUE
   }
 

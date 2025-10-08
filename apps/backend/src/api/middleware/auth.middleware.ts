@@ -27,7 +27,7 @@ export const apiKeyAuth = (): MiddlewareHandler<{
       throw new HTTPError(401, ErrorCode.UNAUTHORIZED, "Missing API key")
     }
 
-    const accountService = new AccountService()
+    const accountService = new AccountService(c.env)
     const accountAddress = await accountService.authenticateApiKey(apiKey)
     c.set("auth", { accountAddress })
     await next()

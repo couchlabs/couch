@@ -1,6 +1,7 @@
 import type { Address, Hash } from "viem"
 import { createLogger } from "@/lib/logger"
-import { type Provider, providers } from "@/providers"
+import type { Provider } from "@/providers/provider.interface"
+import { ProviderRegistry } from "@/providers/provider.registry"
 
 export interface ChargeSubscriptionParams {
   subscriptionId: Hash
@@ -42,8 +43,11 @@ export interface ChargeResult {
 const logger = createLogger("onchain.repository")
 
 export class OnchainRepository {
-  constructor() {
-    logger.info("OnchainRepository initialized with provider factory")
+  private providerRegistry: ProviderRegistry
+
+  constructor(env) {
+    this.providerRegistry = new ProviderRegistry({ Base: env })
+    logger.info("OnchainRepository initialized with provider registry")
   }
 
   async chargeSubscription(
@@ -55,7 +59,7 @@ export class OnchainRepository {
     try {
       log.info("Executing onchain charge via provider")
 
-      const provider = providers.getProvider(providerId)
+      const provider = this.providerRegistry.get(providerId)
       const { transactionHash, gasUsed } = await provider.chargeSubscription({
         subscriptionId,
         amount,
@@ -80,7 +84,7 @@ export class OnchainRepository {
     try {
       log.info("Fetching onchain subscription status via provider")
 
-      const provider = providers.getProvider(providerId)
+      const provider = this.providerRegistry.get(providerId)
       const {
         isSubscribed,
         subscriptionOwner,
@@ -137,7 +141,7 @@ export class OnchainRepository {
   async validateSubscriptionId(
     params: ValidateSubscriptionIdParams,
   ): Promise<boolean> {
-    const provider = providers.getProvider(params.providerId)
+    const provider = this.providerRegistry.get(params.providerId)
     return provider.validateSubscriptionId(params.subscriptionId)
   }
 }

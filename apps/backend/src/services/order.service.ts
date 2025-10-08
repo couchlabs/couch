@@ -42,9 +42,9 @@ export class OrderService {
   private subscriptionRepository: SubscriptionRepository
   private onchainRepository: OnchainRepository
 
-  constructor() {
-    this.subscriptionRepository = new SubscriptionRepository()
-    this.onchainRepository = new OnchainRepository()
+  constructor(env) {
+    this.subscriptionRepository = new SubscriptionRepository(env)
+    this.onchainRepository = new OnchainRepository(env)
   }
 
   /**

@@ -12,7 +12,7 @@ export default {
    */
   async queue(
     batch: typeof orderQueue.Batch,
-    _env: typeof orderProcessor.Env,
+    env: typeof orderProcessor.Env,
     _ctx: ExecutionContext,
   ): Promise<void> {
     const log = logger.with({
@@ -21,6 +21,10 @@ export default {
     })
 
     log.info(`Processing batch of ${batch.messages.length} order messages`)
+
+    // Create shared services for all messages in the batch
+    const webhookService = new WebhookService(env)
+    const orderService = new OrderService(env)
 
     // Process each message in the batch
     const results = await Promise.allSettled(
@@ -35,8 +39,6 @@ export default {
 
         try {
           op.start()
-          const webhookService = new WebhookService()
-          const orderService = new OrderService()
 
           // Fetch order details for webhook emission
           const orderDetails = await orderService.getOrderDetails(orderId)
