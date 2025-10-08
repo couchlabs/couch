@@ -139,6 +139,19 @@ export class SubscriptionRepository {
   }
 
   /**
+   * Transform database row to domain type for Transaction
+   */
+  private toTransactionDomain(row: schema.TransactionRow): Transaction {
+    return {
+      ...row,
+      transactionHash: row.transactionHash as Hash,
+      subscriptionId: row.subscriptionId as Hash,
+      gasUsed: row.gasUsed ?? undefined,
+      createdAt: row.createdAt ?? undefined,
+    }
+  }
+
+  /**
    * Helper to generate next order number for a subscription
    * Uses COALESCE to handle first order (NULL → 0 → 1)
    */
@@ -214,6 +227,7 @@ export class SubscriptionRepository {
 
     if (!result) return null
 
+    // Transform DB strings to domain types
     return {
       id: result.id,
       subscriptionId: result.subscriptionId as Hash,
@@ -223,26 +237,6 @@ export class SubscriptionRepository {
       status: result.status,
       dueAt: result.dueAt,
       periodInSeconds: result.periodInSeconds,
-    }
-  }
-
-  async getSubscription(subscriptionId: Hash): Promise<Subscription | null> {
-    const result = await this.db
-      .select()
-      .from(schema.subscriptions)
-      .where(eq(schema.subscriptions.subscriptionId, subscriptionId))
-      .get()
-
-    if (!result) return null
-
-    return {
-      subscriptionId: result.subscriptionId as Hash,
-      status: result.status,
-      ownerAddress: result.ownerAddress as Address,
-      accountAddress: result.accountAddress as Address,
-      providerId: result.providerId as Provider,
-      createdAt: result.createdAt ?? undefined,
-      modifiedAt: result.modifiedAt ?? undefined,
     }
   }
 
@@ -264,19 +258,6 @@ export class SubscriptionRepository {
     return result?.id ?? null
   }
 
-  async createTransaction(transaction: Transaction): Promise<void> {
-    await this.db
-      .insert(schema.transactions)
-      .values({
-        transactionHash: transaction.transactionHash,
-        orderId: transaction.orderId,
-        subscriptionId: transaction.subscriptionId,
-        amount: transaction.amount,
-        status: transaction.status,
-      })
-      .run()
-  }
-
   /**
    * Check for existing successful transaction (for idempotency)
    */
@@ -296,17 +277,7 @@ export class SubscriptionRepository {
       )
       .get()
 
-    return result
-      ? {
-          transactionHash: result.transactionHash as Hash,
-          orderId: result.orderId,
-          subscriptionId: result.subscriptionId as Hash,
-          amount: result.amount,
-          status: result.status as TransactionStatus,
-          gasUsed: result.gasUsed ?? undefined,
-          createdAt: result.createdAt ?? undefined,
-        }
-      : null
+    return result ? this.toTransactionDomain(result) : null
   }
 
   async deleteSubscriptionData(
@@ -498,6 +469,7 @@ export class SubscriptionRepository {
       `),
     )
 
+    // Transform DB strings to domain types
     return result.map((entry) => ({
       id: entry.id,
       subscriptionId: entry.subscription_id as Hash,

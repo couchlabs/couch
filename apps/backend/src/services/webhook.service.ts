@@ -13,10 +13,7 @@ import {
   isExposableError,
 } from "@/errors/subscription.errors"
 import { createLogger } from "@/lib/logger"
-import {
-  type Webhook,
-  WebhookRepository,
-} from "@/repositories/webhook.repository"
+import { WebhookRepository } from "@/repositories/webhook.repository"
 import type { ActivationResult } from "@/services/subscription.service"
 
 /**
@@ -197,13 +194,6 @@ export class WebhookService {
 
     log.info("Webhook URL set successfully")
     return { url, secret }
-  }
-
-  /**
-   * Gets webhook with secret (for internal use only - webhook delivery)
-   */
-  async getWebhookWithSecret(accountAddress: Address): Promise<Webhook | null> {
-    return await this.webhookRepository.getWebhook({ accountAddress })
   }
 
   /**

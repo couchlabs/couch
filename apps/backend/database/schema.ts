@@ -176,9 +176,29 @@ export const transactions = sqliteTable(
 // TYPE INFERENCE HELPERS
 // =============================================================================
 
-// Override inferred types to use proper viem types
+// Database row types (what's actually stored in SQLite - all strings)
+export type SubscriptionRow = typeof subscriptions.$inferSelect
+export type NewSubscriptionRow = typeof subscriptions.$inferInsert
+
+export type OrderRow = typeof orders.$inferSelect
+export type NewOrderRow = typeof orders.$inferInsert
+
+export type TransactionRow = typeof transactions.$inferSelect
+export type NewTransactionRow = typeof transactions.$inferInsert
+
+export type AccountRow = typeof accounts.$inferSelect
+export type NewAccountRow = typeof accounts.$inferInsert
+
+export type ApiKeyRow = typeof apiKeys.$inferSelect
+export type NewApiKeyRow = typeof apiKeys.$inferInsert
+
+export type WebhookRow = typeof webhooks.$inferSelect
+export type NewWebhookRow = typeof webhooks.$inferInsert
+
+// Domain types (what the application uses - with proper viem types)
+// Repositories transform between Row and Domain types
 export type Subscription = Omit<
-  typeof subscriptions.$inferSelect,
+  SubscriptionRow,
   "subscriptionId" | "ownerAddress" | "accountAddress"
 > & {
   subscriptionId: Hash
@@ -186,32 +206,26 @@ export type Subscription = Omit<
   accountAddress: Address
 }
 
-export type NewSubscription = typeof subscriptions.$inferInsert
-
-export type Order = Omit<typeof orders.$inferSelect, "subscriptionId"> & {
+export type Order = Omit<OrderRow, "subscriptionId"> & {
   subscriptionId: Hash
 }
 
-export type NewOrder = typeof orders.$inferInsert
-
 export type Transaction = Omit<
-  typeof transactions.$inferSelect,
+  TransactionRow,
   "transactionHash" | "subscriptionId"
 > & {
   transactionHash: Hash
   subscriptionId: Hash
 }
 
-export type NewTransaction = typeof transactions.$inferInsert
-
-export type Account = Omit<typeof accounts.$inferSelect, "address"> & {
+export type Account = Omit<AccountRow, "address"> & {
   address: Address
 }
 
-export type ApiKey = Omit<typeof apiKeys.$inferSelect, "accountAddress"> & {
+export type ApiKey = Omit<ApiKeyRow, "accountAddress"> & {
   accountAddress: Address
 }
 
-export type Webhook = Omit<typeof webhooks.$inferSelect, "accountAddress"> & {
+export type Webhook = Omit<WebhookRow, "accountAddress"> & {
   accountAddress: Address
 }

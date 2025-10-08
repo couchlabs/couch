@@ -1,6 +1,6 @@
 import { env } from "cloudflare:workers"
 import * as schema from "@database/schema"
-import { eq, getTableColumns } from "drizzle-orm"
+import { eq } from "drizzle-orm"
 import { drizzle } from "drizzle-orm/d1"
 import type { Address } from "viem"
 import { Stage } from "@/constants/env.constants"
@@ -8,9 +8,6 @@ import { DrizzleLogger } from "@/lib/logger"
 
 // Re-export schema type
 export type Webhook = schema.Webhook
-
-// Safe webhook type without secret (for API responses)
-export type WebhookPublic = Omit<Webhook, "secret">
 
 // Custom parameter types
 export interface CreateOrUpdateWebhookParams {
@@ -34,6 +31,17 @@ export class WebhookRepository {
           ? new DrizzleLogger("webhook.repository")
           : undefined,
     })
+  }
+
+  /**
+   * Transform database row to domain type for Webhook (includes secret)
+   */
+  private toWebhookDomain(row: schema.WebhookRow): Webhook {
+    return {
+      accountAddress: row.accountAddress as Address,
+      url: row.url,
+      secret: row.secret,
+    }
   }
 
   /**
@@ -75,36 +83,6 @@ export class WebhookRepository {
       return null
     }
 
-    return {
-      accountAddress: result.accountAddress as Address,
-      url: result.url,
-      secret: result.secret,
-    }
-  }
-
-  /**
-   * Gets webhook configuration for an account (excludes secret)
-   * Use this for API responses to prevent exposing the webhook secret
-   */
-  async getWebhookForApi(
-    params: GetWebhookParams,
-  ): Promise<WebhookPublic | null> {
-    // Use getTableColumns to safely exclude the secret field
-    const { secret: _secret, ...safeColumns } = getTableColumns(schema.webhooks)
-
-    const result = await this.db
-      .select(safeColumns)
-      .from(schema.webhooks)
-      .where(eq(schema.webhooks.accountAddress, params.accountAddress))
-      .get()
-
-    if (!result) {
-      return null
-    }
-
-    return {
-      accountAddress: result.accountAddress as Address,
-      url: result.url,
-    }
+    return this.toWebhookDomain(result)
   }
 }

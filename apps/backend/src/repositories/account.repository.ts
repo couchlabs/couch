@@ -19,10 +19,6 @@ export interface RotateApiKeyParams {
   keyHash: string
 }
 
-export interface GetAccountParams {
-  address: Address
-}
-
 export interface GetApiKeyParams {
   keyHash: string
 }
@@ -38,6 +34,16 @@ export class AccountRepository {
           ? new DrizzleLogger("account.repository")
           : undefined,
     })
+  }
+
+  /**
+   * Transform database row to domain type for Account
+   * Uses getAddress() to ensure checksummed address
+   */
+  private toAccountDomain(row: schema.AccountRow): Account {
+    return {
+      address: getAddress(row.address),
+    }
   }
 
   /**
@@ -72,23 +78,6 @@ export class AccountRepository {
   }
 
   /**
-   * Gets account by address
-   */
-  async getAccount(params: GetAccountParams): Promise<Account | null> {
-    const result = await this.db
-      .select()
-      .from(schema.accounts)
-      .where(eq(schema.accounts.address, params.address))
-      .get()
-
-    if (!result) {
-      return null
-    }
-
-    return { address: getAddress(result.address) }
-  }
-
-  /**
    * Gets account by API key hash
    */
   async getAccountByApiKey(params: GetApiKeyParams): Promise<Account | null> {
@@ -102,6 +91,6 @@ export class AccountRepository {
       return null
     }
 
-    return { address: getAddress(result.account_address) }
+    return this.toAccountDomain({ address: result.account_address })
   }
 }

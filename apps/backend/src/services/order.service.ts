@@ -28,13 +28,6 @@ export interface ProcessOrderResult {
   nextOrderCreated: boolean
 }
 
-export interface ScheduleNextOrderParams {
-  subscriptionId: Hash
-  dueAt: Date
-  amount: string
-  periodInSeconds: number
-}
-
 const logger = createLogger("order.service")
 
 export class OrderService {
@@ -192,29 +185,5 @@ export class OrderService {
         nextOrderCreated: false,
       }
     }
-  }
-
-  /**
-   * Schedule next order for a subscription
-   * Used when we need to create an order outside of payment processing
-   */
-  async scheduleNextOrder(params: ScheduleNextOrderParams): Promise<void> {
-    const { subscriptionId, dueAt, amount, periodInSeconds } = params
-
-    const log = logger.with({
-      subscriptionId,
-      dueAt: dueAt.toISOString(),
-      amount,
-    })
-    log.info("Scheduling next order")
-
-    await this.subscriptionRepository.createOrder({
-      subscriptionId: subscriptionId,
-      type: OrderType.RECURRING,
-      dueAt: dueAt.toISOString(),
-      amount,
-      periodInSeconds,
-      status: OrderStatus.PENDING,
-    })
   }
 }
