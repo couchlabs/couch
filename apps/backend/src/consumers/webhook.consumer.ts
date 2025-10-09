@@ -1,8 +1,34 @@
 import type { WebhookQueueMessage } from "@alchemy.run"
 import { createLogger } from "@/lib/logger"
-import type { WorkerEnv } from "@/types/api.env"
+import type { WorkerEnv } from "@/types/webhook.consumer.env"
 
 const logger = createLogger("webhook.consumer")
+
+/**
+ * Calculates exponential backoff delay with cap
+ * Formula: min(BASE_DELAY * (2 ** attempts), MAX_DELAY)
+ *
+ * @param attempts - Number of retry attempts (0-indexed)
+ * @returns Delay in seconds
+ *
+ * Example timeline (5s base, 10 retries):
+ * - Retry 1: 5s
+ * - Retry 2: 10s
+ * - Retry 3: 20s
+ * - Retry 4: 40s
+ * - Retry 5: 80s (~1.3min)
+ * - Retry 6: 160s (~2.7min)
+ * - Retry 7: 320s (~5.3min)
+ * - Retry 8-10: 900s (15min cap)
+ * Total window: ~52 minutes
+ */
+function calculateExponentialBackoff(attempts: number): number {
+  const BASE_DELAY_SECONDS = 5 // Faster initial retries
+  const MAX_DELAY_SECONDS = 900 // 15 minutes cap
+
+  const delay = BASE_DELAY_SECONDS * 2 ** attempts
+  return Math.min(delay, MAX_DELAY_SECONDS)
+}
 
 /**
  * Delivers a webhook to the specified URL
@@ -71,20 +97,18 @@ export default {
         // Mark message as processed
         message.ack()
       } else {
+        const delaySeconds = calculateExponentialBackoff(message.attempts)
+
         messageLog.error("Webhook delivery failed", {
           status: result.status,
           error: result.error,
           attempt: message.attempts,
+          nextRetryInSeconds: delaySeconds,
         })
 
-        // Retry with exponential backoff (handled by queue settings)
-        if (message.attempts < 3) {
-          message.retry()
-        } else {
-          messageLog.error("Webhook delivery failed after max retries")
-          // Mark as processed to remove from queue
-          message.ack()
-        }
+        // Retry with exponential backoff
+        // Queue config handles maxRetries (10) - after exhaustion, routes to WEBHOOK_DLQ
+        message.retry({ delaySeconds })
       }
     }
   },

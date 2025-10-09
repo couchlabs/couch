@@ -120,6 +120,18 @@ export const webhookQueue = await Queue<WebhookQueueMessage>(
   },
 )
 
+// order-dlq: Dead letter queue for permanently failed orders (system errors)
+const ORDER_DLQ_NAME = "order-dlq"
+export const orderDLQ = await Queue<OrderQueueMessage>(ORDER_DLQ_NAME, {
+  name: `${NAME_PREFIX}-${ORDER_DLQ_NAME}`,
+})
+
+// webhook-dlq: Dead letter queue for permanently failed webhooks (unreachable endpoints)
+const WEBHOOK_DLQ_NAME = "webhook-dlq"
+export const webhookDLQ = await Queue<WebhookQueueMessage>(WEBHOOK_DLQ_NAME, {
+  name: `${NAME_PREFIX}-${WEBHOOK_DLQ_NAME}`,
+})
+
 // -----------------------------------------------------------------------------
 // API GATEWAY
 // -----------------------------------------------------------------------------
@@ -193,9 +205,9 @@ export const dunningScheduler = await Worker(DUNNING_SCHEDULER_NAME, {
 // -----------------------------------------------------------------------------
 
 // order.consumer: Processes orders
-const ORDER_PROCESSOR_NAME = "order-processor"
-export const orderProcessor = await Worker(ORDER_PROCESSOR_NAME, {
-  name: `${NAME_PREFIX}-${ORDER_PROCESSOR_NAME}`,
+const ORDER_CONSUMER_NAME = "order-consumer"
+export const orderConsumer = await Worker(ORDER_CONSUMER_NAME, {
+  name: `${NAME_PREFIX}-${ORDER_CONSUMER_NAME}`,
   entrypoint: path.join(
     import.meta.dirname,
     "src",
@@ -209,8 +221,8 @@ export const orderProcessor = await Worker(ORDER_PROCESSOR_NAME, {
         batchSize: 10,
         maxConcurrency: 10,
         maxRetries: 3,
-        // maxWaitTimeMs: 500, Error in miniflare
         retryDelay: 60,
+        deadLetterQueue: orderDLQ,
       },
     },
   ],
@@ -224,9 +236,9 @@ export const orderProcessor = await Worker(ORDER_PROCESSOR_NAME, {
 })
 
 // webhook.consumer: Delivers webhooks to merchant endpoints
-const WEBHOOK_DELIVERY_NAME = "webhook-delivery"
-export const webhookDelivery = await Worker(WEBHOOK_DELIVERY_NAME, {
-  name: `${NAME_PREFIX}-${WEBHOOK_DELIVERY_NAME}`,
+const WEBHOOK_CONSUMER_NAME = "webhook-consumer"
+export const webhookConsumer = await Worker(WEBHOOK_CONSUMER_NAME, {
+  name: `${NAME_PREFIX}-${WEBHOOK_CONSUMER_NAME}`,
   entrypoint: path.join(
     import.meta.dirname,
     "src",
@@ -239,8 +251,9 @@ export const webhookDelivery = await Worker(WEBHOOK_DELIVERY_NAME, {
       settings: {
         batchSize: 5,
         maxConcurrency: 5,
-        maxRetries: 3,
-        retryDelay: 60, // 1 minute
+        maxRetries: 10,
+        // Exponential backoff implemented in consumer (5s base, 15min cap, ~52min total window)
+        deadLetterQueue: webhookDLQ,
       },
     },
   ],
@@ -252,15 +265,71 @@ export const webhookDelivery = await Worker(WEBHOOK_DELIVERY_NAME, {
   dev: { port: 3201 },
 })
 
+// -----------------------------------------------------------------------------
+// DLQ CONSUMERS
+// -----------------------------------------------------------------------------
+
+// order.dlq.consumer: Logs permanently failed orders (system errors)
+const ORDER_DLQ_CONSUMER_NAME = "order-dlq-consumer"
+export const orderDLQConsumer = await Worker(ORDER_DLQ_CONSUMER_NAME, {
+  name: `${NAME_PREFIX}-${ORDER_DLQ_CONSUMER_NAME}`,
+  entrypoint: path.join(
+    import.meta.dirname,
+    "src",
+    "consumers",
+    "order.dlq.consumer.ts",
+  ),
+  eventSources: [
+    {
+      queue: orderDLQ,
+      settings: {
+        batchSize: 1,
+        maxConcurrency: 1,
+        maxRetries: 0,
+      },
+    },
+  ],
+  compatibilityFlags,
+  dev: { port: 3202 },
+})
+
+// webhook.dlq.consumer: Logs permanently failed webhooks (unreachable endpoints)
+const WEBHOOK_DLQ_CONSUMER_NAME = "webhook-dlq-consumer"
+export const webhookDLQConsumer = await Worker(WEBHOOK_DLQ_CONSUMER_NAME, {
+  name: `${NAME_PREFIX}-${WEBHOOK_DLQ_CONSUMER_NAME}`,
+  entrypoint: path.join(
+    import.meta.dirname,
+    "src",
+    "consumers",
+    "webhook.dlq.consumer.ts",
+  ),
+  eventSources: [
+    {
+      queue: webhookDLQ,
+      settings: {
+        batchSize: 1,
+        maxConcurrency: 1,
+        maxRetries: 0,
+      },
+    },
+  ],
+  compatibilityFlags,
+  dev: { port: 3203 },
+})
+
 console.log({
   [API_NAME]: api,
   [DB_NAME]: db,
   [ORDER_SCHEDULER_NAME]: orderScheduler,
   [DUNNING_SCHEDULER_NAME]: dunningScheduler,
   [ORDER_QUEUE_NAME]: orderQueue,
-  [ORDER_PROCESSOR_NAME]: orderProcessor,
+  [ORDER_CONSUMER_NAME]: orderConsumer,
   [WEBHOOK_QUEUE_NAME]: webhookQueue,
-  [WEBHOOK_DELIVERY_NAME]: webhookDelivery,
+  [WEBHOOK_CONSUMER_NAME]: webhookConsumer,
+  [ORDER_DLQ_NAME]: orderDLQ,
+  [ORDER_DLQ_CONSUMER_NAME]: orderDLQConsumer,
+  [WEBHOOK_DLQ_NAME]: webhookDLQ,
+  [WEBHOOK_DLQ_CONSUMER_NAME]: webhookDLQConsumer,
 })
 
 await scope.finalize()

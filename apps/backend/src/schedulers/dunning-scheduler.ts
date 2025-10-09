@@ -1,6 +1,6 @@
-import type { dunningScheduler } from "@alchemy.run"
 import { createLogger } from "@/lib/logger"
 import { SubscriptionRepository } from "@/repositories/subscription.repository"
+import type { WorkerEnv } from "@/types/dunning.scheduler.env"
 
 const logger = createLogger("dunning-scheduler")
 
@@ -16,7 +16,7 @@ const logger = createLogger("dunning-scheduler")
 export default {
   async scheduled(
     event: ScheduledEvent,
-    env: typeof dunningScheduler.Env,
+    env: WorkerEnv,
     _ctx: ExecutionContext,
   ): Promise<void> {
     const log = logger.with({

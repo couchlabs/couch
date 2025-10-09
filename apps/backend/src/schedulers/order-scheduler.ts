@@ -1,6 +1,6 @@
-import type { orderScheduler } from "@alchemy.run"
 import { createLogger } from "@/lib/logger"
 import { SubscriptionRepository } from "@/repositories/subscription.repository"
+import type { WorkerEnv } from "@/types/order.scheduler.env"
 
 const logger = createLogger("order.scheduler")
 
@@ -11,7 +11,7 @@ export default {
    */
   async scheduled(
     event: ScheduledEvent,
-    env: typeof orderScheduler.Env,
+    env: WorkerEnv,
     _ctx: ExecutionContext,
   ): Promise<void> {
     const log = logger.with({

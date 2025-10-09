@@ -1,7 +1,8 @@
-import type { orderProcessor, orderQueue } from "@alchemy.run"
+import type { orderQueue } from "@alchemy.run"
 import { createLogger } from "@/lib/logger"
 import { OrderService } from "@/services/order.service"
 import { WebhookService } from "@/services/webhook.service"
+import type { WorkerEnv } from "@/types/order.consumer.env"
 
 const logger = createLogger("order.consumer")
 
@@ -12,7 +13,7 @@ export default {
    */
   async queue(
     batch: typeof orderQueue.Batch,
-    env: typeof orderProcessor.Env,
+    env: WorkerEnv,
     _ctx: ExecutionContext,
   ): Promise<void> {
     const log = logger.with({
