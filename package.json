@@ -15,14 +15,14 @@
       "apps/*"
     ],
     "catalog": {
-      "alchemy": "^0.70.2",
+      "alchemy": "^0.72.0",
       "typescript": "^5.9.3"
     },
     "catalogs": {
       "cloudflare": {
-        "miniflare": "^4.20251004.0",
+        "miniflare": "^4.20251008.0",
         "@cloudflare/workers-types": "^4.20251004.0",
-        "@types/node": "^24.7.0"
+        "@types/node": "^24.7.1"
       },
       "coinbase": {
         "@base-org/account": "^2.4.0",
