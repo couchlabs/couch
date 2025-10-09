@@ -15,7 +15,7 @@
       "apps/*"
     ],
     "catalog": {
-      "alchemy": "^0.70.0",
+      "alchemy": "^0.72.0",
       "typescript": "^5.9.3"
     },
     "catalogs": {
