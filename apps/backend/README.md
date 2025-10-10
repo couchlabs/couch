@@ -60,7 +60,7 @@ The backend starts with the following services:
 
 > **Note**: \*Cron triggers only run in production. Locally, use `GET http://localhost:3100/__scheduled` or `GET http://localhost:3101/__scheduled` to trigger manually, or use the playground app's Backend Settings dialog.
 
-> **Tip**: Run the playground app alongside (`bun run dev --filter=demo`) for a full testing environment with webhook visualization and scheduler controls.
+> **Tip**: Run the playground app alongside (`bun run dev --filter=playground`) for a full testing environment with webhook visualization and scheduler controls.
 
 ## Architecture & Patterns
 

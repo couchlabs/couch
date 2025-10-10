@@ -9,8 +9,8 @@ Couch is an offchain orchestrator for SpendPermission-based recurring payments. 
 ```
 couch/
 ├── apps/
-│ ├── backend/      Offchain orchestrator for recurring payments
-│ └── demo/         Playground application for testing
+│ ├── backend/       Offchain orchestrator for recurring payments
+│ └── playground/    Playground application for testing
 ```
 
 ## Getting started
@@ -63,16 +63,16 @@ COUCH_API_KEY=your_api_key_here
 COUCH_WEBHOOK_SECRET=your_webhook_secret_here
 ```
 
-6. **Start the demo**
+6. **Start the playground**
 
 ```bash
-bun dev --filter=demo
+bun dev --filter=playground
 ```
 
-Your demo should now be fully functional at `http://localhost:8000`
+Your playground should now be fully functional at `http://localhost:8000`
 
 **Notes:**
-> - You can start both backend and demo together with just `bun dev`
+> - You can start both backend and playground together with just `bun dev`
 > - For backend-specific instructions (testing, endpoints, architecture), see the [Backend README](./apps/backend/README.md).
 
 ## Scripts

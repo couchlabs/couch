@@ -1,5 +1,6 @@
 {
-  "name": "couch-poc",
+  "name": "couch",
+  "description": "Stablecoin recurring payments infrastructure",
   "type": "module",
   "private": true,
   "scripts": {
@@ -21,12 +22,13 @@
     "catalogs": {
       "cloudflare": {
         "miniflare": "^4.20251008.0",
-        "@cloudflare/workers-types": "^4.20251004.0",
-        "@types/node": "^24.7.1"
+        "@cloudflare/workers-types": "^4.20251008.0",
+        "@types/node": "^24.7.1",
+        "hono": "^4.9.10"
       },
       "coinbase": {
         "@base-org/account": "^2.4.0",
-        "@coinbase/cdp-sdk": "^1.38.3"
+        "@coinbase/cdp-sdk": "^1.38.4"
       }
     }
   },

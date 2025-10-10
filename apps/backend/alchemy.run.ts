@@ -15,9 +15,8 @@ import drizzleConfig from "./drizzle.config"
  * Example: couch-backend-dev-subscription-api
  *
  * Components:
- *   app.name:    Product/organization identifier (e.g., "couch")
- *   scope.name:  Service/component name (e.g., "backend", "frontend")
- *   scope.stage: Environment (e.g., "dev", "staging", "prod")
+ *   app.name:    Product identifier (e.g., "couch-backend")
+ *   app.stage:   Environment (e.g., "dev", "staging", "prod")
  *   resource:    Specific resource name (e.g., "subscription-api", "spender-evm")
  */
 
@@ -36,11 +35,10 @@ import drizzleConfig from "./drizzle.config"
 // APPLICATION SCOPE
 // =============================================================================
 
-const app = { name: "couch" }
-export const scope = await alchemy("backend", {
+export const app = await alchemy("couch-backend", {
   password: process.env.ALCHEMY_PASSWORD,
 })
-const NAME_PREFIX = `${app.name}-${scope.name}-${scope.stage}`
+const NAME_PREFIX = `${app.name}-${app.stage}`
 
 // =============================================================================
 // ONCHAIN RESOURCES (Coinbase)
@@ -77,7 +75,7 @@ const compatibilityFlags = ["nodejs_compat", "disallow_importable_env"]
 // DATABASES
 // -----------------------------------------------------------------------------
 
-// subscription-db: Main database for subscription and order data
+// db: Main database for the backend
 const DB_NAME = "db"
 const db = await D1Database(DB_NAME, {
   name: `${NAME_PREFIX}-${DB_NAME}`,
@@ -136,7 +134,7 @@ export const webhookDLQ = await Queue<WebhookQueueMessage>(WEBHOOK_DLQ_NAME, {
 // API GATEWAY
 // -----------------------------------------------------------------------------
 
-// subscription-api: Main API service
+// api: Main API service
 const API_NAME = "api"
 export const api = await Worker(API_NAME, {
   name: `${NAME_PREFIX}-${API_NAME}`,
@@ -149,7 +147,7 @@ export const api = await Worker(API_NAME, {
     CDP_PAYMASTER_URL: alchemy.env.CDP_PAYMASTER_URL,
     CDP_WALLET_NAME: spenderSmartAccount.name,
     CDP_SPENDER_ADDRESS: spenderSmartAccount.address,
-    STAGE: scope.stage as Stage,
+    STAGE: app.stage as Stage,
     // RESOURCES:
     DB: db,
     WEBHOOK_QUEUE: webhookQueue,
@@ -162,7 +160,7 @@ export const api = await Worker(API_NAME, {
 // SCHEDULERS
 // -----------------------------------------------------------------------------
 
-// order-scheduler: Schedules order processing
+// order.scheduler: Schedules orders
 const ORDER_SCHEDULER_NAME = "order-scheduler"
 export const orderScheduler = await Worker(ORDER_SCHEDULER_NAME, {
   name: `${NAME_PREFIX}-${ORDER_SCHEDULER_NAME}`,
@@ -176,12 +174,13 @@ export const orderScheduler = await Worker(ORDER_SCHEDULER_NAME, {
   bindings: {
     DB: db,
     ORDER_QUEUE: orderQueue,
-    STAGE: scope.stage as Stage,
+    STAGE: app.stage as Stage,
   },
+  compatibilityFlags,
   dev: { port: 3100 },
 })
 
-// dunning-scheduler: Schedules payment retries for past_due subscriptions
+// dunning.scheduler: Schedules payment retries for past_due subscriptions
 const DUNNING_SCHEDULER_NAME = "dunning-scheduler"
 export const dunningScheduler = await Worker(DUNNING_SCHEDULER_NAME, {
   name: `${NAME_PREFIX}-${DUNNING_SCHEDULER_NAME}`,
@@ -195,8 +194,9 @@ export const dunningScheduler = await Worker(DUNNING_SCHEDULER_NAME, {
   bindings: {
     DB: db,
     ORDER_QUEUE: orderQueue,
-    STAGE: scope.stage as Stage,
+    STAGE: app.stage as Stage,
   },
+  compatibilityFlags,
   dev: { port: 3101 },
 })
 
@@ -332,7 +332,7 @@ console.log({
   [WEBHOOK_DLQ_CONSUMER_NAME]: webhookDLQConsumer,
 })
 
-await scope.finalize()
+await app.finalize()
 
 // TODOS
 // Reconciler components - see commit ee65232 for commented implementation
