@@ -1,4 +1,3 @@
-import { env } from "cloudflare:workers"
 import { type Address, getAddress, isAddress } from "viem"
 import type { Stage } from "@/constants/env.constants"
 import { ErrorCode, HTTPError } from "@/errors/http.errors"
@@ -17,8 +16,8 @@ export class AccountService {
   private accountRepository: AccountRepository
   private stage: Stage
 
-  constructor() {
-    this.accountRepository = new AccountRepository()
+  constructor(env) {
+    this.accountRepository = new AccountRepository(env)
     this.stage = env.STAGE
   }
 

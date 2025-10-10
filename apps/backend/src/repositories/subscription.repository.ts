@@ -1,43 +1,24 @@
-import { env } from "cloudflare:workers"
 import type { D1Database } from "@cloudflare/workers-types"
+import * as schema from "@database/schema"
+import { and, eq, sql } from "drizzle-orm"
+import { drizzle } from "drizzle-orm/d1"
 import type { Address, Hash } from "viem"
+import { Stage } from "@/constants/env.constants"
 import {
   OrderStatus,
   OrderType,
   SubscriptionStatus,
   TransactionStatus,
 } from "@/constants/subscription.constants"
+import { DrizzleLogger } from "@/lib/logger"
 import type { Provider } from "@/providers/provider.interface"
 
-// import { createLogger } from "@/lib/logger"
-// const logger = createLogger('subscription:repository')
+// Re-export schema types (single source of truth)
+export type Subscription = schema.Subscription
+export type Order = schema.Order
+export type Transaction = schema.Transaction
 
-export interface Subscription {
-  subscriptionId: Hash
-  status: SubscriptionStatus
-  ownerAddress: Address
-  accountAddress: Address // Merchant account that receives payments
-  providerId: Provider
-  createdAt?: string
-  modifiedAt?: string
-}
-
-export interface Order {
-  id?: number
-  subscriptionId: string
-  orderNumber: number // Sequential number per subscription (1, 2, 3...)
-  type: OrderType
-  dueAt: string
-  amount: string
-  status: OrderStatus
-  attempts?: number
-  parentOrderId?: number
-  failureReason?: string
-  processingLock?: string
-  lockedBy?: string
-  createdAt?: string
-}
-
+// Custom parameter/result types (not in schema)
 export interface CreateOrderParams {
   subscriptionId: Hash
   type: OrderType
@@ -47,21 +28,11 @@ export interface CreateOrderParams {
   status: OrderStatus
 }
 
-export interface Transaction {
-  transactionHash: Hash
-  orderId: number
-  subscriptionId: Hash
-  amount: string
-  status: TransactionStatus
-  failureReason?: string
-  gasUsed?: string
-  createdAt?: string
-}
-
 // Method parameter interfaces
 export interface CreateSubscriptionParams {
   subscriptionId: Hash
   ownerAddress: Address
+  accountAddress: Address
   providerId: Provider
 }
 
@@ -92,6 +63,7 @@ export interface OrderDetails {
   status: string
   dueAt: string
   periodInSeconds: number
+  attempts: number
 }
 
 export interface RecordTransactionParams {
@@ -99,7 +71,7 @@ export interface RecordTransactionParams {
   orderId: number
   subscriptionId: Hash
   amount: string
-  status: string
+  status: TransactionStatus
 }
 
 export interface UpdateOrderParams {
@@ -111,11 +83,38 @@ export interface UpdateOrderParams {
 
 export interface UpdateSubscriptionParams {
   subscriptionId: Hash
-  status: string
+  status: SubscriptionStatus
 }
 
 export interface DeleteSubscriptionDataParams {
   subscriptionId: Hash
+}
+
+export interface ScheduleRetryParams {
+  orderId: number
+  subscriptionId: Hash
+  nextRetryAt: string
+  failureReason?: string
+  rawError?: string
+}
+
+export interface ReactivateSubscriptionParams {
+  orderId: number
+  subscriptionId: Hash
+}
+
+export interface DueRetry {
+  id: number
+  subscriptionId: Hash
+  accountAddress: Address
+  amount: string
+  attempts: number
+  providerId: Provider
+}
+
+export interface SubscriptionRepositoryDeps {
+  DB: D1Database
+  STAGE: Stage
 }
 
 export interface CreateSubscriptionWithOrderParams {
@@ -148,17 +147,49 @@ export interface ExecuteSubscriptionActivationParams {
   }
 }
 
-export interface MarkSubscriptionInactiveParams {
+export interface MarkSubscriptionIncompleteParams {
   subscriptionId: Hash
   orderId: number
   reason: string
 }
 
 export class SubscriptionRepository {
-  private db: D1Database
+  private db: ReturnType<typeof drizzle<typeof schema>>
 
-  constructor() {
-    this.db = env.DB
+  constructor(deps: SubscriptionRepositoryDeps) {
+    this.db = drizzle(deps.DB, {
+      schema,
+      logger:
+        deps.STAGE === Stage.DEV || deps.STAGE === Stage.STAGING
+          ? new DrizzleLogger("subscription.repository")
+          : undefined,
+    })
+  }
+
+  /**
+   * Transform database row to domain type for Transaction
+   */
+  private toTransactionDomain(row: schema.TransactionRow): Transaction {
+    return {
+      ...row,
+      transactionHash: row.transactionHash as Hash,
+      subscriptionId: row.subscriptionId as Hash,
+      gasUsed: row.gasUsed ?? undefined,
+      createdAt: row.createdAt ?? undefined,
+    }
+  }
+
+  /**
+   * Helper to generate next order number for a subscription
+   * Uses COALESCE to handle first order (NULL → 0 → 1)
+   */
+  private getNextOrderNumber(subscriptionId: Hash) {
+    return sql<number>`COALESCE(
+      (SELECT MAX(${schema.orders.orderNumber})
+       FROM ${schema.orders}
+       WHERE ${schema.orders.subscriptionId} = ${subscriptionId}),
+      0
+    ) + 1`
   }
 
   /**
@@ -167,20 +198,19 @@ export class SubscriptionRepository {
    * This is atomic - prevents race conditions
    */
   async createSubscription(params: CreateSubscriptionParams): Promise<boolean> {
-    const { subscriptionId, ownerAddress, providerId } = params
+    const { subscriptionId, ownerAddress, accountAddress, providerId } = params
     // Use INSERT OR IGNORE to handle race conditions atomically
     // This ensures only one request can create the subscription
     const result = await this.db
-      .prepare(
-        `INSERT OR IGNORE INTO subscriptions (subscription_id, owner_address, status, provider_id)
-         VALUES (?, ?, ?, ?)`,
-      )
-      .bind(
+      .insert(schema.subscriptions)
+      .values({
         subscriptionId,
         ownerAddress,
-        SubscriptionStatus.PROCESSING,
+        accountAddress,
+        status: SubscriptionStatus.PROCESSING,
         providerId,
-      )
+      })
+      .onConflictDoNothing()
       .run()
 
     return result.meta.changes > 0
@@ -192,11 +222,12 @@ export class SubscriptionRepository {
   async subscriptionExists(params: SubscriptionExistsParams): Promise<boolean> {
     const { subscriptionId } = params
     const result = await this.db
-      .prepare("SELECT 1 FROM subscriptions WHERE subscription_id = ? LIMIT 1")
-      .bind(subscriptionId)
-      .first()
+      .select({ exists: sql<number>`1` })
+      .from(schema.subscriptions)
+      .where(eq(schema.subscriptions.subscriptionId, subscriptionId))
+      .get()
 
-    return result !== null
+    return !!result
   }
 
   /**
@@ -204,114 +235,57 @@ export class SubscriptionRepository {
    */
   async getOrderDetails(orderId: number): Promise<OrderDetails | null> {
     const result = await this.db
-      .prepare(
-        `SELECT
-          o.id,
-          o.subscription_id,
-          o.amount,
-          o.order_number,
-          o.status,
-          o.due_at,
-          o.period_length_in_seconds,
-          s.account_address
-        FROM orders o
-        JOIN subscriptions s ON o.subscription_id = s.subscription_id
-        WHERE o.id = ?`,
+      .select({
+        id: schema.orders.id,
+        subscriptionId: schema.orders.subscriptionId,
+        amount: schema.orders.amount,
+        orderNumber: schema.orders.orderNumber,
+        status: schema.orders.status,
+        dueAt: schema.orders.dueAt,
+        periodInSeconds: schema.orders.periodLengthInSeconds,
+        attempts: schema.orders.attempts,
+        accountAddress: schema.subscriptions.accountAddress,
+      })
+      .from(schema.orders)
+      .innerJoin(
+        schema.subscriptions,
+        eq(schema.orders.subscriptionId, schema.subscriptions.subscriptionId),
       )
-      .bind(orderId)
-      .first<{
-        id: number
-        subscription_id: string
-        amount: string
-        order_number: number
-        status: string
-        due_at: string
-        period_length_in_seconds: number
-        account_address: string
-      }>()
+      .where(eq(schema.orders.id, orderId))
+      .get()
 
     if (!result) return null
 
+    // Transform DB strings to domain types
     return {
       id: result.id,
-      subscriptionId: result.subscription_id as Hash,
-      accountAddress: result.account_address as Address,
+      subscriptionId: result.subscriptionId as Hash,
+      accountAddress: result.accountAddress as Address,
       amount: result.amount,
-      orderNumber: result.order_number,
+      orderNumber: result.orderNumber,
       status: result.status,
-      dueAt: result.due_at,
-      periodInSeconds: result.period_length_in_seconds,
+      dueAt: result.dueAt,
+      periodInSeconds: result.periodInSeconds,
+      attempts: result.attempts,
     }
   }
 
-  async getSubscription(subscriptionId: Hash): Promise<Subscription | null> {
+  async createOrder(order: CreateOrderParams): Promise<number | null> {
     const result = await this.db
-      .prepare("SELECT * FROM subscriptions WHERE subscription_id = ?")
-      .bind(subscriptionId)
-      .first<{
-        subscription_id: string
-        status: SubscriptionStatus
-        owner_address: string
-        account_address: string
-        provider_id: string
-        created_at?: string
-        modified_at?: string
-      }>()
+      .insert(schema.orders)
+      .values({
+        subscriptionId: order.subscriptionId,
+        orderNumber: this.getNextOrderNumber(order.subscriptionId),
+        type: order.type,
+        dueAt: order.dueAt,
+        amount: order.amount,
+        periodLengthInSeconds: order.periodInSeconds,
+        status: order.status || OrderStatus.PROCESSING,
+      })
+      .returning({ id: schema.orders.id })
+      .get()
 
-    if (!result) return null
-
-    return {
-      subscriptionId: result.subscription_id as Hash,
-      status: result.status,
-      ownerAddress: result.owner_address as Address,
-      accountAddress: result.account_address as Address,
-      providerId: result.provider_id as Provider,
-      createdAt: result.created_at,
-      modifiedAt: result.modified_at,
-    }
-  }
-
-  async createOrder(order: CreateOrderParams): Promise<number | undefined> {
-    const result = await this.db
-      .prepare(
-        `INSERT INTO orders (
-          subscription_id, order_number, type, due_at, amount, period_length_in_seconds, status
-        ) VALUES (
-          ?,
-          COALESCE((SELECT MAX(order_number) FROM orders WHERE subscription_id = ?), 0) + 1,
-          ?, ?, ?, ?, ?
-        )
-        RETURNING id`,
-      )
-      .bind(
-        order.subscriptionId,
-        order.subscriptionId, // For the subquery
-        order.type,
-        order.dueAt,
-        order.amount,
-        order.periodInSeconds,
-        order.status || OrderStatus.PROCESSING,
-      )
-      .first<{ id: number }>()
-
-    return result?.id
-  }
-
-  async createTransaction(transaction: Transaction): Promise<void> {
-    await this.db
-      .prepare(
-        `INSERT INTO transactions (
-          transaction_hash, order_id, subscription_id, amount, status
-        ) VALUES (?, ?, ?, ?, ?)`,
-      )
-      .bind(
-        transaction.transactionHash, // transaction_hash column (PK)
-        transaction.orderId,
-        transaction.subscriptionId,
-        transaction.amount,
-        transaction.status,
-      )
-      .run()
+    return result?.id ?? null
   }
 
   /**
@@ -322,37 +296,18 @@ export class SubscriptionRepository {
   ): Promise<Transaction | null> {
     const { subscriptionId, orderId } = params
     const result = await this.db
-      .prepare(
-        `SELECT * FROM transactions
-         WHERE subscription_id = ?
-         AND order_id = ?
-         AND status = ?
-         LIMIT 1`,
+      .select()
+      .from(schema.transactions)
+      .where(
+        and(
+          eq(schema.transactions.subscriptionId, subscriptionId),
+          eq(schema.transactions.orderId, orderId),
+          eq(schema.transactions.status, TransactionStatus.CONFIRMED),
+        ),
       )
-      .bind(subscriptionId, orderId, TransactionStatus.CONFIRMED)
-      .first<{
-        transaction_hash: string
-        order_id: number
-        subscription_id: string
-        amount: string
-        status: string
-        failure_reason?: string
-        gas_used?: string
-        created_at?: string
-      }>()
+      .get()
 
-    return result
-      ? {
-          transactionHash: result.transaction_hash as Hash,
-          orderId: result.order_id,
-          subscriptionId: result.subscription_id as Hash,
-          amount: result.amount,
-          status: result.status as TransactionStatus,
-          failureReason: result.failure_reason,
-          gasUsed: result.gas_used,
-          createdAt: result.created_at,
-        }
-      : null
+    return result ? this.toTransactionDomain(result) : null
   }
 
   async deleteSubscriptionData(
@@ -361,14 +316,14 @@ export class SubscriptionRepository {
     const { subscriptionId } = params
     await this.db.batch([
       this.db
-        .prepare("DELETE FROM transactions WHERE subscription_id = ?")
-        .bind(subscriptionId),
+        .delete(schema.transactions)
+        .where(eq(schema.transactions.subscriptionId, subscriptionId)),
       this.db
-        .prepare("DELETE FROM orders WHERE subscription_id = ?")
-        .bind(subscriptionId),
+        .delete(schema.orders)
+        .where(eq(schema.orders.subscriptionId, subscriptionId)),
       this.db
-        .prepare("DELETE FROM subscriptions WHERE subscription_id = ?")
-        .bind(subscriptionId),
+        .delete(schema.subscriptions)
+        .where(eq(schema.subscriptions.subscriptionId, subscriptionId)),
     ])
   }
 
@@ -381,66 +336,56 @@ export class SubscriptionRepository {
   ): Promise<CreateSubscriptionWithOrderResult> {
     const { subscriptionId, ownerAddress, accountAddress, providerId, order } =
       params
-    try {
-      // D1 supports transactions via batch
-      // First, check if subscription exists
-      const exists = await this.subscriptionExists({ subscriptionId })
-      if (exists) {
-        return { created: false }
-      }
 
-      // Create subscription linked to merchant account
-      const subResult = await this.db
-        .prepare(
-          `INSERT INTO subscriptions (subscription_id, owner_address, status, account_address, provider_id)
-           VALUES (?, ?, ?, ?, ?)`,
-        )
-        .bind(
+    // First, check if subscription exists (outside batch for early exit)
+    const exists = await this.subscriptionExists({ subscriptionId })
+    if (exists) {
+      return { created: false }
+    }
+
+    try {
+      // Use batch for atomic operations - both succeed or both fail
+      const [subResult, orderResult] = await this.db.batch([
+        this.db.insert(schema.subscriptions).values({
           subscriptionId,
           ownerAddress,
-          SubscriptionStatus.PROCESSING,
+          status: SubscriptionStatus.PROCESSING,
           accountAddress,
           providerId,
-        )
-        .run()
+        }),
+        this.db
+          .insert(schema.orders)
+          .values({
+            subscriptionId: order.subscriptionId,
+            orderNumber: this.getNextOrderNumber(order.subscriptionId),
+            type: order.type,
+            dueAt: order.dueAt,
+            amount: order.amount,
+            periodLengthInSeconds: order.periodInSeconds,
+            status: order.status || OrderStatus.PROCESSING,
+          })
+          .returning({
+            id: schema.orders.id,
+            orderNumber: schema.orders.orderNumber,
+          }),
+      ])
 
+      // Check if subscription was actually created (race condition check)
       if (subResult.meta.changes === 0) {
-        // Race condition - another request created it
+        // Shouldn't happen in batch, but handle defensively
+        await this.deleteSubscriptionData({ subscriptionId })
         return { created: false }
       }
-
-      // Create order with auto-calculated order_number (starts at 1)
-      const orderResult = await this.db
-        .prepare(
-          `INSERT INTO orders (
-            subscription_id, order_number, type, due_at, amount, period_length_in_seconds, status
-          ) VALUES (
-            ?,
-            COALESCE((SELECT MAX(order_number) FROM orders WHERE subscription_id = ?), 0) + 1,
-            ?, ?, ?, ?, ?
-          )
-          RETURNING id, order_number`,
-        )
-        .bind(
-          order.subscriptionId,
-          order.subscriptionId, // For the subquery
-          order.type,
-          order.dueAt,
-          order.amount,
-          order.periodInSeconds,
-          order.status || OrderStatus.PROCESSING,
-        )
-        .first<{ id: number; order_number: number }>()
 
       return {
         created: true,
-        orderId: orderResult?.id,
-        orderNumber: orderResult?.order_number,
+        orderId: orderResult[0]?.id,
+        orderNumber: orderResult[0]?.orderNumber,
       }
-    } catch (error) {
-      // If anything fails, clean up
-      await this.deleteSubscriptionData({ subscriptionId })
-      throw error
+    } catch {
+      // Batch failed (likely UNIQUE constraint violation from race condition)
+      // No cleanup needed since batch is atomic
+      return { created: false }
     }
   }
 
@@ -455,77 +400,67 @@ export class SubscriptionRepository {
     await this.db.batch([
       // Create transaction record
       this.db
-        .prepare(
-          `INSERT INTO transactions (
-            transaction_hash, order_id, subscription_id, amount, status
-          ) VALUES (?, ?, ?, ?, ?)`,
-        )
-        .bind(
-          transaction.hash, // transaction_hash column (PK)
-          order.id,
+        .insert(schema.transactions)
+        .values({
+          transactionHash: transaction.hash,
+          orderId: order.id,
           subscriptionId,
-          transaction.amount,
-          TransactionStatus.CONFIRMED,
-        ),
+          amount: transaction.amount,
+          status: TransactionStatus.CONFIRMED,
+        }),
       // Mark order as completed
       this.db
-        .prepare(`UPDATE orders SET status = ? WHERE id = ?`)
-        .bind(OrderStatus.PAID, order.id),
+        .update(schema.orders)
+        .set({ status: OrderStatus.PAID })
+        .where(eq(schema.orders.id, order.id)),
       // Create next order with auto-incremented order_number
       this.db
-        .prepare(
-          `INSERT INTO orders (
-            subscription_id, order_number, type, due_at, amount, period_length_in_seconds, status
-          ) VALUES (
-            ?,
-            COALESCE((SELECT MAX(order_number) FROM orders WHERE subscription_id = ?), 0) + 1,
-            ?, ?, ?, ?, ?
-          )`,
-        )
-        .bind(
+        .insert(schema.orders)
+        .values({
           subscriptionId,
-          subscriptionId, // For the subquery
-          OrderType.RECURRING,
-          nextOrder.dueAt,
-          nextOrder.amount,
-          nextOrder.periodInSeconds,
-          OrderStatus.PENDING,
-        ),
+          orderNumber: this.getNextOrderNumber(subscriptionId),
+          type: OrderType.RECURRING,
+          dueAt: nextOrder.dueAt,
+          amount: nextOrder.amount,
+          periodLengthInSeconds: nextOrder.periodInSeconds,
+          status: OrderStatus.PENDING,
+        }),
       // Activate subscription
       this.db
-        .prepare(
-          `UPDATE subscriptions SET status = ?, modified_at = CURRENT_TIMESTAMP
-           WHERE subscription_id = ?`,
-        )
-        .bind(SubscriptionStatus.ACTIVE, subscriptionId),
+        .update(schema.subscriptions)
+        .set({
+          status: SubscriptionStatus.ACTIVE,
+          modifiedAt: sql`CURRENT_TIMESTAMP`,
+        })
+        .where(eq(schema.subscriptions.subscriptionId, subscriptionId)),
     ])
   }
 
   /**
-   * COMPENSATING ACTION: Mark subscription as inactive
+   * COMPENSATING ACTION: Mark subscription as incomplete
    * Used when charge fails after subscription creation
    */
-  async markSubscriptionInactive(
-    params: MarkSubscriptionInactiveParams,
+  async markSubscriptionIncomplete(
+    params: MarkSubscriptionIncompleteParams,
   ): Promise<void> {
     const { subscriptionId, orderId, reason } = params
     await this.db.batch([
-      // Mark subscription as inactive
+      // Mark subscription as incomplete
       this.db
-        .prepare(
-          `UPDATE subscriptions
-           SET status = ?, modified_at = CURRENT_TIMESTAMP
-           WHERE subscription_id = ?`,
-        )
-        .bind(SubscriptionStatus.INACTIVE, subscriptionId),
+        .update(schema.subscriptions)
+        .set({
+          status: SubscriptionStatus.INCOMPLETE,
+          modifiedAt: sql`CURRENT_TIMESTAMP`,
+        })
+        .where(eq(schema.subscriptions.subscriptionId, subscriptionId)),
       // Mark order as failed
       this.db
-        .prepare(
-          `UPDATE orders
-           SET status = ?, failure_reason = ?
-           WHERE id = ?`,
-        )
-        .bind(OrderStatus.FAILED, reason, orderId),
+        .update(schema.orders)
+        .set({
+          status: OrderStatus.FAILED,
+          failureReason: reason,
+        })
+        .where(eq(schema.orders.id, orderId)),
     ])
   }
 
@@ -534,36 +469,38 @@ export class SubscriptionRepository {
    * This prevents race conditions between multiple schedulers
    */
   async claimDueOrders(limit: number = 100): Promise<DueOrder[]> {
-    const result = await this.db
-      .prepare(
-        `UPDATE orders
-         SET status = ?
-         WHERE id IN (
-           SELECT o.id
-           FROM orders o
-           JOIN subscriptions s ON o.subscription_id = s.subscription_id
-           WHERE o.status = ?
-             AND datetime(substr(o.due_at, 1, 19)) <= datetime('now', 'utc')
-             AND s.status = ?
-           ORDER BY o.due_at
-           LIMIT ?
-         )
-         RETURNING id, subscription_id,
-                  (SELECT account_address FROM subscriptions WHERE subscription_id = orders.subscription_id) as account_address,
-                  (SELECT provider_id FROM subscriptions WHERE subscription_id = orders.subscription_id) as provider_id,
-                  amount, attempts`,
-      )
-      .bind(OrderStatus.PROCESSING, OrderStatus.PENDING, "active", limit)
-      .all<{
-        id: number
-        subscription_id: string
-        account_address: string
-        provider_id: string
-        amount: string
-        attempts: number
-      }>()
+    // Use correlated subqueries in RETURNING - the only pattern D1 supports
+    // sql.raw() bypasses Drizzle's table name quoting which breaks D1
+    const result = await this.db.all<{
+      id: number
+      subscription_id: string
+      account_address: string
+      provider_id: string
+      amount: string
+      attempts: number
+    }>(
+      sql.raw(`
+        UPDATE orders
+        SET status = '${OrderStatus.PROCESSING}'
+        WHERE id IN (
+          SELECT o.id
+          FROM orders o
+          JOIN subscriptions s ON o.subscription_id = s.subscription_id
+          WHERE o.status = '${OrderStatus.PENDING}'
+            AND datetime(substr(o.due_at, 1, 19)) <= datetime('now', 'utc')
+            AND s.status = '${SubscriptionStatus.ACTIVE}'
+          ORDER BY o.due_at
+          LIMIT ${limit}
+        )
+        RETURNING id, subscription_id,
+          (SELECT account_address FROM subscriptions WHERE subscription_id = orders.subscription_id) as account_address,
+          (SELECT provider_id FROM subscriptions WHERE subscription_id = orders.subscription_id) as provider_id,
+          amount, attempts
+      `),
+    )
 
-    return (result.results || []).map((entry) => ({
+    // Transform DB strings to domain types
+    return result.map((entry) => ({
       id: entry.id,
       subscriptionId: entry.subscription_id as Hash,
       accountAddress: entry.account_address as Address,
@@ -580,12 +517,14 @@ export class SubscriptionRepository {
     const { transactionHash, orderId, subscriptionId, amount, status } = params
 
     await this.db
-      .prepare(
-        `INSERT INTO transactions (
-          transaction_hash, order_id, subscription_id, amount, status
-        ) VALUES (?, ?, ?, ?, ?)`,
-      )
-      .bind(transactionHash, orderId, subscriptionId, amount, status)
+      .insert(schema.transactions)
+      .values({
+        transactionHash,
+        orderId,
+        subscriptionId,
+        amount,
+        status,
+      })
       .run()
   }
 
@@ -597,34 +536,29 @@ export class SubscriptionRepository {
   ): Promise<{ orderNumber: number }> {
     const { id, status, failureReason, rawError } = params
 
-    let result: { order_number: number } | undefined
+    const updateData: {
+      status: OrderStatus
+      failureReason?: string | null
+      rawError?: string | null
+    } = { status }
+
     if (failureReason || rawError) {
-      result = await this.db
-        .prepare(
-          `UPDATE orders
-           SET status = ?, failure_reason = ?, raw_error = ?
-           WHERE id = ?
-           RETURNING order_number`,
-        )
-        .bind(status, failureReason || null, rawError || null, id)
-        .first<{ order_number: number }>()
-    } else {
-      result = await this.db
-        .prepare(
-          `UPDATE orders
-           SET status = ?
-           WHERE id = ?
-           RETURNING order_number`,
-        )
-        .bind(status, id)
-        .first<{ order_number: number }>()
+      updateData.failureReason = failureReason || null
+      updateData.rawError = rawError || null
     }
+
+    const result = await this.db
+      .update(schema.orders)
+      .set(updateData)
+      .where(eq(schema.orders.id, id))
+      .returning({ orderNumber: schema.orders.orderNumber })
+      .get()
 
     if (!result) {
       throw new Error(`Failed to update order ${id} - order not found`)
     }
 
-    return { orderNumber: result.order_number }
+    return { orderNumber: result.orderNumber }
   }
 
   /**
@@ -634,12 +568,112 @@ export class SubscriptionRepository {
     const { subscriptionId, status } = params
 
     await this.db
-      .prepare(
-        `UPDATE subscriptions
-         SET status = ?, modified_at = CURRENT_TIMESTAMP
-         WHERE subscription_id = ?`,
-      )
-      .bind(status, subscriptionId)
+      .update(schema.subscriptions)
+      .set({
+        status,
+        modifiedAt: sql`CURRENT_TIMESTAMP`,
+      })
+      .where(eq(schema.subscriptions.subscriptionId, subscriptionId))
       .run()
+  }
+
+  /**
+   * TRANSACTION: Schedule payment retry atomically
+   * Updates order with next retry date and marks subscription as PAST_DUE
+   */
+  async scheduleRetry(params: ScheduleRetryParams): Promise<void> {
+    const { orderId, subscriptionId, nextRetryAt, failureReason, rawError } =
+      params
+
+    await this.db.batch([
+      // Increment attempts and set next retry date
+      this.db
+        .update(schema.orders)
+        .set({
+          attempts: sql`${schema.orders.attempts} + 1`,
+          nextRetryAt,
+          status: OrderStatus.FAILED,
+          failureReason: failureReason || null,
+          rawError: rawError || null,
+        })
+        .where(eq(schema.orders.id, orderId)),
+      // Mark subscription as past due
+      this.db
+        .update(schema.subscriptions)
+        .set({
+          status: SubscriptionStatus.PAST_DUE,
+          modifiedAt: sql`CURRENT_TIMESTAMP`,
+        })
+        .where(eq(schema.subscriptions.subscriptionId, subscriptionId)),
+    ])
+  }
+
+  /**
+   * TRANSACTION: Reactivate subscription after successful retry
+   * Clears next retry date and marks subscription as ACTIVE
+   */
+  async reactivateSubscription(
+    params: ReactivateSubscriptionParams,
+  ): Promise<void> {
+    const { orderId, subscriptionId } = params
+
+    await this.db.batch([
+      // Clear next retry date
+      this.db
+        .update(schema.orders)
+        .set({
+          nextRetryAt: null,
+        })
+        .where(eq(schema.orders.id, orderId)),
+      // Reactivate subscription
+      this.db
+        .update(schema.subscriptions)
+        .set({
+          status: SubscriptionStatus.ACTIVE,
+          modifiedAt: sql`CURRENT_TIMESTAMP`,
+        })
+        .where(eq(schema.subscriptions.subscriptionId, subscriptionId)),
+    ])
+  }
+
+  /**
+   * Get orders due for payment retry
+   * Uses Drizzle query builder for type safety
+   */
+  async getDueRetries(limit: number = 100): Promise<DueRetry[]> {
+    const result = await this.db
+      .select({
+        id: schema.orders.id,
+        subscriptionId: schema.orders.subscriptionId,
+        accountAddress: schema.subscriptions.accountAddress,
+        providerId: schema.subscriptions.providerId,
+        amount: schema.orders.amount,
+        attempts: schema.orders.attempts,
+      })
+      .from(schema.orders)
+      .innerJoin(
+        schema.subscriptions,
+        eq(schema.orders.subscriptionId, schema.subscriptions.subscriptionId),
+      )
+      .where(
+        and(
+          eq(schema.orders.status, OrderStatus.FAILED),
+          eq(schema.subscriptions.status, SubscriptionStatus.PAST_DUE),
+          sql`datetime(substr(${schema.orders.nextRetryAt}, 1, 19)) <= datetime('now', 'utc')`,
+        ),
+      )
+      .orderBy(sql`datetime(substr(${schema.orders.nextRetryAt}, 1, 19))`)
+      .limit(limit)
+      .all()
+
+    // Transform DB strings to domain types
+    return result.map((entry) => ({
+      id: entry.id,
+      subscriptionId: entry.subscriptionId as Hash,
+      accountAddress: entry.accountAddress as Address,
+      amount: entry.amount,
+      attempts: entry.attempts,
+      providerId: entry.providerId as Provider,
+    }))
   }
 }

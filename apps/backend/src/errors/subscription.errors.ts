@@ -1,35 +1,80 @@
-/**
- * Payment error mapping utilities for subscription service
- */
-
-import { ErrorCode } from "@/errors/http.errors"
+import { SubscriptionStatus } from "@/constants/subscription.constants"
+import { ErrorCode, HTTPError } from "@/errors/http.errors"
 
 /**
- * Gets the appropriate error code for a payment/blockchain error.
- * Maps blockchain error messages to our error codes.
- * Only returns user-actionable error codes when appropriate.
+ * Payment error classification utilities for subscription service
  */
-export function getPaymentErrorCode(error: Error): ErrorCode {
-  const message = error.message.toLowerCase()
 
-  // User-actionable errors that should be exposed
+/**
+ * Error code to user-friendly message mapping
+ */
+const ERROR_MESSAGES: Record<string, string> = {
+  [ErrorCode.INSUFFICIENT_BALANCE]:
+    "Insufficient balance to complete the payment",
+  [ErrorCode.PERMISSION_EXPIRED]: "Subscription permission has expired",
+  [ErrorCode.PERMISSION_REVOKED]: "Subscription permission has been revoked",
+  [ErrorCode.PAYMENT_FAILED]: "Payment failed",
+}
+
+/**
+ * Checks if an error should be exposed to merchants in webhooks.
+ * Uses HTTP semantics: 402 Payment Required indicates a payment error.
+ * Payment errors are exposed with details, system errors are sanitized.
+ */
+export function isExposableError(error: unknown): error is HTTPError {
+  return error instanceof HTTPError && error.status === 402
+}
+
+/**
+ * Only INSUFFICIENT_BALANCE is retryable via dunning.
+ * User might add funds over the 21-day retry period.
+ */
+export function isRetryablePaymentError(error: unknown): boolean {
+  return (
+    error instanceof HTTPError && error.code === ErrorCode.INSUFFICIENT_BALANCE
+  )
+}
+
+/**
+ * Terminal subscription errors - subscription cannot continue.
+ * Mark as UNPAID immediately without retry.
+ */
+export function isTerminalSubscriptionError(error: unknown): boolean {
+  return (
+    error instanceof HTTPError &&
+    (error.code === ErrorCode.PERMISSION_REVOKED ||
+      error.code === ErrorCode.PERMISSION_EXPIRED)
+  )
+}
+
+/**
+ * Gets user-friendly error message for an error code
+ */
+export function getErrorMessage(errorCode: ErrorCode): string {
+  return ERROR_MESSAGES[errorCode] || "An error occurred"
+}
+
+/**
+ * Maps error code to subscription status for webhooks.
+ * Determines the correct subscription state based on payment failure type.
+ *
+ * CANCELED: Permission revoked/expired - non-recoverable, requires new permission onchain
+ * PAST_DUE: Insufficient balance - recoverable via dunning retries
+ * ACTIVE: Other errors - system/provider errors, subscription continues
+ */
+export function getSubscriptionStatusFromError(
+  errorCode: string | undefined,
+): SubscriptionStatus {
   if (
-    message.includes("erc20: transfer amount exceeds balance") ||
-    message.includes("insufficient balance") ||
-    message.includes("not enough")
+    errorCode === ErrorCode.PERMISSION_REVOKED ||
+    errorCode === ErrorCode.PERMISSION_EXPIRED
   ) {
-    return ErrorCode.INSUFFICIENT_BALANCE
+    return SubscriptionStatus.CANCELED // Terminal - subscription cannot continue
   }
 
-  if (message.includes("expired")) {
-    return ErrorCode.PERMISSION_EXPIRED
+  if (errorCode === ErrorCode.INSUFFICIENT_BALANCE) {
+    return SubscriptionStatus.PAST_DUE // Retrying via dunning
   }
 
-  // All other payment errors map to generic PAYMENT_FAILED
-  // These are internal/technical issues that users can't directly fix:
-  // - spending allowance issues (internal configuration)
-  // - gas issues (internal wallet funding)
-  // - revoked permissions (should be handled differently)
-  // - generic permission errors (too vague to be actionable)
-  return ErrorCode.PAYMENT_FAILED
+  return SubscriptionStatus.ACTIVE // Other errors - subscription continues
 }

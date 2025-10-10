@@ -1,6 +1,6 @@
-import type { orderScheduler } from "@alchemy.run"
 import { createLogger } from "@/lib/logger"
 import { SubscriptionRepository } from "@/repositories/subscription.repository"
+import type { WorkerEnv } from "@/types/order.scheduler.env"
 
 const logger = createLogger("order.scheduler")
 
@@ -11,7 +11,7 @@ export default {
    */
   async scheduled(
     event: ScheduledEvent,
-    env: typeof orderScheduler.Env,
+    env: WorkerEnv,
     _ctx: ExecutionContext,
   ): Promise<void> {
     const log = logger.with({
@@ -23,7 +23,7 @@ export default {
     try {
       op.start()
 
-      const subscriptionRepository = new SubscriptionRepository()
+      const subscriptionRepository = new SubscriptionRepository(env)
 
       // Claim due orders atomically
       log.info("Claiming due orders")

@@ -25,8 +25,8 @@ subscriptionRoutes.post("/", subscriptionBody(), async (ctx) => {
   const { accountAddress } = ctx.get("auth")
   const { subscriptionId, providerId } = ctx.get("subscription")
 
-  const subscriptionService = new SubscriptionService()
-  const webhookService = new WebhookService()
+  const subscriptionService = new SubscriptionService(ctx.env)
+  const webhookService = new WebhookService(ctx.env)
 
   // Create subscription in DB and start background activation
   const { orderId, orderNumber, subscriptionMetadata } =
@@ -63,23 +63,22 @@ subscriptionRoutes.post("/", subscriptionBody(), async (ctx) => {
         // 4. Fire activation success webhook
         await webhookService.emitSubscriptionActivated(activation)
       } catch (error) {
-        // 5. Mark subscription as inactive in DB
+        // 5. Mark subscription as incomplete in DB
         const errorMessage =
           error instanceof Error ? error.message : "activation_failed"
-        await subscriptionService.markSubscriptionInactive({
+        await subscriptionService.markSubscriptionIncomplete({
           subscriptionId,
           orderId,
           reason: errorMessage,
         })
 
-        // 6. Fire activation failed webhook
+        // 6. Fire activation failed webhook (service handles error sanitization)
         await webhookService.emitActivationFailed({
           accountAddress,
           subscriptionId,
           amount: subscriptionMetadata.amount,
           periodInSeconds: subscriptionMetadata.periodInSeconds,
-          errorCode: "payment_failed",
-          errorMessage,
+          error,
         })
       }
     })(),

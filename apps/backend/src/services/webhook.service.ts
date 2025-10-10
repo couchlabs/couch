@@ -1,4 +1,3 @@
-import { env } from "cloudflare:workers"
 import type { WebhookQueueMessage } from "@alchemy.run"
 import type { Queue } from "@cloudflare/workers-types"
 import type { Address, Hash } from "viem"
@@ -7,11 +6,9 @@ import {
   SubscriptionStatus,
 } from "@/constants/subscription.constants"
 import { ErrorCode, HTTPError } from "@/errors/http.errors"
+import { getErrorMessage, isExposableError } from "@/errors/subscription.errors"
 import { createLogger } from "@/lib/logger"
-import {
-  type Webhook,
-  WebhookRepository,
-} from "@/repositories/webhook.repository"
+import { WebhookRepository } from "@/repositories/webhook.repository"
 import type { ActivationResult } from "@/services/subscription.service"
 
 /**
@@ -46,6 +43,7 @@ export interface WebhookOrderData {
   status: WebhookOrderStatus
   current_period_start?: number // Unix timestamp
   current_period_end?: number // Unix timestamp
+  next_retry_at?: number // Unix timestamp - when next payment retry is scheduled (only present when retrying)
 }
 
 /**
@@ -113,6 +111,7 @@ export interface EmitWebhookEventParams {
   errorMessage?: string
   orderDueAt?: Date // Order's due_at (period start)
   orderPeriodInSeconds?: number // Order's period length
+  nextRetryAt?: Date // When next payment retry is scheduled (only for failed payments with retries)
 }
 
 const logger = createLogger("webhook.service")
@@ -121,8 +120,8 @@ export class WebhookService {
   private webhookRepository: WebhookRepository
   private webhookQueue: Queue<WebhookQueueMessage>
 
-  constructor() {
-    this.webhookRepository = new WebhookRepository()
+  constructor(env) {
+    this.webhookRepository = new WebhookRepository(env)
     this.webhookQueue = env.WEBHOOK_QUEUE
   }
 
@@ -168,6 +167,35 @@ export class WebhookService {
   }
 
   /**
+   * Generates HMAC signature for webhook payload
+   * Uses SHA-256 HMAC to sign the payload with the webhook secret
+   */
+  private async generateHMACSignature(
+    secret: string,
+    payload: string,
+  ): Promise<string> {
+    const encoder = new TextEncoder()
+    const key = await crypto.subtle.importKey(
+      "raw",
+      encoder.encode(secret),
+      { name: "HMAC", hash: "SHA-256" },
+      false,
+      ["sign"],
+    )
+
+    const signature = await crypto.subtle.sign(
+      "HMAC",
+      key,
+      encoder.encode(payload),
+    )
+
+    // Convert to hex string
+    return Array.from(new Uint8Array(signature))
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join("")
+  }
+
+  /**
    * Sets or updates the webhook URL for an account
    * Generates a new secret each time
    */
@@ -192,13 +220,6 @@ export class WebhookService {
 
     log.info("Webhook URL set successfully")
     return { url, secret }
-  }
-
-  /**
-   * Gets webhook with secret (for internal use only - webhook delivery)
-   */
-  async getWebhookWithSecret(accountAddress: Address): Promise<Webhook | null> {
-    return await this.webhookRepository.getWebhook({ accountAddress })
   }
 
   /**
@@ -277,46 +298,69 @@ export class WebhookService {
   async emitPaymentFailed(params: {
     accountAddress: Address
     subscriptionId: Hash
+    subscriptionStatus: SubscriptionStatus // Pass correct status based on error type
     orderNumber: number
     amount: string
     periodInSeconds: number
-    failureReason?: string
+    failureReason?: string // Error code (e.g., INSUFFICIENT_BALANCE)
+    failureMessage?: string // Original SDK error message
+    nextRetryAt?: Date // When next payment retry is scheduled
   }): Promise<void> {
+    // Use error code, fallback to generic PAYMENT_FAILED
+    const errorCode = params.failureReason || ErrorCode.PAYMENT_FAILED
+
+    // Use original SDK message if available, otherwise use generic message
+    const errorMessage =
+      params.failureMessage || getErrorMessage(errorCode as ErrorCode)
+
     await this.emitSubscriptionUpdated({
       accountAddress: params.accountAddress,
       subscriptionId: params.subscriptionId,
-      subscriptionStatus: SubscriptionStatus.INACTIVE,
+      subscriptionStatus: params.subscriptionStatus, // Use passed status
       subscriptionAmount: params.amount, // Use order amount as subscription metadata
       subscriptionPeriodInSeconds: params.periodInSeconds, // Use order period as subscription metadata
       orderNumber: params.orderNumber,
       orderType: OrderType.RECURRING,
       amount: params.amount,
       success: false,
-      errorCode: "payment_failed",
-      errorMessage: params.failureReason || "Payment processing failed",
+      errorCode,
+      errorMessage,
+      nextRetryAt: params.nextRetryAt,
     })
   }
 
   /**
    * Emits webhook event when initial activation charge fails
+   * Sanitizes error details based on error type (payment vs system)
    */
   async emitActivationFailed(params: {
     accountAddress: Address
     subscriptionId: Hash
     amount: string
     periodInSeconds: number
-    errorCode: string
-    errorMessage: string
+    error: unknown
   }): Promise<void> {
+    // Sanitize error for webhook exposure
+    // Not all errors come from provider - could be DB, validation, or webhook errors
+    // Only expose payment errors (402) to merchants, hide internal errors
+    let errorCode = "internal_error"
+    let errorMessage = "An internal error occurred"
+
+    if (isExposableError(params.error)) {
+      // Payment errors (402) are exposed with details
+      errorCode = params.error.code
+      errorMessage = params.error.message
+    }
+
     await this.emitSubscriptionUpdated({
       accountAddress: params.accountAddress,
       subscriptionId: params.subscriptionId,
-      subscriptionStatus: SubscriptionStatus.INACTIVE,
+      subscriptionStatus: SubscriptionStatus.INCOMPLETE,
       subscriptionAmount: params.amount,
       subscriptionPeriodInSeconds: params.periodInSeconds,
       success: false,
-      errorCode: params.errorCode,
-      errorMessage: params.errorMessage,
+      errorCode,
+      errorMessage,
     })
   }
 
@@ -378,6 +422,13 @@ export class WebhookService {
           eventData.order.current_period_start = periodStartTimestamp
           eventData.order.current_period_end = periodEndTimestamp
         }
+
+        // Add next retry timestamp if scheduled (only for failed payments with retries)
+        if (params.nextRetryAt) {
+          eventData.order.next_retry_at = Math.floor(
+            params.nextRetryAt.getTime() / 1000,
+          )
+        }
       }
 
       // Add transaction data if payment was successful
@@ -404,19 +455,28 @@ export class WebhookService {
         data: eventData,
       }
 
-      // Queue the webhook for delivery
+      // Pre-serialize and sign the webhook payload
+      const payload = JSON.stringify(event)
+      const signature = await this.generateHMACSignature(
+        webhook.secret,
+        payload,
+      )
+
+      // Queue the pre-signed webhook for delivery
       const message: WebhookQueueMessage = {
         url: webhook.url,
-        secret: webhook.secret,
-        event,
+        payload,
+        signature,
+        timestamp: event.created_at,
       }
 
       await this.webhookQueue.send(message)
 
-      log.info("Webhook event queued for delivery", {
+      log.info("Webhook event queued for delivery (pre-signed)", {
         eventType: event.type,
         url: webhook.url,
         accountAddress,
+        signaturePreview: `${signature.slice(0, 8)}...`,
       })
     } catch (error) {
       log.error("Failed to emit webhook event", { error })

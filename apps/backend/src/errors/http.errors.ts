@@ -17,6 +17,7 @@ export const ErrorCode = {
   SUBSCRIPTION_EXISTS: "SUBSCRIPTION_EXISTS",
   SUBSCRIPTION_NOT_ACTIVE: "SUBSCRIPTION_NOT_ACTIVE",
   PERMISSION_EXPIRED: "PERMISSION_EXPIRED",
+  PERMISSION_REVOKED: "PERMISSION_REVOKED",
 
   // User-actionable payment errors
   INSUFFICIENT_BALANCE: "INSUFFICIENT_BALANCE", // User needs to add funds
@@ -32,6 +33,8 @@ export type ErrorCode = (typeof ErrorCode)[keyof typeof ErrorCode]
 
 // HTTPError class that extends HTTPException with consistent JSON format
 export class HTTPError extends HTTPException {
+  public readonly code: ErrorCode
+
   constructor(
     status: ContentfulStatusCode,
     code: ErrorCode,
@@ -54,5 +57,6 @@ export class HTTPError extends HTTPException {
     // - message: for proper error.message property
     // - res: for custom JSON response body
     super(status, { res, message })
+    this.code = code
   }
 }

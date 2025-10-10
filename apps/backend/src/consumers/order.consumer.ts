@@ -1,7 +1,8 @@
-import type { orderProcessor, orderQueue } from "@alchemy.run"
+import type { orderQueue } from "@alchemy.run"
 import { createLogger } from "@/lib/logger"
 import { OrderService } from "@/services/order.service"
 import { WebhookService } from "@/services/webhook.service"
+import type { WorkerEnv } from "@/types/order.consumer.env"
 
 const logger = createLogger("order.consumer")
 
@@ -12,7 +13,7 @@ export default {
    */
   async queue(
     batch: typeof orderQueue.Batch,
-    _env: typeof orderProcessor.Env,
+    env: WorkerEnv,
     _ctx: ExecutionContext,
   ): Promise<void> {
     const log = logger.with({
@@ -21,6 +22,10 @@ export default {
     })
 
     log.info(`Processing batch of ${batch.messages.length} order messages`)
+
+    // Create shared services for all messages in the batch
+    const webhookService = new WebhookService(env)
+    const orderService = new OrderService(env)
 
     // Process each message in the batch
     const results = await Promise.allSettled(
@@ -35,8 +40,6 @@ export default {
 
         try {
           op.start()
-          const webhookService = new WebhookService()
-          const orderService = new OrderService()
 
           // Fetch order details for webhook emission
           const orderDetails = await orderService.getOrderDetails(orderId)
@@ -81,14 +84,16 @@ export default {
             await webhookService.emitPaymentFailed({
               accountAddress: orderDetails.accountAddress,
               subscriptionId: orderDetails.subscriptionId,
-              orderNumber: result.orderNumber, // Guaranteed to exist
+              subscriptionStatus: result.subscriptionStatus,
+              orderNumber: result.orderNumber,
               amount: orderDetails.amount,
               periodInSeconds: orderDetails.periodInSeconds,
               failureReason: result.failureReason,
+              failureMessage: result.failureMessage,
+              nextRetryAt: result.nextRetryAt,
             })
 
-            // ACK the message even on payment failure (v1: no retries)
-            // The subscription has been marked as inactive
+            // ACK the message even on payment failure
             message.ack()
 
             op.success({

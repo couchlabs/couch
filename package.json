@@ -1,14 +1,15 @@
 {
-  "name": "couch-poc",
+  "name": "couch",
+  "description": "Stablecoin recurring payments infrastructure",
   "type": "module",
   "private": true,
   "scripts": {
     "faucet": "bun node_modules/alchemy/src/coinbase/faucet.ts",
-    "dev": "turbo run dev",
-    "deploy": "turbo run deploy --ui=stream",
-    "destroy": "turbo run destroy --ui=stream",
-    "check": "bun tsc --noEmit && biome check",
-    "fix": "biome check --write"
+    "dev": "turbo dev --ui=tui",
+    "destroy": "turbo destroy ",
+    "check": "turbo check",
+    "check:fix": "turbo check:fix",
+    "db:generate": "turbo db:generate"
   },
   "workspaces": {
     "packages": [
@@ -20,12 +21,14 @@
     },
     "catalogs": {
       "cloudflare": {
-        "miniflare": "^4.20251001.0",
-        "@cloudflare/workers-types": "^4.20251001.0"
+        "miniflare": "^4.20251008.0",
+        "@cloudflare/workers-types": "^4.20251008.0",
+        "@types/node": "^24.7.1",
+        "hono": "^4.9.10"
       },
       "coinbase": {
-        "@base-org/account": "^2.3.1",
-        "@coinbase/cdp-sdk": "^1.38.3"
+        "@base-org/account": "^2.4.0",
+        "@coinbase/cdp-sdk": "^1.38.4"
       }
     }
   },

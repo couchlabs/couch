@@ -1,19 +1,24 @@
 {
   "$schema": "https://turborepo.com/schema.json",
-  "ui": "tui",
+  "ui": "stream",
   "tasks": {
-    "deploy": {
-      "dependsOn": ["^deploy"],
-      "cache": false
-    },
     "dev": {
       "persistent": true,
       "cache": false
     },
-    "backend#destroy": {
+    "destroy": {
       "cache": false
     },
-    "frontend#destroy": {
+    "db:generate": {
+      "cache": false,
+      "dependsOn": [
+        "check"
+      ]
+    },
+    "check": {
+      "cache": false
+    },
+    "check:fix": {
       "cache": false
     }
   }

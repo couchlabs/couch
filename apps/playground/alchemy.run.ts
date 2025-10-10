@@ -15,9 +15,8 @@ import { api, spenderSmartAccount } from "backend/alchemy"
  * Example: couch-frontend-dev-example-site
  *
  * Components:
- *   app.name:    Product/organization identifier (e.g., "couch")
- *   scope.name:  Service/component name (e.g., "backend", "frontend")
- *   scope.stage: Environment (e.g., "dev", "staging", "prod")
+ *   app.name:    Product identifier (e.g., "couch-playground")
+ *   app.stage:   Environment (e.g., "dev", "staging", "prod")
  *   resource:    Specific resource name (e.g., "subscription-api", "spender-evm")
  */
 
@@ -34,18 +33,17 @@ import { api, spenderSmartAccount } from "backend/alchemy"
 // APPLICATION SCOPE
 // =============================================================================
 
-const app = { name: "couch" }
-export const scope = await alchemy("demo", {
+export const app = await alchemy("couch-playground", {
   password: process.env.ALCHEMY_PASSWORD,
 })
-const NAME_PREFIX = `${app.name}-${scope.name}-${scope.stage}`
+const NAME_PREFIX = `${app.name}-${app.stage}`
 
 // -----------------------------------------------------------------------------
 // DATABASES
 // -----------------------------------------------------------------------------
 
-// subscription-db: Main database for subscription and order data
-const DB_NAME = "demo-db"
+// playground-db: Main database for subscription and order data
+const DB_NAME = "playground-db"
 const db = await D1Database(DB_NAME, {
   name: `${NAME_PREFIX}-${DB_NAME}`,
   migrationsDir: path.join(import.meta.dirname, "migrations"),
@@ -84,4 +82,4 @@ export const website = await Vite(WEBSITE_NAME, {
 
 console.log({ [WEBSITE_NAME]: website })
 
-await scope.finalize()
+await app.finalize()

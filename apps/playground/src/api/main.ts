@@ -109,19 +109,24 @@ app.post("/api/webhook", async (c) => {
   return c.text("", 200)
 })
 
-// Simple catch-all proxy that injects Authorization: Bearer header with COUCH_API_KEY
+// Proxy with Authorization header injection and scheduler routing
 app.all("/proxy/*", async (c) => {
-  const path = c.req.path.replace(/^\/proxy\//, "")
+  let path = c.req.path.replace(/^\/proxy\//, "")
   const clientIp =
     c.req.header("CF-Connecting-IP") ||
     c.req.header("X-Forwarded-For") ||
     c.req.header("X-Real-IP") ||
     "127.0.0.1"
 
-  // Special case: __scheduled endpoint is on port 3100 (order-processor)
   let baseUrl = c.env.COUCH_API_URL.replace(/\/+$/, "")
-  if (path === "__scheduled") {
-    baseUrl = baseUrl.replace(":3000", ":3100")
+
+  // Route scheduler endpoints to appropriate ports
+  if (path === "scheduled/order") {
+    baseUrl = baseUrl.replace(":3000", ":3100") // order-scheduler
+    path = "__scheduled"
+  } else if (path === "scheduled/dunning") {
+    baseUrl = baseUrl.replace(":3000", ":3101") // dunning-scheduler
+    path = "__scheduled"
   }
 
   return proxy(`${baseUrl}/${path}`, {
@@ -148,7 +153,13 @@ interface WebhookEvent {
   data: {
     subscription: {
       id: string // subscription ID (hash)
-      status: "active" | "inactive" | "processing"
+      status:
+        | "processing"
+        | "active"
+        | "incomplete"
+        | "past_due"
+        | "canceled"
+        | "unpaid"
       amount: string // Recurring charge amount (always present)
       period_in_seconds: number // Billing period (always present)
     }

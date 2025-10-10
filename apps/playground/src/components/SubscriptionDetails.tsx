@@ -9,6 +9,7 @@ import {
   ChevronDown,
   ChevronRight,
   Circle,
+  Copy,
   ExternalLink,
   HelpCircle,
   Loader2,
@@ -60,6 +61,7 @@ export function SubscriptionDetails({
   } | null>(null)
   const [onchainLoading, setOnchainLoading] = useState(false)
   const [revokeLoading, setRevokeLoading] = useState(false)
+  const [copiedEventId, setCopiedEventId] = useState<number | null>(null)
 
   useEffect(() => {
     if (!subscriptionId) {
@@ -187,14 +189,33 @@ export function SubscriptionDetails({
     }
   }, [subscriptionId, fetchOnchainStatus, onchainStatus])
 
+  const handleCopyPayload = useCallback(
+    async (eventId: number, payload: string) => {
+      try {
+        await navigator.clipboard.writeText(payload)
+        setCopiedEventId(eventId)
+        setTimeout(() => setCopiedEventId(null), 2000)
+      } catch (error) {
+        console.error("Failed to copy to clipboard:", error)
+      }
+    },
+    [],
+  )
+
   const _getStatusIcon = (status: Subscription["status"]) => {
     switch (status) {
       case "active":
         return <Check className="h-4 w-4 text-green-600" />
       case "processing":
         return <Loader2 className="h-4 w-4 text-yellow-600 animate-spin" />
-      case "inactive":
+      case "incomplete":
         return <X className="h-4 w-4 text-red-600" />
+      case "past_due":
+        return <X className="h-4 w-4 text-orange-600" />
+      case "unpaid":
+        return <X className="h-4 w-4 text-red-600" />
+      case "canceled":
+        return <X className="h-4 w-4 text-gray-600" />
       default:
         return null
     }
@@ -217,7 +238,13 @@ export function SubscriptionDetails({
       }
 
       if (data.data.error) {
-        return `Error: ${data.data.error.message}`
+        if (data.data.subscription.status === "incomplete") {
+          return "Subscription activation"
+        }
+        if (data.data.subscription.status === "unpaid") {
+          return "Subscription renewal"
+        }
+        return "Error"
       }
 
       // Processing state (subscription created but not yet charged)
@@ -324,7 +351,7 @@ export function SubscriptionDetails({
                         Indicates whether the subscription charge was
                         successfully executed for the current period. If the
                         onchain permission is revoked by the user, the
-                        subscription will become inactive at the next period
+                        subscription will become canceled at the next period
                         when it attempts to charge.
                       </p>
                     </TooltipContent>
@@ -545,7 +572,10 @@ export function SubscriptionDetails({
                               return (
                                 <Check className="h-4 w-4 text-green-600" />
                               )
-                            } else if (data.data.order?.status === "failed") {
+                            } else if (
+                              data.data.order?.status === "failed" ||
+                              data.data.error
+                            ) {
                               return <X className="h-4 w-4 text-red-600" />
                             } else if (
                               data.data.subscription.status === "processing"
@@ -584,29 +614,90 @@ export function SubscriptionDetails({
                             const txHash = data.data.transaction?.hash
 
                             return (
-                              <div>
+                              <div className="space-y-3">
                                 <pre className="text-xs font-mono overflow-x-auto whitespace-pre-wrap break-all">
                                   {JSON.stringify(data, null, 2)}
                                 </pre>
-                                {txHash && (
-                                  <a
-                                    href={`https://sepolia.basescan.org/tx/${txHash}`}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="inline-flex items-center gap-1 text-xs text-primary hover:underline mt-2 cursor-pointer"
-                                    onClick={(e) => e.stopPropagation()}
+                                {/* Action Bar */}
+                                <div className="flex items-center gap-2 pt-2 border-t">
+                                  <Button
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      handleCopyPayload(
+                                        event.id,
+                                        event.event_data,
+                                      )
+                                    }}
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-8"
                                   >
-                                    View on BaseScan
-                                    <ExternalLink className="h-3 w-3" />
-                                  </a>
-                                )}
+                                    {copiedEventId === event.id ? (
+                                      <>
+                                        <Check className="h-3.5 w-3.5 mr-1.5" />
+                                        Copied
+                                      </>
+                                    ) : (
+                                      <>
+                                        <Copy className="h-3.5 w-3.5 mr-1.5" />
+                                        Copy
+                                      </>
+                                    )}
+                                  </Button>
+                                  {txHash && (
+                                    <Button
+                                      onClick={(e) => {
+                                        e.stopPropagation()
+                                        window.open(
+                                          `https://sepolia.basescan.org/tx/${txHash}`,
+                                          "_blank",
+                                        )
+                                      }}
+                                      variant="outline"
+                                      size="sm"
+                                      className="h-8"
+                                    >
+                                      View on BaseScan
+                                      <ExternalLink className="h-3 w-3 ml-1.5" />
+                                    </Button>
+                                  )}
+                                </div>
                               </div>
                             )
                           } catch {
                             return (
-                              <pre className="text-xs font-mono overflow-x-auto whitespace-pre-wrap break-all">
-                                {event.event_data}
-                              </pre>
+                              <div className="space-y-3">
+                                <pre className="text-xs font-mono overflow-x-auto whitespace-pre-wrap break-all">
+                                  {event.event_data}
+                                </pre>
+                                {/* Action Bar */}
+                                <div className="flex items-center gap-2 pt-2 border-t">
+                                  <Button
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      handleCopyPayload(
+                                        event.id,
+                                        event.event_data,
+                                      )
+                                    }}
+                                    variant="outline"
+                                    size="sm"
+                                    className="h-8"
+                                  >
+                                    {copiedEventId === event.id ? (
+                                      <>
+                                        <Check className="h-3.5 w-3.5 mr-1.5" />
+                                        Copied
+                                      </>
+                                    ) : (
+                                      <>
+                                        <Copy className="h-3.5 w-3.5 mr-1.5" />
+                                        Copy
+                                      </>
+                                    )}
+                                  </Button>
+                                </div>
+                              </div>
                             )
                           }
                         })()}

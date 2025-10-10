@@ -1,11 +1,10 @@
 import path from "node:path"
-
 import alchemy from "alchemy"
 import { D1Database, Queue, Worker } from "alchemy/cloudflare"
 import { EvmAccount, EvmSmartAccount } from "alchemy/coinbase"
 import type { Stage } from "@/constants/env.constants"
 import type { Provider } from "@/providers/provider.interface"
-import type { WebhookEvent } from "@/services/webhook.service"
+import drizzleConfig from "./drizzle.config"
 
 // =============================================================================
 // CONFIGURATION & CONVENTIONS
@@ -16,9 +15,8 @@ import type { WebhookEvent } from "@/services/webhook.service"
  * Example: couch-backend-dev-subscription-api
  *
  * Components:
- *   app.name:    Product/organization identifier (e.g., "couch")
- *   scope.name:  Service/component name (e.g., "backend", "frontend")
- *   scope.stage: Environment (e.g., "dev", "staging", "prod")
+ *   app.name:    Product identifier (e.g., "couch-backend")
+ *   app.stage:   Environment (e.g., "dev", "staging", "prod")
  *   resource:    Specific resource name (e.g., "subscription-api", "spender-evm")
  */
 
@@ -37,11 +35,10 @@ import type { WebhookEvent } from "@/services/webhook.service"
 // APPLICATION SCOPE
 // =============================================================================
 
-const app = { name: "couch" }
-export const scope = await alchemy("backend", {
+export const app = await alchemy("couch-backend", {
   password: process.env.ALCHEMY_PASSWORD,
 })
-const NAME_PREFIX = `${app.name}-${scope.name}-${scope.stage}`
+const NAME_PREFIX = `${app.name}-${app.stage}`
 
 // =============================================================================
 // ONCHAIN RESOURCES (Coinbase)
@@ -72,17 +69,18 @@ export const spenderSmartAccount = await EvmSmartAccount(SPENDER_ACCOUNT_NAME, {
 // =============================================================================
 
 // Cloudflare Worker Flags
-const compatibilityFlags = ["nodejs_compat"]
+const compatibilityFlags = ["nodejs_compat", "disallow_importable_env"]
 
 // -----------------------------------------------------------------------------
 // DATABASES
 // -----------------------------------------------------------------------------
 
-// subscription-db: Main database for subscription and order data
+// db: Main database for the backend
 const DB_NAME = "db"
 const db = await D1Database(DB_NAME, {
   name: `${NAME_PREFIX}-${DB_NAME}`,
-  migrationsDir: path.join(import.meta.dirname, "migrations"),
+  migrationsDir: path.join(import.meta.dirname, drizzleConfig.out),
+  migrationsTable: drizzleConfig.migrations?.table,
   primaryLocationHint: "wnam",
   readReplication: {
     mode: "auto",
@@ -108,8 +106,9 @@ export const orderQueue = await Queue<OrderQueueMessage>(ORDER_QUEUE_NAME, {
 const WEBHOOK_QUEUE_NAME = "webhook-queue"
 export interface WebhookQueueMessage {
   url: string
-  secret: string
-  event: WebhookEvent
+  payload: string // Pre-serialized JSON
+  signature: string // Pre-computed sha256 HMAC hex
+  timestamp: number // Unix timestamp for header
 }
 export const webhookQueue = await Queue<WebhookQueueMessage>(
   WEBHOOK_QUEUE_NAME,
@@ -119,11 +118,23 @@ export const webhookQueue = await Queue<WebhookQueueMessage>(
   },
 )
 
+// order-dlq: Dead letter queue for permanently failed orders (system errors)
+const ORDER_DLQ_NAME = "order-dlq"
+export const orderDLQ = await Queue<OrderQueueMessage>(ORDER_DLQ_NAME, {
+  name: `${NAME_PREFIX}-${ORDER_DLQ_NAME}`,
+})
+
+// webhook-dlq: Dead letter queue for permanently failed webhooks (unreachable endpoints)
+const WEBHOOK_DLQ_NAME = "webhook-dlq"
+export const webhookDLQ = await Queue<WebhookQueueMessage>(WEBHOOK_DLQ_NAME, {
+  name: `${NAME_PREFIX}-${WEBHOOK_DLQ_NAME}`,
+})
+
 // -----------------------------------------------------------------------------
 // API GATEWAY
 // -----------------------------------------------------------------------------
 
-// subscription-api: Main API service
+// api: Main API service
 const API_NAME = "api"
 export const api = await Worker(API_NAME, {
   name: `${NAME_PREFIX}-${API_NAME}`,
@@ -136,7 +147,7 @@ export const api = await Worker(API_NAME, {
     CDP_PAYMASTER_URL: alchemy.env.CDP_PAYMASTER_URL,
     CDP_WALLET_NAME: spenderSmartAccount.name,
     CDP_SPENDER_ADDRESS: spenderSmartAccount.address,
-    STAGE: scope.stage as Stage,
+    STAGE: app.stage as Stage,
     // RESOURCES:
     DB: db,
     WEBHOOK_QUEUE: webhookQueue,
@@ -149,7 +160,7 @@ export const api = await Worker(API_NAME, {
 // SCHEDULERS
 // -----------------------------------------------------------------------------
 
-// order-scheduler: Schedules order processing
+// order.scheduler: Schedules orders
 const ORDER_SCHEDULER_NAME = "order-scheduler"
 export const orderScheduler = await Worker(ORDER_SCHEDULER_NAME, {
   name: `${NAME_PREFIX}-${ORDER_SCHEDULER_NAME}`,
@@ -163,8 +174,30 @@ export const orderScheduler = await Worker(ORDER_SCHEDULER_NAME, {
   bindings: {
     DB: db,
     ORDER_QUEUE: orderQueue,
+    STAGE: app.stage as Stage,
   },
+  compatibilityFlags,
   dev: { port: 3100 },
+})
+
+// dunning.scheduler: Schedules payment retries for past_due subscriptions
+const DUNNING_SCHEDULER_NAME = "dunning-scheduler"
+export const dunningScheduler = await Worker(DUNNING_SCHEDULER_NAME, {
+  name: `${NAME_PREFIX}-${DUNNING_SCHEDULER_NAME}`,
+  entrypoint: path.join(
+    import.meta.dirname,
+    "src",
+    "schedulers",
+    "dunning-scheduler.ts",
+  ),
+  crons: ["0 * * * *"], // Run every hour
+  bindings: {
+    DB: db,
+    ORDER_QUEUE: orderQueue,
+    STAGE: app.stage as Stage,
+  },
+  compatibilityFlags,
+  dev: { port: 3101 },
 })
 
 // -----------------------------------------------------------------------------
@@ -172,9 +205,9 @@ export const orderScheduler = await Worker(ORDER_SCHEDULER_NAME, {
 // -----------------------------------------------------------------------------
 
 // order.consumer: Processes orders
-const ORDER_PROCESSOR_NAME = "order-processor"
-export const orderProcessor = await Worker(ORDER_PROCESSOR_NAME, {
-  name: `${NAME_PREFIX}-${ORDER_PROCESSOR_NAME}`,
+const ORDER_CONSUMER_NAME = "order-consumer"
+export const orderConsumer = await Worker(ORDER_CONSUMER_NAME, {
+  name: `${NAME_PREFIX}-${ORDER_CONSUMER_NAME}`,
   entrypoint: path.join(
     import.meta.dirname,
     "src",
@@ -188,8 +221,8 @@ export const orderProcessor = await Worker(ORDER_PROCESSOR_NAME, {
         batchSize: 10,
         maxConcurrency: 10,
         maxRetries: 3,
-        // maxWaitTimeMs: 500, Error in miniflare
         retryDelay: 60,
+        deadLetterQueue: orderDLQ,
       },
     },
   ],
@@ -203,9 +236,9 @@ export const orderProcessor = await Worker(ORDER_PROCESSOR_NAME, {
 })
 
 // webhook.consumer: Delivers webhooks to merchant endpoints
-const WEBHOOK_DELIVERY_NAME = "webhook-delivery"
-export const webhookDelivery = await Worker(WEBHOOK_DELIVERY_NAME, {
-  name: `${NAME_PREFIX}-${WEBHOOK_DELIVERY_NAME}`,
+const WEBHOOK_CONSUMER_NAME = "webhook-consumer"
+export const webhookConsumer = await Worker(WEBHOOK_CONSUMER_NAME, {
+  name: `${NAME_PREFIX}-${WEBHOOK_CONSUMER_NAME}`,
   entrypoint: path.join(
     import.meta.dirname,
     "src",
@@ -218,8 +251,9 @@ export const webhookDelivery = await Worker(WEBHOOK_DELIVERY_NAME, {
       settings: {
         batchSize: 5,
         maxConcurrency: 5,
-        maxRetries: 3,
-        retryDelay: 60, // 1 minute
+        maxRetries: 10,
+        // Exponential backoff implemented in consumer (5s base, 15min cap, ~52min total window)
+        deadLetterQueue: webhookDLQ,
       },
     },
   ],
@@ -231,17 +265,74 @@ export const webhookDelivery = await Worker(WEBHOOK_DELIVERY_NAME, {
   dev: { port: 3201 },
 })
 
+// -----------------------------------------------------------------------------
+// DLQ CONSUMERS
+// -----------------------------------------------------------------------------
+
+// order.dlq.consumer: Logs permanently failed orders (system errors)
+const ORDER_DLQ_CONSUMER_NAME = "order-dlq-consumer"
+export const orderDLQConsumer = await Worker(ORDER_DLQ_CONSUMER_NAME, {
+  name: `${NAME_PREFIX}-${ORDER_DLQ_CONSUMER_NAME}`,
+  entrypoint: path.join(
+    import.meta.dirname,
+    "src",
+    "consumers",
+    "order.dlq.consumer.ts",
+  ),
+  eventSources: [
+    {
+      queue: orderDLQ,
+      settings: {
+        batchSize: 1,
+        maxConcurrency: 1,
+        maxRetries: 0,
+      },
+    },
+  ],
+  compatibilityFlags,
+  dev: { port: 3202 },
+})
+
+// webhook.dlq.consumer: Logs permanently failed webhooks (unreachable endpoints)
+const WEBHOOK_DLQ_CONSUMER_NAME = "webhook-dlq-consumer"
+export const webhookDLQConsumer = await Worker(WEBHOOK_DLQ_CONSUMER_NAME, {
+  name: `${NAME_PREFIX}-${WEBHOOK_DLQ_CONSUMER_NAME}`,
+  entrypoint: path.join(
+    import.meta.dirname,
+    "src",
+    "consumers",
+    "webhook.dlq.consumer.ts",
+  ),
+  eventSources: [
+    {
+      queue: webhookDLQ,
+      settings: {
+        batchSize: 1,
+        maxConcurrency: 1,
+        maxRetries: 0,
+      },
+    },
+  ],
+  compatibilityFlags,
+  dev: { port: 3203 },
+})
+
 console.log({
   [API_NAME]: api,
   [DB_NAME]: db,
   [ORDER_SCHEDULER_NAME]: orderScheduler,
+  [DUNNING_SCHEDULER_NAME]: dunningScheduler,
   [ORDER_QUEUE_NAME]: orderQueue,
-  [ORDER_PROCESSOR_NAME]: orderProcessor,
+  [ORDER_CONSUMER_NAME]: orderConsumer,
   [WEBHOOK_QUEUE_NAME]: webhookQueue,
-  [WEBHOOK_DELIVERY_NAME]: webhookDelivery,
+  [WEBHOOK_CONSUMER_NAME]: webhookConsumer,
+  [ORDER_DLQ_NAME]: orderDLQ,
+  [ORDER_DLQ_CONSUMER_NAME]: orderDLQConsumer,
+  [WEBHOOK_DLQ_NAME]: webhookDLQ,
+  [WEBHOOK_DLQ_CONSUMER_NAME]: webhookDLQConsumer,
 })
 
-await scope.finalize()
+await app.finalize()
 
 // TODOS
 // Reconciler components - see commit ee65232 for commented implementation
