@@ -7,7 +7,8 @@
     "destroy": "alchemy destroy --app couch-backend",
     "db:generate": "drizzle-kit generate",
     "check": "tsc --noEmit && biome check",
-    "check:fix": "bun check --write"
+    "check:fix": "bun check --write",
+    "test": "vitest run"
   },
   "exports": {
     "./alchemy": {
@@ -32,6 +33,8 @@
     "miniflare": "catalog:cloudflare",
     "@cloudflare/workers-types": "catalog:cloudflare",
     "@types/node": "catalog:cloudflare",
-    "drizzle-kit": "^0.31.5"
+    "drizzle-kit": "^0.31.5",
+    "vitest": "^2.0.0",
+    "@vitest/coverage-v8": "^2.0.0"
   }
 }

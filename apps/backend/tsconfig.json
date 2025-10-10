@@ -4,6 +4,7 @@
     "drizzle.config.ts",
     "database/**/*.ts",
     "src/**/*.ts",
+    "tests/**/*.ts",
     "types/**/*.ts"
   ],
   "exclude": ["node_modules", "lib"],
@@ -20,7 +21,8 @@
     "paths": {
       "@alchemy.run": ["./alchemy.run.ts"],
       "@/*": ["./src/*"],
-      "@database/*": ["./database/*"]
+      "@database/*": ["./database/*"],
+      "@tests/*": ["./tests/*"]
     }
   }
 }

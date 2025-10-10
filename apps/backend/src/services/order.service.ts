@@ -1,17 +1,12 @@
 import type { Hash } from "viem"
 import {
-  calculateNextRetryDate,
-  DUNNING_CONFIG,
   OrderStatus,
   OrderType,
   SubscriptionStatus,
   TransactionStatus,
 } from "@/constants/subscription.constants"
 import { ErrorCode, HTTPError } from "@/errors/http.errors"
-import {
-  isRetryablePaymentError,
-  isTerminalSubscriptionError,
-} from "@/errors/subscription.errors"
+import { decideDunningAction } from "@/lib/dunning.logic"
 import { createLogger } from "@/lib/logger"
 import type { Provider } from "@/providers/provider.interface"
 import { OnchainRepository } from "@/repositories/onchain.repository"
@@ -189,51 +184,43 @@ export class OrderService {
         rawError: errorMessage,
       })
 
-      // ================================================================
-      // CASE 1: TERMINAL (revoked/expired) - mark CANCELED, no next order
-      // ================================================================
-      if (isTerminalSubscriptionError(error)) {
-        log.info(`Terminal subscription error: ${errorCode}`)
+      // Decide dunning action based on error type and retry count
+      const action = decideDunningAction({
+        error,
+        currentAttempts: order.attempts || 0,
+        failureDate: new Date(),
+      })
 
-        await this.subscriptionRepository.updateSubscription({
-          subscriptionId: order.subscriptionId,
-          status: SubscriptionStatus.CANCELED,
-        })
+      // Execute action based on decision
+      switch (action.type) {
+        case "terminal": {
+          log.info(`Terminal subscription error: ${errorCode}`)
 
-        return {
-          success: false,
-          orderNumber: orderResult.orderNumber,
-          failureReason: errorCode,
-          failureMessage: errorMessage,
-          nextOrderCreated: false,
-          subscriptionStatus: SubscriptionStatus.CANCELED,
+          await this.subscriptionRepository.updateSubscription({
+            subscriptionId: order.subscriptionId,
+            status: action.subscriptionStatus,
+          })
+
+          return {
+            success: false,
+            orderNumber: orderResult.orderNumber,
+            failureReason: errorCode,
+            failureMessage: errorMessage,
+            nextOrderCreated: false,
+            subscriptionStatus: action.subscriptionStatus,
+          }
         }
-      }
 
-      // ================================================================
-      // CASE 2: RETRYABLE (insufficient balance) - schedule retry
-      // ================================================================
-      if (isRetryablePaymentError(error)) {
-        const currentAttempts = order.attempts || 0
-
-        if (currentAttempts < DUNNING_CONFIG.MAX_ATTEMPTS) {
-          // Schedule retry
-          const nextRetryDate = calculateNextRetryDate(
-            currentAttempts,
-            new Date(),
-          )
-          const attemptLabel =
-            DUNNING_CONFIG.RETRY_INTERVALS[currentAttempts]?.label || "retry"
-
+        case "retry": {
           log.info(
-            `Insufficient balance (attempt ${currentAttempts + 1}/${DUNNING_CONFIG.MAX_ATTEMPTS}) - scheduling ${attemptLabel}`,
-            { nextRetryAt: nextRetryDate.toISOString() },
+            `Insufficient balance (attempt ${action.attemptNumber}/${action.attemptNumber}) - scheduling ${action.attemptLabel}`,
+            { nextRetryAt: action.nextRetryAt.toISOString() },
           )
 
           await this.subscriptionRepository.scheduleRetry({
             orderId,
             subscriptionId: order.subscriptionId,
-            nextRetryAt: nextRetryDate.toISOString(),
+            nextRetryAt: action.nextRetryAt.toISOString(),
             failureReason: errorCode,
             rawError: errorMessage,
           })
@@ -247,16 +234,17 @@ export class OrderService {
             failureReason: errorCode,
             failureMessage: errorMessage,
             nextOrderCreated: false,
-            subscriptionStatus: SubscriptionStatus.PAST_DUE,
-            nextRetryAt: nextRetryDate,
+            subscriptionStatus: action.subscriptionStatus,
+            nextRetryAt: action.nextRetryAt,
           }
-        } else {
-          // Max retries exhausted
-          log.info(`Max retries exhausted (${DUNNING_CONFIG.MAX_ATTEMPTS})`)
+        }
+
+        case "max_retries_exhausted": {
+          log.info("Max retries exhausted")
 
           await this.subscriptionRepository.updateSubscription({
             subscriptionId: order.subscriptionId,
-            status: SubscriptionStatus.UNPAID,
+            status: action.subscriptionStatus,
           })
 
           return {
@@ -265,56 +253,53 @@ export class OrderService {
             failureReason: errorCode,
             failureMessage: errorMessage,
             nextOrderCreated: false,
-            subscriptionStatus: SubscriptionStatus.UNPAID,
+            subscriptionStatus: action.subscriptionStatus,
           }
         }
-      }
 
-      // ================================================================
-      // CASE 3: OTHER ERRORS - log, keep subscription ACTIVE
-      // ================================================================
-      // Could be our bugs, system errors, etc.
-      // Keep subscription ACTIVE and create next order - let it recover
-      log.warn(
-        `Non-retryable error: ${errorCode} - keeping subscription active`,
-      )
+        case "other_error": {
+          log.warn(
+            `Non-retryable error: ${errorCode} - keeping subscription active`,
+          )
 
-      // Get onchain state for next order
-      const { subscription: onchainStatus } =
-        await this.onchainRepository.getSubscriptionStatus({
-          subscriptionId: order.subscriptionId,
-          providerId,
-        })
+          // Get onchain state for next order
+          const { subscription: onchainStatus } =
+            await this.onchainRepository.getSubscriptionStatus({
+              subscriptionId: order.subscriptionId,
+              providerId,
+            })
 
-      // Create next order if subscription still active
-      let nextOrderCreated = false
-      if (
-        onchainStatus.isSubscribed &&
-        onchainStatus.nextPeriodStart &&
-        onchainStatus.periodInSeconds
-      ) {
-        log.info("Creating next order despite failure", {
-          reason: "Keep subscription active for recovery",
-        })
+          // Create next order if subscription still active
+          let nextOrderCreated = false
+          if (
+            onchainStatus.isSubscribed &&
+            onchainStatus.nextPeriodStart &&
+            onchainStatus.periodInSeconds
+          ) {
+            log.info("Creating next order despite failure", {
+              reason: "Keep subscription active for recovery",
+            })
 
-        await this.subscriptionRepository.createOrder({
-          subscriptionId: order.subscriptionId,
-          type: OrderType.RECURRING,
-          dueAt: onchainStatus.nextPeriodStart.toISOString(),
-          amount: String(onchainStatus.recurringCharge),
-          periodInSeconds: onchainStatus.periodInSeconds,
-          status: OrderStatus.PENDING,
-        })
-        nextOrderCreated = true
-      }
+            await this.subscriptionRepository.createOrder({
+              subscriptionId: order.subscriptionId,
+              type: OrderType.RECURRING,
+              dueAt: onchainStatus.nextPeriodStart.toISOString(),
+              amount: String(onchainStatus.recurringCharge),
+              periodInSeconds: onchainStatus.periodInSeconds,
+              status: OrderStatus.PENDING,
+            })
+            nextOrderCreated = true
+          }
 
-      return {
-        success: false,
-        orderNumber: orderResult.orderNumber,
-        failureReason: errorCode,
-        failureMessage: errorMessage,
-        nextOrderCreated,
-        subscriptionStatus: SubscriptionStatus.ACTIVE,
+          return {
+            success: false,
+            orderNumber: orderResult.orderNumber,
+            failureReason: errorCode,
+            failureMessage: errorMessage,
+            nextOrderCreated,
+            subscriptionStatus: action.subscriptionStatus,
+          }
+        }
       }
     }
   }
