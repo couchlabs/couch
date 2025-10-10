@@ -103,8 +103,6 @@ POST /api/subscriptions
         → webhook.service.ts (emit webhook event)
 ```
 
-### Service/Repository Pattern
-
 Each domain follows a consistent structure:
 
 **Service Layer** (`services/*.service.ts`)
@@ -440,25 +438,6 @@ Authorization: Bearer <api_key>
 ```
 
 API keys are obtained via `PUT /api/account` and are tied to a merchant account address.
-
-## Project Structure
-
-```
-src/
-├── api/              # HTTP API endpoints
-│   ├── routes/       # Route handlers
-│   └── middleware/   # Auth middleware
-├── services/         # Business logic
-├── repositories/     # Data access layer
-├── providers/        # Onchain provider abstractions
-├── consumers/        # Queue consumers
-├── schedulers/       # Cron job schedulers
-├── errors/           # Error handling
-├── lib/              # Shared utils (ie logger)
-├── constants/        # Shared constants
-├── types/            # types
-└── alchemy.run.ts    # IaC configuration for provisioning and deploying the whole system
-```
 
 ## Database Schema
 
