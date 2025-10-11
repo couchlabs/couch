@@ -7,8 +7,7 @@
     "destroy": "alchemy destroy --app couch-backend",
     "db:generate": "drizzle-kit generate",
     "check": "tsc --noEmit && biome check",
-    "check:fix": "bun check --write",
-    "test": "bun test"
+    "check:fix": "bun check --write"
   },
   "exports": {
     "./alchemy": {
