@@ -43,6 +43,20 @@ export class OrderService {
   }
 
   /**
+   * Create OrderService with injected dependencies for testing
+   * Allows mocking repositories without touching production constructor
+   */
+  static createForTesting(deps: {
+    subscriptionRepository: SubscriptionRepository
+    onchainRepository: OnchainRepository
+  }): OrderService {
+    const service = Object.create(OrderService.prototype)
+    service.subscriptionRepository = deps.subscriptionRepository
+    service.onchainRepository = deps.onchainRepository
+    return service
+  }
+
+  /**
    * Get order details for webhook emission
    * Throws if order not found
    */

@@ -34,7 +34,8 @@
   },
   "devDependencies": {
     "turbo": "latest",
-    "@biomejs/biome": "latest"
+    "@biomejs/biome": "latest",
+    "bun": "latest"
   },
-  "packageManager": "bun@1.2.23"
+  "packageManager": "bun@1.3.0"
 }

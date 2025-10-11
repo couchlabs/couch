@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest"
+import { describe, expect, it } from "bun:test"
 import { SubscriptionStatus } from "@/constants/subscription.constants"
 import { ErrorCode, HTTPError } from "@/errors/http.errors"
 import {

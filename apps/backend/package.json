@@ -8,7 +8,7 @@
     "db:generate": "drizzle-kit generate",
     "check": "tsc --noEmit && biome check",
     "check:fix": "bun check --write",
-    "test": "vitest run"
+    "test": "bun test"
   },
   "exports": {
     "./alchemy": {
@@ -29,12 +29,11 @@
   },
   "devDependencies": {
     "alchemy": "catalog:",
-    "typescript": "catalog:",
     "miniflare": "catalog:cloudflare",
     "@cloudflare/workers-types": "catalog:cloudflare",
     "@types/node": "catalog:cloudflare",
+    "typescript": "catalog:",
     "drizzle-kit": "^0.31.5",
-    "vitest": "^2.0.0",
-    "@vitest/coverage-v8": "^2.0.0"
+    "@types/bun": "latest"
   }
 }

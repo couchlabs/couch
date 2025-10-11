@@ -1,5 +1,5 @@
-import { addDays, FIXED_DATE } from "@tests/helpers"
-import { describe, expect, it } from "vitest"
+import { describe, expect, it } from "bun:test"
+import { addDays, FIXED_DATE } from "@tests/test-utils"
 import {
   calculateNextRetryDate,
   DUNNING_CONFIG,

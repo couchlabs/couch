@@ -23,6 +23,11 @@ class Logger {
   }
 
   private log(level: LogLevel, message: string, data?: unknown) {
+    // Silence all logs in test environment
+    if (process.env.NODE_ENV === "test") {
+      return
+    }
+
     const timestamp = new Date().toISOString()
     const logEntry = {
       timestamp,
