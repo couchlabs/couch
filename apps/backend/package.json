@@ -28,10 +28,11 @@
   },
   "devDependencies": {
     "alchemy": "catalog:",
-    "typescript": "catalog:",
     "miniflare": "catalog:cloudflare",
     "@cloudflare/workers-types": "catalog:cloudflare",
     "@types/node": "catalog:cloudflare",
-    "drizzle-kit": "^0.31.5"
+    "typescript": "catalog:",
+    "drizzle-kit": "^0.31.5",
+    "@types/bun": "latest"
   }
 }

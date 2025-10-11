@@ -126,6 +126,20 @@ export class WebhookService {
   }
 
   /**
+   * Create WebhookService with injected dependencies for testing
+   * Allows mocking repositories and queue without touching production constructor
+   */
+  static createForTesting(deps: {
+    webhookRepository: WebhookRepository
+    webhookQueue: Queue<WebhookQueueMessage>
+  }): WebhookService {
+    const service = Object.create(WebhookService.prototype)
+    service.webhookRepository = deps.webhookRepository
+    service.webhookQueue = deps.webhookQueue
+    return service
+  }
+
+  /**
    * Generates a secure webhook secret for HMAC signing
    * Format: whsec_ prefix + 32 bytes hex (following industry standards like Stripe)
    */

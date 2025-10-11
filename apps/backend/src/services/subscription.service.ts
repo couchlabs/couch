@@ -69,6 +69,20 @@ export class SubscriptionService {
   }
 
   /**
+   * Create SubscriptionService with injected dependencies for testing
+   * Allows mocking repositories without touching production constructor
+   */
+  static createForTesting(deps: {
+    subscriptionRepository: SubscriptionRepository
+    onchainRepository: OnchainRepository
+  }): SubscriptionService {
+    const service = Object.create(SubscriptionService.prototype)
+    service.subscriptionRepository = deps.subscriptionRepository
+    service.onchainRepository = deps.onchainRepository
+    return service
+  }
+
+  /**
    * Completes the subscription activation in the background.
    * This includes database updates and scheduling next order.
    * Errors are logged but not thrown since this runs in background.
