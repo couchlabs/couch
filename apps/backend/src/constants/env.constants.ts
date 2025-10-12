@@ -1,7 +1,6 @@
 export enum Stage {
   DEV = "dev",
   STAGING = "staging",
-  SANDBOX = "sandbox",
   PROD = "prod",
 }
 

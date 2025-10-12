@@ -35,7 +35,7 @@ export class AccountRepository {
     this.db = drizzle(deps.DB, {
       schema,
       logger:
-        deps.STAGE === Stage.DEV || deps.STAGE === Stage.STAGING
+        deps.STAGE !== Stage.PROD
           ? new DrizzleLogger("account.repository")
           : undefined,
     })
