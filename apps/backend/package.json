@@ -7,7 +7,8 @@
     "destroy": "alchemy destroy --app couch-backend",
     "db:generate": "drizzle-kit generate",
     "check": "tsc --noEmit && biome check",
-    "check:fix": "bun check --write"
+    "check:fix": "bun check --write",
+    "test": "bun test"
   },
   "exports": {
     "./alchemy": {
@@ -27,12 +28,12 @@
     "drizzle-orm": "^0.44.6"
   },
   "devDependencies": {
-    "alchemy": "catalog:",
-    "miniflare": "catalog:cloudflare",
     "@cloudflare/workers-types": "catalog:cloudflare",
+    "@types/bun": "latest",
     "@types/node": "catalog:cloudflare",
-    "typescript": "catalog:",
+    "alchemy": "catalog:",
     "drizzle-kit": "^0.31.5",
-    "@types/bun": "latest"
+    "miniflare": "catalog:cloudflare",
+    "typescript": "catalog:"
   }
 }

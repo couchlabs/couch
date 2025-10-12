@@ -1,6 +1,6 @@
 import {
   calculateNextRetryDate,
-  DUNNING_CONFIG,
+  getDunningConfig,
   SubscriptionStatus,
 } from "@/constants/subscription.constants"
 import {
@@ -54,6 +54,7 @@ export function decideDunningAction(
   input: DunningDecisionInput,
 ): DunningAction {
   const { error, currentAttempts, failureDate } = input
+  const config = getDunningConfig()
 
   // CASE 1: TERMINAL (revoked/expired) - mark CANCELED
   if (isTerminalSubscriptionError(error)) {
@@ -67,10 +68,10 @@ export function decideDunningAction(
 
   // CASE 2: RETRYABLE (insufficient balance) - check retry limit
   if (isRetryablePaymentError(error)) {
-    if (currentAttempts < DUNNING_CONFIG.MAX_ATTEMPTS) {
+    if (currentAttempts < config.MAX_ATTEMPTS) {
       const nextRetryAt = calculateNextRetryDate(currentAttempts, failureDate)
       const attemptLabel =
-        DUNNING_CONFIG.RETRY_INTERVALS[currentAttempts]?.label || "retry"
+        config.RETRY_INTERVALS[currentAttempts]?.label || "retry"
 
       return {
         type: "retry",

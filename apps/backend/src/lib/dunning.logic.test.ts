@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test"
 import { addDays, FIXED_DATE } from "@tests/test-utils"
 import {
-  DUNNING_CONFIG,
+  getDunningConfig,
   SubscriptionStatus,
 } from "@/constants/subscription.constants"
 import { ErrorCode, HTTPError } from "@/errors/http.errors"
@@ -155,6 +155,7 @@ describe("decideDunningAction", () => {
 
   describe("Retryable errors - max retries exhausted", () => {
     it("returns max_retries_exhausted when currentAttempts = MAX_ATTEMPTS", () => {
+      const DUNNING_CONFIG = getDunningConfig()
       const result = decideDunningAction({
         error: new HTTPError(
           402,
@@ -174,6 +175,7 @@ describe("decideDunningAction", () => {
     })
 
     it("returns max_retries_exhausted when currentAttempts > MAX_ATTEMPTS", () => {
+      const DUNNING_CONFIG = getDunningConfig()
       const result = decideDunningAction({
         error: new HTTPError(
           402,
@@ -265,6 +267,7 @@ describe("decideDunningAction", () => {
 
     it("retryable errors respect attempt limits", () => {
       // Retryable error at max attempts becomes unpaid
+      const DUNNING_CONFIG = getDunningConfig()
       const result = decideDunningAction({
         error: new HTTPError(
           402,

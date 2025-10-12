@@ -53,31 +53,38 @@ export enum TransactionStatus {
  * Dunning (payment retry) configuration
  * Defines retry schedule for recurring payment failures
  */
-export const DUNNING_CONFIG = {
-  RETRY_INTERVALS: [
-    { days: 2, label: "First retry" }, // Day 2
-    { days: 5, label: "Second retry" }, // Day 7 (cumulative)
-    { days: 7, label: "Third retry" }, // Day 14 (cumulative)
-    { days: 7, label: "Final retry" }, // Day 21 (cumulative)
-  ],
-  MAX_ATTEMPTS: 4,
-  CRON_SCHEDULE: "0 * * * *", // Hourly
-} as const
+export function getDunningConfig() {
+  return {
+    RETRY_INTERVALS: [
+      { days: 2, label: "First retry" }, // Day 2
+      { days: 5, label: "Second retry" }, // Day 7 (cumulative)
+      { days: 7, label: "Third retry" }, // Day 14 (cumulative)
+      { days: 7, label: "Final retry" }, // Day 21 (cumulative)
+    ],
+    MAX_ATTEMPTS: 4,
+    CRON_SCHEDULE: "0 * * * *", // Hourly
+  } as const
+}
 
 export function calculateNextRetryDate(
   attempt: number,
   failureDate: Date,
 ): Date {
-  if (attempt >= DUNNING_CONFIG.MAX_ATTEMPTS) {
+  const config = getDunningConfig()
+
+  if (attempt >= config.MAX_ATTEMPTS) {
     throw new Error("Max retry attempts exceeded")
   }
 
-  const cumulativeDays = DUNNING_CONFIG.RETRY_INTERVALS.slice(
-    0,
-    attempt + 1,
-  ).reduce((sum, interval) => sum + interval.days, 0)
-
+  const intervals = config.RETRY_INTERVALS.slice(0, attempt + 1)
   const nextRetry = new Date(failureDate)
+
+  // Cumulative days
+  const cumulativeDays = intervals.reduce(
+    (sum, interval) => sum + interval.days,
+    0,
+  )
   nextRetry.setDate(nextRetry.getDate() + cumulativeDays)
+
   return nextRetry
 }

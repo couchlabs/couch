@@ -2,7 +2,7 @@ import { describe, expect, it } from "bun:test"
 import { addDays, FIXED_DATE } from "@tests/test-utils"
 import {
   calculateNextRetryDate,
-  DUNNING_CONFIG,
+  getDunningConfig,
 } from "./subscription.constants"
 
 describe("calculateNextRetryDate", () => {
@@ -32,12 +32,14 @@ describe("calculateNextRetryDate", () => {
     })
 
     it("throws error when attempt = MAX_ATTEMPTS", () => {
+      const DUNNING_CONFIG = getDunningConfig()
       expect(() =>
         calculateNextRetryDate(DUNNING_CONFIG.MAX_ATTEMPTS, FIXED_DATE),
       ).toThrow("Max retry attempts exceeded")
     })
 
     it("throws error when attempt > MAX_ATTEMPTS", () => {
+      const DUNNING_CONFIG = getDunningConfig()
       expect(() =>
         calculateNextRetryDate(DUNNING_CONFIG.MAX_ATTEMPTS + 1, FIXED_DATE),
       ).toThrow("Max retry attempts exceeded")

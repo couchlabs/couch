@@ -73,8 +73,8 @@ export const website = await Vite(WEBSITE_NAME, {
   },
   // Envs exposed to worker only
   bindings: {
-    COUCH_WEBHOOK_SECRET: alchemy.secret(process.env.COUCH_WEBHOOK_SECRET),
-    COUCH_API_KEY: alchemy.secret(process.env.COUCH_API_KEY),
+    COUCH_WEBHOOK_SECRET: alchemy.secret.env.COUCH_WEBHOOK_SECRET,
+    COUCH_API_KEY: alchemy.secret.env.COUCH_API_KEY,
     COUCH_API_URL: api.url,
     DB: db,
   },

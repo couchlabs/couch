@@ -53,13 +53,7 @@ export function SubscriptionCreator() {
         periodUnit,
       )
 
-      console.log("Creating subscription with Base SDK:", {
-        recurringCharge: chargeAmount,
-        subscriptionOwner: accountAddress,
-        periodInSeconds,
-      })
-
-      // Step 1: Create subscription onchain with Base SDK
+      // Create subscription via Coinbase Wallet
       const subscription = await base.subscription.subscribe({
         recurringCharge: chargeAmount, // USDC amount
         subscriptionOwner: accountAddress, // Backend wallet address (spender)
@@ -70,7 +64,7 @@ export function SubscriptionCreator() {
 
       console.log("Subscription created onchain:", subscription)
 
-      // Step 2: Activate subscription via backend
+      // Activate subscription via backend
       const response = await fetch("/proxy/api/subscriptions", {
         method: "POST",
         headers: {
@@ -95,7 +89,7 @@ export function SubscriptionCreator() {
       }
 
       const data = await response.json()
-      console.log("Subscription created:", data)
+      console.log("Subscription activated:", data)
 
       // Success - reset loading state immediately
       setIsSubscribing(false)

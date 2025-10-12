@@ -31,21 +31,6 @@ app.get("/api/subscriptions", async (c) => {
   return c.json(result.results || [])
 })
 
-// Get single subscription
-app.get("/api/subscriptions/:id", async (c) => {
-  const id = c.req.param("id")
-  const result = await c.env.DB.prepare(
-    "SELECT * FROM subscriptions WHERE id = ?",
-  )
-    .bind(id)
-    .first()
-
-  if (!result) {
-    return c.json({ error: "Subscription not found" }, 404)
-  }
-  return c.json(result)
-})
-
 // Get webhook events for a subscription
 app.get("/api/subscriptions/:id/events", async (c) => {
   const id = c.req.param("id")
