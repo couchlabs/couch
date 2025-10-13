@@ -1,6 +1,8 @@
 import path from "node:path"
 import alchemy from "alchemy"
 import { D1Database, Vite } from "alchemy/cloudflare"
+import { GitHubComment } from "alchemy/github"
+import { CloudflareStateStore } from "alchemy/state"
 import {
   api,
   dunningScheduler,
@@ -39,6 +41,7 @@ import {
 
 export const app = await alchemy("couch-playground", {
   password: process.env.ALCHEMY_PASSWORD,
+  stateStore: (scope) => new CloudflareStateStore(scope),
 })
 const NAME_PREFIX = `${app.name}-${app.stage}`
 
@@ -90,6 +93,33 @@ export const website = await Vite(WEBSITE_NAME, {
   },
 })
 
-console.log({ [WEBSITE_NAME]: website })
+if (app.stage === "dev") {
+  console.log({ [WEBSITE_NAME]: website })
+}
+
+// =============================================================================
+// PR PREVIEW COMMENTS
+// =============================================================================
+
+if (process.env.PULL_REQUEST) {
+  await GitHubComment("playground-preview-comment", {
+    owner: "couchlabs",
+    repository: "couch",
+    issueNumber: Number(process.env.PULL_REQUEST),
+    body: `## 🎮 Playground Preview Deployed
+
+**Stage:** \`${app.stage}\`
+
+### 🌐 Preview URL
+**👉 https://${website.url}**
+
+### 🔗 Backend Integration
+- Connected to backend stage: \`${app.stage}\`
+- Subscription API: https://${api.url}
+
+---
+<sub>🤖 Built from commit ${process.env.GITHUB_SHA?.slice(0, 7)} • This comment updates automatically with each push</sub>`,
+  })
+}
 
 await app.finalize()

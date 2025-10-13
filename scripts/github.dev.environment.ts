@@ -38,6 +38,10 @@ const ENV_NAME = GitHubEnvironment.DEV
 const SECRETS = validateSecrets([
   // Alchemy
   { name: "ALCHEMY_PASSWORD", description: "Alchemy deployment password" },
+  {
+    name: "ALCHEMY_STATE_TOKEN",
+    description: "Alchemy state store token (shared across all deployments)",
+  },
   // Cloudflare
   {
     name: "CLOUDFLARE_API_TOKEN",
@@ -55,6 +59,11 @@ const SECRETS = validateSecrets([
     name: "CDP_CLIENT_API_KEY",
     description:
       "CDP Client API Key for paymaster (shared across all environments)",
+  },
+  // Couch (Playground)
+  {
+    name: "MERCHANT_ADDRESS",
+    description: "Merchant wallet address for creating accounts",
   },
 ])
 

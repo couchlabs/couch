@@ -51,6 +51,10 @@ const SECRETS = validateSecrets([
     envVar: "PROD_ALCHEMY_PASSWORD",
     description: "Alchemy deployment password (production)",
   },
+  {
+    name: "ALCHEMY_STATE_TOKEN",
+    description: "Alchemy state store token (shared across all environments)",
+  },
   // Cloudflare
   {
     name: "CLOUDFLARE_API_TOKEN",
@@ -76,6 +80,12 @@ const SECRETS = validateSecrets([
     name: "CDP_CLIENT_API_KEY",
     description:
       "CDP Client API Key for paymaster (shared across all environments)",
+  },
+  // Couch (Playground)
+  {
+    name: "MERCHANT_ADDRESS",
+    envVar: "PROD_MERCHANT_ADDRESS",
+    description: "Merchant wallet address for creating accounts (production)",
   },
 ])
 

@@ -2,6 +2,8 @@ import path from "node:path"
 import alchemy from "alchemy"
 import { D1Database, Queue, Worker } from "alchemy/cloudflare"
 import { EvmAccount, EvmSmartAccount } from "alchemy/coinbase"
+import { GitHubComment } from "alchemy/github"
+import { CloudflareStateStore } from "alchemy/state"
 import { resolveStageConfig } from "@/constants/env.constants"
 import type { Provider } from "@/providers/provider.interface"
 import drizzleConfig from "./drizzle.config"
@@ -37,6 +39,7 @@ import drizzleConfig from "./drizzle.config"
 
 export const app = await alchemy("couch-backend", {
   password: process.env.ALCHEMY_PASSWORD,
+  stateStore: (scope) => new CloudflareStateStore(scope),
 })
 const NAME_PREFIX = `${app.name}-${app.stage}`
 const { NETWORK, LOGGING, DUNNING_MODE, HTTP_TRIGGER, WALLET_STAGE } =
@@ -330,20 +333,49 @@ export const webhookDLQConsumer = await Worker(WEBHOOK_DLQ_CONSUMER_NAME, {
   dev: { port: 3203 },
 })
 
-console.log({
-  [API_NAME]: api,
-  [DB_NAME]: db,
-  [ORDER_SCHEDULER_NAME]: orderScheduler,
-  [DUNNING_SCHEDULER_NAME]: dunningScheduler,
-  [ORDER_QUEUE_NAME]: orderQueue,
-  [ORDER_CONSUMER_NAME]: orderConsumer,
-  [WEBHOOK_QUEUE_NAME]: webhookQueue,
-  [WEBHOOK_CONSUMER_NAME]: webhookConsumer,
-  [ORDER_DLQ_NAME]: orderDLQ,
-  [ORDER_DLQ_CONSUMER_NAME]: orderDLQConsumer,
-  [WEBHOOK_DLQ_NAME]: webhookDLQ,
-  [WEBHOOK_DLQ_CONSUMER_NAME]: webhookDLQConsumer,
-})
+// Log all resources in dev, just API URL in other stages
+if (app.stage === "dev") {
+  console.log({
+    [API_NAME]: api,
+    [DB_NAME]: db,
+    [ORDER_SCHEDULER_NAME]: orderScheduler,
+    [DUNNING_SCHEDULER_NAME]: dunningScheduler,
+    [ORDER_QUEUE_NAME]: orderQueue,
+    [ORDER_CONSUMER_NAME]: orderConsumer,
+    [WEBHOOK_QUEUE_NAME]: webhookQueue,
+    [WEBHOOK_CONSUMER_NAME]: webhookConsumer,
+    [ORDER_DLQ_NAME]: orderDLQ,
+    [ORDER_DLQ_CONSUMER_NAME]: orderDLQConsumer,
+    [WEBHOOK_DLQ_NAME]: webhookDLQ,
+    [WEBHOOK_DLQ_CONSUMER_NAME]: webhookDLQConsumer,
+  })
+} else {
+  console.log(`API URL: ${api.url}`)
+}
+
+// =============================================================================
+// PR PREVIEW COMMENTS
+// =============================================================================
+
+if (process.env.PULL_REQUEST) {
+  await GitHubComment("backend-preview-comment", {
+    owner: "couchlabs",
+    repository: "couch",
+    issueNumber: Number(process.env.PULL_REQUEST),
+    body: `## 🚀 Backend Preview Deployed
+
+**Stage:** \`${app.stage}\`
+**Network:** ${NETWORK === "testnet" ? "Base Sepolia (testnet)" : "Base (mainnet)"}
+
+### 📡 API Endpoints
+- **Subscription API:** https://${api.url}
+- **Order Scheduler:** https://${orderScheduler.url}
+- **Dunning Scheduler:** https://${dunningScheduler.url}
+
+---
+<sub>🤖 Built from commit ${process.env.GITHUB_SHA?.slice(0, 7)} • This comment updates automatically with each push</sub>`,
+  })
+}
 
 await app.finalize()
 
