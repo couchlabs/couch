@@ -55,10 +55,10 @@ jobs:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
 
-      - name: Install dependencies
+      - name: "Install dependencies"
         run: bun install
 
-      - name: Deploy backend
+      - name: "Deploy backend"
         id: backend
         run: |
           # Capture deployment output
@@ -88,7 +88,7 @@ jobs:
           GITHUB_SHA: ${{ github.sha }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Create account and webhook
+      - name: "Create account and register webhook on the backend"
         id: couch
         run: |
           # Create account and get API key
@@ -148,7 +148,7 @@ jobs:
           echo "api_key=$API_KEY" >> $GITHUB_OUTPUT
           echo "webhook_secret=$WEBHOOK_SECRET" >> $GITHUB_OUTPUT
 
-      - name: Deploy playground
+      - name: "Deploy playground"
         run: turbo infra:deploy --filter=playground
         env:
           STAGE: ${{ env.STAGE }}
