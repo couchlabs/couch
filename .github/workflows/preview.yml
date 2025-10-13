@@ -6,6 +6,7 @@ on:
 
 jobs:
   security-check:
+    name: "Security check"
     runs-on: ubuntu-latest
     outputs:
       is-fork: ${{ steps.check.outputs.is-fork }}
@@ -20,6 +21,7 @@ jobs:
           fi
 
   test:
+    name: "Tests"
     needs: security-check
     runs-on: ubuntu-latest
     steps:
@@ -32,52 +34,3 @@ jobs:
 
       - name: Run tests
         run: bun run test
-
-  comment-pr:
-    needs: [security-check, test]
-    if: needs.security-check.outputs.is-fork == 'false'
-    runs-on: ubuntu-latest
-    permissions:
-      pull-requests: write
-    steps:
-      - name: Comment PR
-        uses: actions/github-script@v7
-        with:
-          script: |
-            const body = `## ✅ Tests Passed
-
-            All tests passed successfully!
-
-            - **Test run**: [View logs](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})
-
-            *Preview deployments will be added in Phase 3b*`;
-
-            // Try to find existing comment
-            const comments = await github.rest.issues.listComments({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-            });
-
-            const botComment = comments.data.find(comment =>
-              comment.user.type === 'Bot' &&
-              comment.body.includes('Tests Passed')
-            );
-
-            if (botComment) {
-              // Update existing comment
-              await github.rest.issues.updateComment({
-                comment_id: botComment.id,
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                body: body
-              });
-            } else {
-              // Create new comment
-              await github.rest.issues.createComment({
-                issue_number: context.issue.number,
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                body: body
-              });
-            }
