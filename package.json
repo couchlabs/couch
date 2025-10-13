@@ -4,12 +4,16 @@
   "type": "module",
   "private": true,
   "scripts": {
-    "faucet": "bun node_modules/alchemy/src/coinbase/faucet.ts",
     "dev": "turbo dev --ui=tui",
-    "destroy": "turbo destroy ",
-    "check": "turbo check",
-    "check:fix": "turbo check:fix",
-    "db:generate": "turbo db:generate"
+    "test": "turbo test",
+    "fix": "turbo fix",
+    "dev:faucet": "bun node_modules/alchemy/src/coinbase/faucet.ts",
+    "gh:setup:dev": "alchemy deploy scripts/github.dev.environment.ts",
+    "gh:setup:sandbox": "alchemy deploy scripts/github.sandbox.environment.ts",
+    "gh:setup:prod": "alchemy deploy scripts/github.prod.environment.ts",
+    "db:generate": "turbo db:generate",
+    "infra:deploy": "turbo infra:deploy",
+    "infra:destroy": "turbo infra:destroy"
   },
   "workspaces": {
     "packages": [
@@ -34,8 +38,8 @@
   },
   "devDependencies": {
     "turbo": "latest",
-    "@biomejs/biome": "latest",
-    "bun": "latest"
+    "bun": "latest",
+    "@biomejs/biome": "latest"
   },
   "packageManager": "bun@1.3.0"
 }

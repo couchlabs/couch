@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from "bun:test"
 import { createTestDB } from "@tests/test-db"
 import type { Address, Hash } from "viem"
-import { Stage } from "@/constants/env.constants"
 import {
   OrderStatus,
   OrderType,
@@ -24,7 +23,7 @@ describe("SubscriptionRepository", () => {
     // Initialize repository
     repo = new SubscriptionRepository({
       DB: testDB.db,
-      STAGE: Stage.DEV,
+      LOGGING: "verbose",
     })
   })
 

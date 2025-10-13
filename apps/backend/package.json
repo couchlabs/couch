@@ -4,11 +4,11 @@
   "private": true,
   "scripts": {
     "dev": "alchemy dev --stage dev --adopt --app couch-backend",
-    "destroy": "alchemy destroy --app couch-backend",
+    "infra:deploy": "alchemy deploy --stage $STAGE --app couch-backend",
+    "infra:destroy": "alchemy destroy --stage $STAGE --app couch-backend",
     "db:generate": "drizzle-kit generate",
-    "check": "tsc --noEmit && biome check",
-    "check:fix": "bun check --write",
-    "test": "bun test"
+    "test": "tsc --noEmit && biome check && bun test",
+    "fix": "biome check --write"
   },
   "exports": {
     "./alchemy": {

@@ -6,19 +6,22 @@
       "persistent": true,
       "cache": false
     },
-    "destroy": {
+    "test": {
+      "cache": false
+    },
+    "fix": {
       "cache": false
     },
     "db:generate": {
       "cache": false,
       "dependsOn": [
-        "check"
+        "test"
       ]
     },
-    "check": {
+    "infra:deploy": {
       "cache": false
     },
-    "check:fix": {
+    "infra:destroy": {
       "cache": false
     }
   }

@@ -14,6 +14,10 @@ import {
   type OrderDetails,
   SubscriptionRepository,
 } from "@/repositories/subscription.repository"
+import type { SubscriptionServiceDeps } from "@/services/subscription.service"
+
+// OrderService has same dependencies as SubscriptionService
+export type OrderServiceDeps = SubscriptionServiceDeps
 
 export interface ProcessOrderParams {
   orderId: number
@@ -37,7 +41,7 @@ export class OrderService {
   private subscriptionRepository: SubscriptionRepository
   private onchainRepository: OnchainRepository
 
-  constructor(env) {
+  constructor(env: OrderServiceDeps) {
     this.subscriptionRepository = new SubscriptionRepository(env)
     this.onchainRepository = new OnchainRepository(env)
   }

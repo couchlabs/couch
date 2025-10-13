@@ -3,7 +3,7 @@ import * as schema from "@database/schema"
 import { and, eq, sql } from "drizzle-orm"
 import { drizzle } from "drizzle-orm/d1"
 import type { Address, Hash } from "viem"
-import { Stage } from "@/constants/env.constants"
+import type { LoggingLevel } from "@/constants/env.constants"
 import {
   OrderStatus,
   OrderType,
@@ -114,7 +114,7 @@ export interface DueRetry {
 
 export interface SubscriptionRepositoryDeps {
   DB: D1Database
-  STAGE: Stage
+  LOGGING: LoggingLevel
 }
 
 export interface CreateSubscriptionWithOrderParams {
@@ -160,7 +160,7 @@ export class SubscriptionRepository {
     this.db = drizzle(deps.DB, {
       schema,
       logger:
-        deps.STAGE !== Stage.PROD
+        deps.LOGGING === "verbose"
           ? new DrizzleLogger("subscription.repository")
           : undefined,
     })

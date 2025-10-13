@@ -4,7 +4,10 @@
   "private": true,
   "scripts": {
     "dev": "alchemy dev --stage dev --adopt --app couch-playground",
-    "destroy": "alchemy destroy --app couch-playground"
+    "infra:deploy": "alchemy deploy --stage $STAGE --app couch-playground",
+    "infra:destroy": "alchemy destroy --stage $STAGE --app couch-playground",
+    "test": "echo 'No tests configured'",
+    "fix": "echo 'No linting configured'"
   },
   "dependencies": {
     "@base-org/account": "catalog:coinbase",

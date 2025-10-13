@@ -58,7 +58,7 @@ The backend starts with the following services:
 | Order DLQ Consumer | 3202 | Dead letter queue monitor for orders |
 | Webhook DLQ Consumer | 3203 | Dead letter queue monitor for webhooks |
 
-> **Note**: \*Cron triggers only run in production. Locally, use `GET http://localhost:3100/__scheduled` or `GET http://localhost:3101/__scheduled` to trigger manually, or use the playground app's Backend Settings dialog.
+> **Note**: \*Cron triggers only run in production. In dev/preview environments, schedulers can be triggered manually via HTTP: `curl http://localhost:3100` or `curl http://localhost:3101`, or use the playground app's Backend Settings dialog.
 
 > **Tip**: Run the playground app alongside (`bun run dev --filter=playground`) for a full testing environment with webhook visualization and scheduler controls.
 
@@ -472,18 +472,19 @@ transactions       -- Blockchain transactions
 
 **3. Process recurring orders**
 
-5. Trigger order scheduler to process recurring payments via `http://localhost:3100/__scheduled`
+5. Trigger order scheduler to process recurring payments via `curl http://localhost:3100`
 
 ### DEV Endpoints
 
-- `GET http://localhost:3100/__scheduled` - Trigger order scheduler to process due recurring payments
-- `GET http://localhost:3101/__scheduled` - Trigger dunning scheduler to process payment retries
+**Scheduler HTTP Triggers** (dev/preview only):
+- `curl http://localhost:3100` - Trigger order scheduler to process due recurring payments
+- `curl http://localhost:3101` - Trigger dunning scheduler to process payment retries
 
 **Playground App Proxy Routes** (with automatic auth injection):
-- `/proxy/scheduled/order` → Routes to order-scheduler (port 3100)
-- `/proxy/scheduled/dunning` → Routes to dunning-scheduler (port 3101)
+- `/proxy/scheduled/order` → Routes to order-scheduler HTTP trigger
+- `/proxy/scheduled/dunning` → Routes to dunning-scheduler HTTP trigger
 
-**Note**: The playground app includes a settings UI to manually or automatically trigger these schedulers
+**Note**: The playground app includes a settings UI to manually or automatically trigger these schedulers. HTTP triggers return 403 Forbidden in staging/sandbox/prod environments for security.
 
 ### Monitoring
 

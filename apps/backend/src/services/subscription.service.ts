@@ -1,4 +1,6 @@
+import type { D1Database } from "@cloudflare/workers-types"
 import type { Address, Hash } from "viem"
+import type { LoggingLevel, Network } from "@/constants/env.constants"
 import { OrderStatus, OrderType } from "@/constants/subscription.constants"
 import { ErrorCode, HTTPError } from "@/errors/http.errors"
 import { createLogger } from "@/lib/logger"
@@ -8,6 +10,20 @@ import {
   OnchainRepository,
 } from "@/repositories/onchain.repository"
 import { SubscriptionRepository } from "@/repositories/subscription.repository"
+
+export interface SubscriptionServiceDeps {
+  // From SubscriptionRepository
+  DB: D1Database
+  LOGGING: LoggingLevel
+  // From OnchainRepository
+  CDP_API_KEY_ID: string
+  CDP_API_KEY_SECRET: string
+  CDP_WALLET_SECRET: string
+  CDP_WALLET_NAME: string
+  CDP_CLIENT_API_KEY: string
+  CDP_SPENDER_ADDRESS: Address
+  NETWORK: Network
+}
 
 export interface ValidateSubscriptionIdParams {
   subscriptionId: Hash
@@ -63,7 +79,7 @@ export class SubscriptionService {
   private subscriptionRepository: SubscriptionRepository
   private onchainRepository: OnchainRepository
 
-  constructor(env) {
+  constructor(env: SubscriptionServiceDeps) {
     this.subscriptionRepository = new SubscriptionRepository(env)
     this.onchainRepository = new OnchainRepository(env)
   }

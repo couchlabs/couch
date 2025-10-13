@@ -3,7 +3,7 @@ import * as schema from "@database/schema"
 import { eq } from "drizzle-orm"
 import { drizzle } from "drizzle-orm/d1"
 import type { Address } from "viem"
-import { Stage } from "@/constants/env.constants"
+import type { LoggingLevel } from "@/constants/env.constants"
 import { DrizzleLogger } from "@/lib/logger"
 
 // Re-export schema type
@@ -12,7 +12,7 @@ export type Webhook = schema.Webhook
 // Custom parameter types
 export interface WebhookRepositoryDeps {
   DB: D1Database
-  STAGE: Stage
+  LOGGING: LoggingLevel
 }
 
 export interface CreateOrUpdateWebhookParams {
@@ -32,7 +32,7 @@ export class WebhookRepository {
     this.db = drizzle(deps.DB, {
       schema,
       logger:
-        deps.STAGE !== Stage.PROD
+        deps.LOGGING === "verbose"
           ? new DrizzleLogger("webhook.repository")
           : undefined,
     })

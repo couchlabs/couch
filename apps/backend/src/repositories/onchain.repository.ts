@@ -1,7 +1,18 @@
 import type { Address, Hash } from "viem"
+import type { Network } from "@/constants/env.constants"
 import { createLogger } from "@/lib/logger"
 import type { Provider } from "@/providers/provider.interface"
 import { ProviderRegistry } from "@/providers/provider.registry"
+
+export interface OnchainRepositoryDeps {
+  CDP_API_KEY_ID: string
+  CDP_API_KEY_SECRET: string
+  CDP_WALLET_SECRET: string
+  CDP_WALLET_NAME: string
+  CDP_CLIENT_API_KEY: string
+  CDP_SPENDER_ADDRESS: Address
+  NETWORK: Network
+}
 
 export interface ChargeSubscriptionParams {
   subscriptionId: Hash
@@ -45,7 +56,7 @@ const logger = createLogger("onchain.repository")
 export class OnchainRepository {
   private providerRegistry: ProviderRegistry
 
-  constructor(env) {
+  constructor(env: OnchainRepositoryDeps) {
     this.providerRegistry = new ProviderRegistry({ Base: env })
     logger.info("OnchainRepository initialized with provider registry")
   }

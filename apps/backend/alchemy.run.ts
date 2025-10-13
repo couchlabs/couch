@@ -2,7 +2,7 @@ import path from "node:path"
 import alchemy from "alchemy"
 import { D1Database, Queue, Worker } from "alchemy/cloudflare"
 import { EvmAccount, EvmSmartAccount } from "alchemy/coinbase"
-import type { Stage } from "@/constants/env.constants"
+import { resolveStageConfig } from "@/constants/env.constants"
 import type { Provider } from "@/providers/provider.interface"
 import drizzleConfig from "./drizzle.config"
 
@@ -39,6 +39,8 @@ export const app = await alchemy("couch-backend", {
   password: process.env.ALCHEMY_PASSWORD,
 })
 const NAME_PREFIX = `${app.name}-${app.stage}`
+const { NETWORK, LOGGING, DUNNING_MODE, HTTP_TRIGGER, WALLET_STAGE } =
+  resolveStageConfig(app.stage)
 
 // =============================================================================
 // ONCHAIN RESOURCES (Coinbase)
@@ -53,15 +55,18 @@ const NAME_PREFIX = `${app.name}-${app.stage}`
  * Base Account SDK requires EOA and smart account to share the same CDP wallet identifier.
  * @see https://github.com/base-org/account-sdk/blob/main/packages/account-sdk/src/interface/payment/charge.ts#L114-120
  * EvmSmartAccount inherits its name from the owner account when the name property is omitted.
+ *
+ * Wallet Strategy (via WALLET_STAGE runtime config):
+ * - dev/preview: Share test wallet (couch-backend-dev-spender-evm)
+ * - sandbox: Dedicated test wallet (couch-backend-sandbox-spender-evm)
+ * - prod: Dedicated mainnet wallet (couch-backend-prod-spender-evm)
  */
 const SPENDER_ACCOUNT_NAME = "spender-evm"
 export const spenderSmartAccount = await EvmSmartAccount(SPENDER_ACCOUNT_NAME, {
   owner: await EvmAccount(`${SPENDER_ACCOUNT_NAME}-owner`, {
-    name: `${NAME_PREFIX}-${SPENDER_ACCOUNT_NAME}`, // CDP Identifier
+    name: `${app.name}-${WALLET_STAGE}-${SPENDER_ACCOUNT_NAME}`, // CDP Identifier
   }),
-  faucet: {
-    "base-sepolia": ["eth"],
-  },
+  faucet: NETWORK === "testnet" ? { "base-sepolia": ["eth"] } : undefined,
 })
 
 // =============================================================================
@@ -144,10 +149,14 @@ export const api = await Worker(API_NAME, {
     CDP_API_KEY_ID: alchemy.secret.env.CDP_API_KEY_ID,
     CDP_API_KEY_SECRET: alchemy.secret.env.CDP_API_KEY_SECRET,
     CDP_WALLET_SECRET: alchemy.secret.env.CDP_WALLET_SECRET,
-    CDP_PAYMASTER_URL: alchemy.env.CDP_PAYMASTER_URL,
+    CDP_CLIENT_API_KEY: alchemy.env.CDP_CLIENT_API_KEY,
     CDP_WALLET_NAME: spenderSmartAccount.name,
     CDP_SPENDER_ADDRESS: spenderSmartAccount.address,
-    STAGE: app.stage as Stage,
+    // STAGE CONFIGS:
+    NETWORK,
+    LOGGING,
+    DUNNING_MODE,
+    WALLET_STAGE,
     // RESOURCES:
     DB: db,
     WEBHOOK_QUEUE: webhookQueue,
@@ -174,7 +183,9 @@ export const orderScheduler = await Worker(ORDER_SCHEDULER_NAME, {
   bindings: {
     DB: db,
     ORDER_QUEUE: orderQueue,
-    STAGE: app.stage as Stage,
+    // STAGE CONFIGS:
+    LOGGING,
+    HTTP_TRIGGER,
   },
   compatibilityFlags,
   dev: { port: 3100 },
@@ -194,7 +205,9 @@ export const dunningScheduler = await Worker(DUNNING_SCHEDULER_NAME, {
   bindings: {
     DB: db,
     ORDER_QUEUE: orderQueue,
-    STAGE: app.stage as Stage,
+    // STAGE CONFIGS:
+    LOGGING,
+    HTTP_TRIGGER,
   },
   compatibilityFlags,
   dev: { port: 3101 },

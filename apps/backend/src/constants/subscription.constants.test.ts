@@ -3,10 +3,10 @@ import { addDays, FIXED_DATE } from "@tests/test-utils"
 import {
   calculateNextRetryDate,
   getDunningConfig,
-} from "./subscription.constants"
+} from "@/constants/subscription.constants"
 
 describe("calculateNextRetryDate", () => {
-  describe("Retry date calculation", () => {
+  describe("Retry date calculation (standard mode - default)", () => {
     it("calculates first retry date (attempt 0 -> Day 2)", () => {
       const result = calculateNextRetryDate(0, FIXED_DATE)
       const expected = addDays(FIXED_DATE, 2)
@@ -66,6 +66,39 @@ describe("calculateNextRetryDate", () => {
       const result = calculateNextRetryDate(0, dateWithTime)
       const expected = new Date("2025-01-17T14:30:45.123Z")
       expect(result).toEqual(expected)
+    })
+  })
+
+  describe("Fast mode", () => {
+    const addMinutes = (date: Date, minutes: number): Date => {
+      const result = new Date(date)
+      result.setMinutes(result.getMinutes() + minutes)
+      return result
+    }
+
+    it("calculates first retry date (attempt 0 -> 2 minutes)", () => {
+      const result = calculateNextRetryDate(0, FIXED_DATE, "fast")
+      const expected = addMinutes(FIXED_DATE, 2)
+      expect(result).toEqual(expected)
+    })
+
+    it("calculates second retry date (attempt 1 -> 5 minutes cumulative)", () => {
+      const result = calculateNextRetryDate(1, FIXED_DATE, "fast")
+      const expected = addMinutes(FIXED_DATE, 5) // 2 + 3 = 5 minutes
+      expect(result).toEqual(expected)
+    })
+
+    it("calculates third retry date (attempt 2 -> 10 minutes cumulative)", () => {
+      const result = calculateNextRetryDate(2, FIXED_DATE, "fast")
+      const expected = addMinutes(FIXED_DATE, 10) // 2 + 3 + 5 = 10 minutes
+      expect(result).toEqual(expected)
+    })
+
+    it("throws error when attempt = MAX_ATTEMPTS", () => {
+      const DUNNING_CONFIG = getDunningConfig("fast")
+      expect(() =>
+        calculateNextRetryDate(DUNNING_CONFIG.MAX_ATTEMPTS, FIXED_DATE, "fast"),
+      ).toThrow("Max retry attempts exceeded")
     })
   })
 })

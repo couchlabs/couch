@@ -65,4 +65,34 @@ export default {
       throw error
     }
   },
+
+  /**
+   * HTTP handler - allows manual triggering in dev/preview environments
+   * Only available when HTTP_TRIGGER is "true"
+   */
+  async fetch(
+    _request: Request,
+    env: WorkerEnv,
+    ctx: ExecutionContext,
+  ): Promise<Response> {
+    if (env.HTTP_TRIGGER !== "true") {
+      return new Response("HTTP trigger not available in this environment", {
+        status: 403,
+      })
+    }
+
+    // Call scheduled() with a mock event
+    await this.scheduled(
+      {
+        scheduledTime: Date.now(),
+        cron: "manual-trigger",
+      },
+      env,
+      ctx,
+    )
+
+    return new Response("Order scheduler triggered successfully", {
+      status: 200,
+    })
+  },
 }

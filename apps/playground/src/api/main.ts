@@ -96,25 +96,26 @@ app.post("/api/webhook", async (c) => {
 
 // Proxy with Authorization header injection and scheduler routing
 app.all("/proxy/*", async (c) => {
-  let path = c.req.path.replace(/^\/proxy\//, "")
+  const path = c.req.path.replace(/^\/proxy\//, "")
   const clientIp =
     c.req.header("CF-Connecting-IP") ||
     c.req.header("X-Forwarded-For") ||
     c.req.header("X-Real-IP") ||
     "127.0.0.1"
 
-  let baseUrl = c.env.COUCH_API_URL.replace(/\/+$/, "")
-
-  // Route scheduler endpoints to appropriate ports
+  // Route scheduler endpoints using bindings (call them directly)
+  let targetUrl: string
   if (path === "scheduled/order") {
-    baseUrl = baseUrl.replace(":3000", ":3100") // order-scheduler
-    path = "__scheduled"
+    targetUrl = c.env.COUCH_ORDER_SCHEDULER_URL
   } else if (path === "scheduled/dunning") {
-    baseUrl = baseUrl.replace(":3000", ":3101") // dunning-scheduler
-    path = "__scheduled"
+    targetUrl = c.env.COUCH_DUNNING_SCHEDULER_URL
+  } else {
+    // API endpoints: append path to base URL
+    const baseUrl = c.env.COUCH_API_URL.replace(/\/+$/, "")
+    targetUrl = `${baseUrl}/${path}`
   }
 
-  return proxy(`${baseUrl}/${path}`, {
+  return proxy(targetUrl, {
     ...c.req,
     headers: {
       ...c.req.header(),

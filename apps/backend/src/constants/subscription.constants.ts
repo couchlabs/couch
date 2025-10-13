@@ -10,6 +10,8 @@
  * 3. Ensure all values are lowercase to match DB constraints
  */
 
+import type { DunningMode } from "@/constants/env.constants"
+
 /**
  * Subscription lifecycle statuses
  *
@@ -53,7 +55,20 @@ export enum TransactionStatus {
  * Dunning (payment retry) configuration
  * Defines retry schedule for recurring payment failures
  */
-export function getDunningConfig() {
+export function getDunningConfig(mode: DunningMode = "standard") {
+  if (mode === "fast") {
+    // Fast testing mode (dev/preview only)
+    return {
+      RETRY_INTERVALS: [
+        { minutes: 2, label: "First retry" }, // 2 min
+        { minutes: 3, label: "Second retry" }, // 5 min cumulative
+        { minutes: 5, label: "Final retry" }, // 10 min cumulative
+      ],
+      MAX_ATTEMPTS: 3,
+    } as const
+  }
+
+  // Standard production behavior (staging/sandbox/prod)
   return {
     RETRY_INTERVALS: [
       { days: 2, label: "First retry" }, // Day 2
@@ -62,15 +77,15 @@ export function getDunningConfig() {
       { days: 7, label: "Final retry" }, // Day 21 (cumulative)
     ],
     MAX_ATTEMPTS: 4,
-    CRON_SCHEDULE: "0 * * * *", // Hourly
   } as const
 }
 
 export function calculateNextRetryDate(
   attempt: number,
   failureDate: Date,
+  mode: DunningMode = "standard",
 ): Date {
-  const config = getDunningConfig()
+  const config = getDunningConfig(mode)
 
   if (attempt >= config.MAX_ATTEMPTS) {
     throw new Error("Max retry attempts exceeded")
@@ -79,12 +94,21 @@ export function calculateNextRetryDate(
   const intervals = config.RETRY_INTERVALS.slice(0, attempt + 1)
   const nextRetry = new Date(failureDate)
 
-  // Cumulative days
-  const cumulativeDays = intervals.reduce(
-    (sum, interval) => sum + interval.days,
-    0,
-  )
-  nextRetry.setDate(nextRetry.getDate() + cumulativeDays)
+  if (mode === "fast") {
+    // Cumulative minutes
+    const cumulativeMinutes = intervals.reduce(
+      (sum, interval) => sum + ("minutes" in interval ? interval.minutes : 0),
+      0,
+    )
+    nextRetry.setMinutes(nextRetry.getMinutes() + cumulativeMinutes)
+  } else {
+    // Cumulative days
+    const cumulativeDays = intervals.reduce(
+      (sum, interval) => sum + ("days" in interval ? interval.days : 0),
+      0,
+    )
+    nextRetry.setDate(nextRetry.getDate() + cumulativeDays)
+  }
 
   return nextRetry
 }

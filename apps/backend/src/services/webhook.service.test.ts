@@ -2,7 +2,6 @@ import { afterEach, beforeEach, describe, expect, it, mock } from "bun:test"
 import type { D1Database } from "@cloudflare/workers-types"
 import { createTestDB } from "@tests/test-db"
 import type { Address, Hash } from "viem"
-import { Stage } from "@/constants/env.constants"
 import {
   OrderType,
   SubscriptionStatus,
@@ -29,7 +28,7 @@ describe("WebhookService", () => {
     return WebhookService.createForTesting({
       webhookRepository: new WebhookRepository({
         DB: db,
-        STAGE: Stage.DEV,
+        LOGGING: "verbose",
       }),
       webhookQueue: {
         send: mockQueueSend,

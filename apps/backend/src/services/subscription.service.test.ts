@@ -2,7 +2,6 @@ import { afterEach, beforeEach, describe, expect, it, mock } from "bun:test"
 import type { D1Database } from "@cloudflare/workers-types"
 import { createTestDB } from "@tests/test-db"
 import type { Address, Hash } from "viem"
-import { Stage } from "@/constants/env.constants"
 import {
   OrderStatus,
   OrderType,
@@ -57,7 +56,7 @@ describe("SubscriptionService", () => {
     return SubscriptionService.createForTesting({
       subscriptionRepository: new SubscriptionRepository({
         DB: db,
-        STAGE: Stage.DEV,
+        LOGGING: "verbose",
       }),
       onchainRepository: {
         validateSubscriptionId: mockValidateSubscriptionId,

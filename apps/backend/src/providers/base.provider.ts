@@ -1,7 +1,7 @@
 import { base } from "@base-org/account/node"
 import type { Address, Hash } from "viem"
 import { isHash } from "viem"
-import { isTestnetEnvironment, type Stage } from "@/constants/env.constants"
+import type { Network } from "@/constants/env.constants"
 import { ErrorCode, HTTPError } from "@/errors/http.errors"
 import {
   type ChargeParams,
@@ -17,47 +17,49 @@ export interface BaseProviderDeps {
   CDP_API_KEY_SECRET: string
   CDP_WALLET_SECRET: string
   CDP_WALLET_NAME: string
-  CDP_PAYMASTER_URL: string
+  CDP_CLIENT_API_KEY: string
   CDP_SPENDER_ADDRESS: Address
-  STAGE: Stage
+  NETWORK: Network
 }
 
 export class BaseProvider implements SubscriptionProvider {
   readonly providerId = Provider.BASE
-  private readonly testnet: boolean
+  private readonly network: Network
   private readonly cdpConfig: {
     apiKeyId: string
     apiKeySecret: string
     walletSecret: string
     walletName: string
-    paymasterUrl: string
+    clientApiKey: string
     spenderAddress: Address
   }
 
   constructor(deps: BaseProviderDeps) {
-    this.testnet = isTestnetEnvironment(deps.STAGE)
+    this.network = deps.NETWORK
     this.cdpConfig = {
       apiKeyId: deps.CDP_API_KEY_ID,
       apiKeySecret: deps.CDP_API_KEY_SECRET,
       walletSecret: deps.CDP_WALLET_SECRET,
       walletName: deps.CDP_WALLET_NAME,
-      paymasterUrl: deps.CDP_PAYMASTER_URL,
+      clientApiKey: deps.CDP_CLIENT_API_KEY,
       spenderAddress: deps.CDP_SPENDER_ADDRESS,
     }
   }
 
   async chargeSubscription(params: ChargeParams): Promise<ChargeResult> {
     try {
+      const paymasterUrl = `https://api.developer.coinbase.com/rpc/v1/base/${this.cdpConfig.clientApiKey}`
+
       const result = await base.subscription.charge({
         cdpApiKeyId: this.cdpConfig.apiKeyId,
         cdpApiKeySecret: this.cdpConfig.apiKeySecret,
         cdpWalletSecret: this.cdpConfig.walletSecret,
         walletName: this.cdpConfig.walletName,
-        paymasterUrl: this.cdpConfig.paymasterUrl,
+        paymasterUrl,
         id: params.subscriptionId as Hash,
         amount: params.amount,
         recipient: params.recipient,
-        testnet: this.testnet,
+        testnet: this.network === "testnet",
       })
 
       return {
@@ -85,7 +87,7 @@ export class BaseProvider implements SubscriptionProvider {
   async getSubscriptionStatus(params: StatusParams): Promise<StatusResult> {
     const subscription = await base.subscription.getStatus({
       id: params.subscriptionId as Hash,
-      testnet: this.testnet,
+      testnet: this.network === "testnet",
     })
 
     return {
