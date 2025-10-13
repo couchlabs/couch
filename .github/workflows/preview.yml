@@ -62,7 +62,7 @@ jobs:
         id: backend
         run: |
           # Capture deployment output
-          OUTPUT=$(turbo infra:deploy --filter=backend 2>&1)
+          OUTPUT=$(bun run infra:deploy --filter=backend 2>&1)
           echo "$OUTPUT"
 
           # Extract API URL from output (handles both "API URL: ..." and object format)
@@ -149,7 +149,7 @@ jobs:
           echo "webhook_secret=$WEBHOOK_SECRET" >> $GITHUB_OUTPUT
 
       - name: "Deploy playground"
-        run: turbo infra:deploy --filter=playground
+        run: bun run infra:deploy --filter=playground
         env:
           STAGE: ${{ env.STAGE }}
           ALCHEMY_PASSWORD: ${{ secrets.ALCHEMY_PASSWORD }}
@@ -177,7 +177,7 @@ jobs:
         run: bun install
 
       - name: Destroy preview
-        run: turbo infra:destroy
+        run: bun run infra:destroy
         env:
           STAGE: ${{ env.STAGE }}
           ALCHEMY_PASSWORD: ${{ secrets.ALCHEMY_PASSWORD }}
