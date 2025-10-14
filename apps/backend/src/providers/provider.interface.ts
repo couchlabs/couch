@@ -30,16 +30,30 @@ export interface StatusParams {
   subscriptionId: string
 }
 
-// TODO: Revisit this interface when adding second provider
+// TODO: Revisit this type when adding second provider
 // Current design is based on Base SDK behavior - may need adjustment
 // to be truly generic across different provider implementations
-export interface StatusResult {
-  isSubscribed: boolean
-  subscriptionOwner?: Address // Only when permission exists (found in indexer)
-  remainingChargeInPeriod?: string // Only when permission exists
-  spenderAddress: Address
-  currentPeriodStart?: Date // Only when permission exists
-  nextPeriodStart?: Date // Optional - undefined means no future recurring charges
-  recurringCharge: string // Always present (defaults to '0' when not found)
-  periodInDays?: number // Period length in days (from permission.period) - only when permission exists
-}
+
+/**
+ * Discriminated union representing two distinct states:
+ * 1. Permission not found in indexer (minimal data)
+ * 2. Permission found (full subscription data, may be active or inactive)
+ */
+export type StatusResult =
+  | {
+      permissionExists: false
+      isSubscribed: false
+      recurringCharge: string // Always '0' when permission not found
+      spenderAddress: Address
+    }
+  | {
+      permissionExists: true
+      isSubscribed: boolean // true if active, false if revoked/expired
+      subscriptionOwner: Address
+      remainingChargeInPeriod: string
+      currentPeriodStart: Date
+      nextPeriodStart?: Date // Optional - undefined means no future recurring charges
+      recurringCharge: string
+      periodInDays: number
+      spenderAddress: Address
+    }

@@ -23,9 +23,8 @@
     "strict": true,
     "skipLibCheck": true,
     "types": ["@cloudflare/workers-types"],
-    "composite": true,
     "paths": {
-      "@/*": ["./src/*"],
+      "@/*": ["./src/*", "../backend/src/*"],
       "@public/*": ["./public/*"]
     }
   }

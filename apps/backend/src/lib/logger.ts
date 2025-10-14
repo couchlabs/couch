@@ -34,7 +34,7 @@ class Logger {
       level,
       message,
       ...this.context,
-      ...(data && { data }),
+      ...(data != null && { data }),
     }
 
     // In production, this could send to a logging service

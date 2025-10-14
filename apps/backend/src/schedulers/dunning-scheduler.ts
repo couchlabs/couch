@@ -92,7 +92,7 @@ export default {
       {
         scheduledTime: Date.now(),
         cron: "manual-trigger",
-      },
+      } as ScheduledEvent,
       env,
       ctx,
     )

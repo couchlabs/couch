@@ -104,8 +104,10 @@ describe("SubscriptionRepository", () => {
       })
 
       expect(result.created).toBe(true)
-      expect(result.orderId).toBeDefined()
-      expect(result.orderNumber).toBe(1) // First order
+      if (result.created) {
+        expect(result.orderId).toBeDefined()
+        expect(result.orderNumber).toBe(1) // First order
+      }
     })
 
     it("returns false when subscription already exists", async () => {
@@ -155,6 +157,9 @@ describe("SubscriptionRepository", () => {
         },
       })
 
+      if (!result.created)
+        throw new Error("Expected subscription to be created")
+
       const details = await repo.getOrderDetails(result.orderId)
       expect(details).toMatchObject({
         id: result.orderId,
@@ -185,6 +190,9 @@ describe("SubscriptionRepository", () => {
           status: OrderStatus.PROCESSING,
         },
       })
+
+      if (!result.created)
+        throw new Error("Expected subscription to be created")
 
       // Activate the subscription first
       await repo.updateSubscription({
@@ -224,6 +232,9 @@ describe("SubscriptionRepository", () => {
           },
         })
 
+        if (!result.created)
+          throw new Error("Expected subscription to be created")
+
         await repo.updateSubscription({
           subscriptionId,
           status: SubscriptionStatus.ACTIVE,
@@ -257,6 +268,9 @@ describe("SubscriptionRepository", () => {
         },
       })
 
+      if (!result.created)
+        throw new Error("Expected subscription to be created")
+
       await repo.scheduleRetry({
         orderId: result.orderId,
         subscriptionId: "0x1234" as Hash,
@@ -287,6 +301,9 @@ describe("SubscriptionRepository", () => {
         },
       })
 
+      if (!result.created)
+        throw new Error("Expected subscription to be created")
+
       // Schedule retry with past retry date
       await repo.scheduleRetry({
         orderId: result.orderId,
@@ -316,6 +333,9 @@ describe("SubscriptionRepository", () => {
           status: OrderStatus.PROCESSING,
         },
       })
+
+      if (!result.created)
+        throw new Error("Expected subscription to be created")
 
       // Schedule retry with future date
       await repo.scheduleRetry({

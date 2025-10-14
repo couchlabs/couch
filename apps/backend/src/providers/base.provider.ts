@@ -90,15 +90,32 @@ export class BaseProvider implements SubscriptionProvider {
       testnet: this.network === "testnet",
     })
 
+    // Check if permission exists in indexer by validating required fields
+    // SDK returns minimal data when permission not found: { isSubscribed: false, recurringCharge: '0' }
+    if (
+      !subscription.subscriptionOwner ||
+      !subscription.remainingChargeInPeriod ||
+      !subscription.currentPeriodStart ||
+      subscription.periodInDays === undefined
+    ) {
+      return {
+        permissionExists: false,
+        isSubscribed: false, // SDK always returns false when permission not found
+        recurringCharge: subscription.recurringCharge,
+        spenderAddress: this.cdpConfig.spenderAddress,
+      }
+    }
+
     return {
+      permissionExists: true,
       isSubscribed: subscription.isSubscribed,
       subscriptionOwner: subscription.subscriptionOwner as Address,
       remainingChargeInPeriod: subscription.remainingChargeInPeriod,
-      spenderAddress: this.cdpConfig.spenderAddress,
       currentPeriodStart: subscription.currentPeriodStart,
       nextPeriodStart: subscription.nextPeriodStart,
       recurringCharge: subscription.recurringCharge,
       periodInDays: subscription.periodInDays,
+      spenderAddress: this.cdpConfig.spenderAddress,
     }
   }
 

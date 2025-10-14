@@ -24,16 +24,23 @@ export interface ProcessOrderParams {
   providerId: Provider
 }
 
-export interface ProcessOrderResult {
-  success: boolean
-  transactionHash?: Hash
-  orderNumber: number // Always returned - updateOrder throws if order not found
-  failureReason?: string // Error code (e.g., INSUFFICIENT_BALANCE)
-  failureMessage?: string // Original error message from SDK
-  nextOrderCreated: boolean
-  subscriptionStatus: SubscriptionStatus // Actual subscription status after processing
-  nextRetryAt?: Date // When next payment retry is scheduled (only for failed payments with retries)
-}
+export type ProcessOrderResult =
+  | {
+      success: true
+      transactionHash: Hash
+      orderNumber: number
+      nextOrderCreated: boolean
+      subscriptionStatus: SubscriptionStatus
+    }
+  | {
+      success: false
+      orderNumber: number
+      failureReason: string
+      failureMessage: string
+      nextOrderCreated: boolean
+      subscriptionStatus: SubscriptionStatus
+      nextRetryAt?: Date
+    }
 
 const logger = createLogger("order.service")
 

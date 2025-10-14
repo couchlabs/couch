@@ -33,6 +33,7 @@ describe("SubscriptionService", () => {
 
   const MOCK_SUBSCRIPTION_STATUS: SubscriptionStatusResult = {
     subscription: {
+      permissionExists: true,
       isSubscribed: true,
       subscriptionOwner: TEST_OWNER,
       remainingChargeInPeriod: "500000",
@@ -210,12 +211,25 @@ describe("SubscriptionService", () => {
 
       const service = createSubscriptionServiceForTest(testDB.db)
 
+      // Explicitly construct discriminated union with permissionExists: true, isSubscribed: false
       mockGetSubscriptionStatus.mockResolvedValue({
-        ...MOCK_SUBSCRIPTION_STATUS,
         subscription: {
-          ...MOCK_SUBSCRIPTION_STATUS.subscription,
+          permissionExists: true,
           isSubscribed: false,
+          subscriptionOwner:
+            MOCK_SUBSCRIPTION_STATUS.subscription.subscriptionOwner,
+          remainingChargeInPeriod:
+            MOCK_SUBSCRIPTION_STATUS.subscription.remainingChargeInPeriod,
+          currentPeriodStart:
+            MOCK_SUBSCRIPTION_STATUS.subscription.currentPeriodStart,
+          nextPeriodStart:
+            MOCK_SUBSCRIPTION_STATUS.subscription.nextPeriodStart,
+          recurringCharge:
+            MOCK_SUBSCRIPTION_STATUS.subscription.recurringCharge,
+          periodInSeconds:
+            MOCK_SUBSCRIPTION_STATUS.subscription.periodInSeconds,
         },
+        context: MOCK_SUBSCRIPTION_STATUS.context,
       })
 
       await expect(
@@ -238,7 +252,7 @@ describe("SubscriptionService", () => {
       }
     })
 
-    it("throws error if missing remainingChargeInPeriod", async () => {
+    it("throws error if permission not found onchain", async () => {
       const testDB = await createTestDB({
         accounts: [TEST_ACCOUNT],
       })
@@ -247,10 +261,13 @@ describe("SubscriptionService", () => {
       const service = createSubscriptionServiceForTest(testDB.db)
 
       mockGetSubscriptionStatus.mockResolvedValue({
-        ...MOCK_SUBSCRIPTION_STATUS,
         subscription: {
-          ...MOCK_SUBSCRIPTION_STATUS.subscription,
-          remainingChargeInPeriod: undefined,
+          permissionExists: false,
+          isSubscribed: false,
+          recurringCharge: "0",
+        },
+        context: {
+          spenderAddress: "0xspender" as Address,
         },
       })
 
@@ -260,57 +277,19 @@ describe("SubscriptionService", () => {
           accountAddress: TEST_ACCOUNT,
           providerId: Provider.BASE,
         }),
-      ).rejects.toThrow("missing remainingChargeInPeriod")
-    })
+      ).rejects.toThrow(HTTPError)
 
-    it("throws error if missing recurringCharge", async () => {
-      const testDB = await createTestDB({
-        accounts: [TEST_ACCOUNT],
-      })
-      dispose = testDB.dispose
-
-      const service = createSubscriptionServiceForTest(testDB.db)
-
-      mockGetSubscriptionStatus.mockResolvedValue({
-        ...MOCK_SUBSCRIPTION_STATUS,
-        subscription: {
-          ...MOCK_SUBSCRIPTION_STATUS.subscription,
-          recurringCharge: undefined,
-        },
-      })
-
-      await expect(
-        service.createSubscription({
+      try {
+        await service.createSubscription({
           subscriptionId: TEST_SUBSCRIPTION_ID,
           accountAddress: TEST_ACCOUNT,
           providerId: Provider.BASE,
-        }),
-      ).rejects.toThrow("missing recurringCharge")
-    })
-
-    it("throws error if missing periodInSeconds", async () => {
-      const testDB = await createTestDB({
-        accounts: [TEST_ACCOUNT],
-      })
-      dispose = testDB.dispose
-
-      const service = createSubscriptionServiceForTest(testDB.db)
-
-      mockGetSubscriptionStatus.mockResolvedValue({
-        ...MOCK_SUBSCRIPTION_STATUS,
-        subscription: {
-          ...MOCK_SUBSCRIPTION_STATUS.subscription,
-          periodInSeconds: undefined,
-        },
-      })
-
-      await expect(
-        service.createSubscription({
-          subscriptionId: TEST_SUBSCRIPTION_ID,
-          accountAddress: TEST_ACCOUNT,
-          providerId: Provider.BASE,
-        }),
-      ).rejects.toThrow("missing periodInSeconds")
+        })
+      } catch (error) {
+        expect(error).toBeInstanceOf(HTTPError)
+        expect((error as HTTPError).code).toBe(ErrorCode.PERMISSION_NOT_FOUND)
+        expect((error as HTTPError).status).toBe(404)
+      }
     })
   })
 
@@ -428,7 +407,7 @@ describe("SubscriptionService", () => {
       expect(mockChargeSubscription).not.toHaveBeenCalled()
     })
 
-    it("throws error if missing required onchain fields", async () => {
+    it("throws error if missing nextPeriodStart", async () => {
       const testDB = await createTestDB({
         accounts: [TEST_ACCOUNT],
         subscriptions: [
@@ -452,13 +431,24 @@ describe("SubscriptionService", () => {
 
       const service = createSubscriptionServiceForTest(testDB.db)
 
-      // Test missing currentPeriodStart
+      // Test missing nextPeriodStart - properly construct discriminated union
       mockGetSubscriptionStatus.mockResolvedValue({
-        ...MOCK_SUBSCRIPTION_STATUS,
         subscription: {
-          ...MOCK_SUBSCRIPTION_STATUS.subscription,
-          currentPeriodStart: undefined,
+          permissionExists: true,
+          isSubscribed: true,
+          subscriptionOwner:
+            MOCK_SUBSCRIPTION_STATUS.subscription.subscriptionOwner,
+          remainingChargeInPeriod:
+            MOCK_SUBSCRIPTION_STATUS.subscription.remainingChargeInPeriod,
+          currentPeriodStart:
+            MOCK_SUBSCRIPTION_STATUS.subscription.currentPeriodStart,
+          nextPeriodStart: undefined,
+          recurringCharge:
+            MOCK_SUBSCRIPTION_STATUS.subscription.recurringCharge,
+          periodInSeconds:
+            MOCK_SUBSCRIPTION_STATUS.subscription.periodInSeconds,
         },
+        context: MOCK_SUBSCRIPTION_STATUS.context,
       })
 
       await expect(
@@ -469,7 +459,7 @@ describe("SubscriptionService", () => {
           orderId: testDB.orderIds[0],
           orderNumber: 1,
         }),
-      ).rejects.toThrow("missing currentPeriodStart")
+      ).rejects.toThrow("missing nextPeriodStart")
     })
   })
 

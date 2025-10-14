@@ -87,7 +87,8 @@ const compatibilityFlags = ["nodejs_compat", "disallow_importable_env"]
 const DB_NAME = "db"
 const db = await D1Database(DB_NAME, {
   name: `${NAME_PREFIX}-${DB_NAME}`,
-  migrationsDir: path.join(import.meta.dirname, drizzleConfig.out),
+  // biome-ignore lint/style/noNonNullAssertion: drizzleConfig.out defined in drizzle.config.ts
+  migrationsDir: path.join(import.meta.dirname, drizzleConfig.out!),
   migrationsTable: drizzleConfig.migrations?.table,
   primaryLocationHint: "wnam",
   readReplication: {

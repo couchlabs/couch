@@ -4,7 +4,6 @@ import { Button } from "@/components/ui/button"
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
@@ -63,7 +62,9 @@ const SCHEDULERS: Record<
 export function BackendSettings() {
   const [selectedScheduler, setSelectedScheduler] =
     useState<SchedulerType>("order")
-  const [settings, setSettings] = useState<Record<SchedulerType, SchedulerSettings>>({
+  const [settings, setSettings] = useState<
+    Record<SchedulerType, SchedulerSettings>
+  >({
     order: {
       isActive: false,
       intervalValue: "5",
@@ -148,6 +149,7 @@ export function BackendSettings() {
     settings.order.pollerMode,
     settings.order.timesValue,
     triggerScheduler,
+    settings.order,
   ])
 
   // Auto-poller effect for Dunning Scheduler
@@ -192,6 +194,7 @@ export function BackendSettings() {
     settings.dunning.pollerMode,
     settings.dunning.timesValue,
     triggerScheduler,
+    settings.dunning,
   ])
 
   const anySchedulerActive = Object.values(settings).some((s) => s.isActive)
@@ -219,25 +222,28 @@ export function BackendSettings() {
         <div className="flex gap-6">
           {/* Sidebar */}
           <div className="w-48 space-y-1">
-            {(Object.entries(SCHEDULERS) as [SchedulerType, typeof SCHEDULERS[SchedulerType]][]).map(
-              ([type, scheduler]) => (
-                <button
-                  key={type}
-                  type="button"
-                  onClick={() => setSelectedScheduler(type)}
-                  className={`w-full text-left px-3 py-2 rounded-md text-sm transition-colors ${
-                    selectedScheduler === type
-                      ? "bg-accent text-accent-foreground"
-                      : "hover:bg-accent/50"
-                  }`}
-                >
-                  <div className="font-medium">{scheduler.name}</div>
-                  <div className="text-xs text-muted-foreground">
-                    {scheduler.description}
-                  </div>
-                </button>
-              ),
-            )}
+            {(
+              Object.entries(SCHEDULERS) as [
+                SchedulerType,
+                (typeof SCHEDULERS)[SchedulerType],
+              ][]
+            ).map(([type, scheduler]) => (
+              <button
+                key={type}
+                type="button"
+                onClick={() => setSelectedScheduler(type)}
+                className={`w-full text-left px-3 py-2 rounded-md text-sm transition-colors ${
+                  selectedScheduler === type
+                    ? "bg-accent text-accent-foreground"
+                    : "hover:bg-accent/50"
+                }`}
+              >
+                <div className="font-medium">{scheduler.name}</div>
+                <div className="text-xs text-muted-foreground">
+                  {scheduler.description}
+                </div>
+              </button>
+            ))}
           </div>
 
           <Separator orientation="vertical" />

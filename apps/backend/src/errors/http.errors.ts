@@ -16,6 +16,7 @@ export const ErrorCode = {
   // Subscription/Payment errors (4xx)
   SUBSCRIPTION_EXISTS: "SUBSCRIPTION_EXISTS",
   SUBSCRIPTION_NOT_ACTIVE: "SUBSCRIPTION_NOT_ACTIVE",
+  PERMISSION_NOT_FOUND: "PERMISSION_NOT_FOUND",
   PERMISSION_EXPIRED: "PERMISSION_EXPIRED",
   PERMISSION_REVOKED: "PERMISSION_REVOKED",
 
@@ -46,7 +47,7 @@ export class HTTPError extends HTTPException {
       JSON.stringify({
         error: message,
         code,
-        ...(details && { details }),
+        ...(details != null && { details }),
       }),
       {
         headers: { "Content-Type": "application/json" },

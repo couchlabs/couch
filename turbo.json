@@ -9,14 +9,24 @@
     "test": {
       "cache": false
     },
-    "fix": {
+    "test:unit": {
+      "cache": false
+    },
+    "//#lint": {
+      "cache": false
+    },
+    "//#format": {
+      "cache": false
+    },
+    "typecheck": {
+      "cache": false
+    },
+    "//#fix": {
       "cache": false
     },
     "db:generate": {
       "cache": false,
-      "dependsOn": [
-        "test"
-      ]
+      "dependsOn": ["test"]
     },
     "infra:deploy": {
       "cache": false

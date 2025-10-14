@@ -198,6 +198,17 @@ export class SubscriptionService {
       },
     )
 
+    // Check if permission exists in indexer
+    if (!subscription.permissionExists) {
+      throw new HTTPError(
+        404,
+        ErrorCode.PERMISSION_NOT_FOUND,
+        "Subscription permission not found onchain",
+        { subscriptionId },
+      )
+    }
+
+    // Check if subscription is active
     if (!subscription.isSubscribed) {
       throw new HTTPError(
         403,
@@ -207,31 +218,9 @@ export class SubscriptionService {
       )
     }
 
-    // Validate all required fields are present
-    if (!subscription.remainingChargeInPeriod) {
-      logger.error("Missing remaining charge in period", { subscriptionId })
-      throw new Error(
-        "Invalid subscription configuration: missing remainingChargeInPeriod",
-      )
-    }
-
-    if (!subscription.recurringCharge) {
-      logger.error("Missing recurring charge", { subscriptionId })
-      throw new Error(
-        "Invalid subscription configuration: missing recurringCharge",
-      )
-    }
-
-    if (!subscription.periodInSeconds) {
-      logger.error("Missing period in seconds", { subscriptionId })
-      throw new Error(
-        "Invalid subscription configuration: missing periodInSeconds",
-      )
-    }
-
     // Create subscription and initial order in DB
     log.info("Creating subscription and order")
-    const { created, orderId, orderNumber } =
+    const result =
       await this.subscriptionRepository.createSubscriptionWithOrder({
         subscriptionId,
         ownerAddress: subscription.subscriptionOwner,
@@ -247,7 +236,7 @@ export class SubscriptionService {
         },
       })
 
-    if (!created || !orderId || !orderNumber) {
+    if (!result.created) {
       throw new HTTPError(
         409,
         ErrorCode.SUBSCRIPTION_EXISTS,
@@ -257,8 +246,8 @@ export class SubscriptionService {
     }
 
     return {
-      orderId,
-      orderNumber,
+      orderId: result.orderId,
+      orderNumber: result.orderNumber,
       subscriptionMetadata: {
         amount: String(subscription.recurringCharge),
         periodInSeconds: subscription.periodInSeconds,
@@ -287,39 +276,21 @@ export class SubscriptionService {
       },
     )
 
-    // Validate required fields are present
-    if (!subscription.remainingChargeInPeriod) {
-      logger.error("Missing remaining charge in period", { subscriptionId })
-      throw new Error(
-        "Invalid subscription configuration: missing remainingChargeInPeriod",
+    // Validate permission exists
+    if (!subscription.permissionExists) {
+      throw new HTTPError(
+        404,
+        ErrorCode.PERMISSION_NOT_FOUND,
+        "Subscription permission not found onchain",
+        { subscriptionId },
       )
     }
 
-    if (!subscription.periodInSeconds) {
-      logger.error("Missing period in seconds", { subscriptionId })
-      throw new Error(
-        "Invalid subscription configuration: missing periodInSeconds",
-      )
-    }
-
-    if (!subscription.currentPeriodStart) {
-      logger.error("Missing current period start", { subscriptionId })
-      throw new Error(
-        "Invalid subscription configuration: missing currentPeriodStart",
-      )
-    }
-
+    // Validate nextPeriodStart exists (required for scheduling next charge)
     if (!subscription.nextPeriodStart) {
       logger.error("Missing next period start", { subscriptionId })
       throw new Error(
         "Invalid subscription configuration: missing nextPeriodStart",
-      )
-    }
-
-    if (!subscription.recurringCharge) {
-      logger.error("Missing recurring charge", { subscriptionId })
-      throw new Error(
-        "Invalid subscription configuration: missing recurringCharge",
       )
     }
 

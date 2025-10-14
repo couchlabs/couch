@@ -30,6 +30,7 @@ describe("OrderService", () => {
 
   const MOCK_SUBSCRIPTION_STATUS: SubscriptionStatusResult = {
     subscription: {
+      permissionExists: true,
       isSubscribed: true,
       subscriptionOwner: "0xowner" as Address,
       remainingChargeInPeriod: "500000",
@@ -202,12 +203,22 @@ describe("OrderService", () => {
       const orderService = createOrderServiceForTest(testDB.db)
 
       const cancelledStatus: SubscriptionStatusResult = {
-        ...MOCK_SUBSCRIPTION_STATUS,
         subscription: {
-          ...MOCK_SUBSCRIPTION_STATUS.subscription,
+          permissionExists: true,
           isSubscribed: false,
+          subscriptionOwner:
+            MOCK_SUBSCRIPTION_STATUS.subscription.subscriptionOwner,
+          remainingChargeInPeriod:
+            MOCK_SUBSCRIPTION_STATUS.subscription.remainingChargeInPeriod,
+          currentPeriodStart:
+            MOCK_SUBSCRIPTION_STATUS.subscription.currentPeriodStart,
           nextPeriodStart: undefined,
+          recurringCharge:
+            MOCK_SUBSCRIPTION_STATUS.subscription.recurringCharge,
+          periodInSeconds:
+            MOCK_SUBSCRIPTION_STATUS.subscription.periodInSeconds,
         },
+        context: MOCK_SUBSCRIPTION_STATUS.context,
       }
 
       mockGetSubscriptionStatus.mockResolvedValue(cancelledStatus)
@@ -374,7 +385,10 @@ describe("OrderService", () => {
       })
 
       expect(result.subscriptionStatus).toBe(SubscriptionStatus.CANCELED)
-      expect(result.failureReason).toBe(ErrorCode.PERMISSION_REVOKED)
+      expect(result.success).toBe(false)
+      if (!result.success) {
+        expect(result.failureReason).toBe(ErrorCode.PERMISSION_REVOKED)
+      }
     })
 
     it("handles SUBSCRIPTION_NOT_ACTIVE as other error, keeping subscription active", async () => {
@@ -415,7 +429,10 @@ describe("OrderService", () => {
       })
 
       expect(result.subscriptionStatus).toBe(SubscriptionStatus.ACTIVE)
-      expect(result.failureReason).toBe(ErrorCode.SUBSCRIPTION_NOT_ACTIVE)
+      expect(result.success).toBe(false)
+      if (!result.success) {
+        expect(result.failureReason).toBe(ErrorCode.SUBSCRIPTION_NOT_ACTIVE)
+      }
       expect(result.nextOrderCreated).toBe(true)
     })
   })
@@ -458,9 +475,11 @@ describe("OrderService", () => {
       })
 
       expect(result.success).toBe(false)
-      expect(result.failureReason).toBe(ErrorCode.INSUFFICIENT_BALANCE)
+      if (!result.success) {
+        expect(result.failureReason).toBe(ErrorCode.INSUFFICIENT_BALANCE)
+        expect(result.nextRetryAt).toBeDefined()
+      }
       expect(result.subscriptionStatus).toBe(SubscriptionStatus.PAST_DUE)
-      expect(result.nextRetryAt).toBeDefined()
       expect(result.nextOrderCreated).toBe(false)
 
       // Verify order was marked as failed with attempts incremented
@@ -510,9 +529,11 @@ describe("OrderService", () => {
       })
 
       expect(result.success).toBe(false)
-      expect(result.failureReason).toBe(ErrorCode.INSUFFICIENT_BALANCE)
+      if (!result.success) {
+        expect(result.failureReason).toBe(ErrorCode.INSUFFICIENT_BALANCE)
+        expect(result.nextRetryAt).toBeDefined()
+      }
       expect(result.subscriptionStatus).toBe(SubscriptionStatus.PAST_DUE)
-      expect(result.nextRetryAt).toBeDefined()
       expect(result.nextOrderCreated).toBe(false)
 
       // Verify order was marked as failed with attempts incremented to 3
@@ -569,7 +590,9 @@ describe("OrderService", () => {
       })
 
       expect(result.success).toBe(false)
-      expect(result.failureReason).toBe(ErrorCode.INSUFFICIENT_BALANCE)
+      if (!result.success) {
+        expect(result.failureReason).toBe(ErrorCode.INSUFFICIENT_BALANCE)
+      }
       expect(result.subscriptionStatus).toBe(SubscriptionStatus.UNPAID)
       expect(result.nextOrderCreated).toBe(false)
     })
@@ -614,7 +637,9 @@ describe("OrderService", () => {
       })
 
       expect(result.success).toBe(false)
-      expect(result.failureReason).toBe(ErrorCode.PAYMENT_FAILED)
+      if (!result.success) {
+        expect(result.failureReason).toBe(ErrorCode.PAYMENT_FAILED)
+      }
       expect(result.subscriptionStatus).toBe(SubscriptionStatus.ACTIVE)
       expect(result.nextOrderCreated).toBe(true)
     })
@@ -653,8 +678,10 @@ describe("OrderService", () => {
       })
 
       expect(result.success).toBe(false)
-      expect(result.failureReason).toBe(ErrorCode.PAYMENT_FAILED)
-      expect(result.failureMessage).toBe("Network timeout")
+      if (!result.success) {
+        expect(result.failureReason).toBe(ErrorCode.PAYMENT_FAILED)
+        expect(result.failureMessage).toBe("Network timeout")
+      }
       expect(result.subscriptionStatus).toBe(SubscriptionStatus.ACTIVE)
     })
 
@@ -688,12 +715,22 @@ describe("OrderService", () => {
       )
 
       const cancelledStatus: SubscriptionStatusResult = {
-        ...MOCK_SUBSCRIPTION_STATUS,
         subscription: {
-          ...MOCK_SUBSCRIPTION_STATUS.subscription,
+          permissionExists: true,
           isSubscribed: false,
+          subscriptionOwner:
+            MOCK_SUBSCRIPTION_STATUS.subscription.subscriptionOwner,
+          remainingChargeInPeriod:
+            MOCK_SUBSCRIPTION_STATUS.subscription.remainingChargeInPeriod,
+          currentPeriodStart:
+            MOCK_SUBSCRIPTION_STATUS.subscription.currentPeriodStart,
           nextPeriodStart: undefined,
+          recurringCharge:
+            MOCK_SUBSCRIPTION_STATUS.subscription.recurringCharge,
+          periodInSeconds:
+            MOCK_SUBSCRIPTION_STATUS.subscription.periodInSeconds,
         },
+        context: MOCK_SUBSCRIPTION_STATUS.context,
       }
 
       mockChargeSubscription.mockRejectedValue(paymentError)

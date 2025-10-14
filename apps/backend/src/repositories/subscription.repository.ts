@@ -125,11 +125,15 @@ export interface CreateSubscriptionWithOrderParams {
   order: CreateOrderParams
 }
 
-export interface CreateSubscriptionWithOrderResult {
-  created: boolean
-  orderId?: number
-  orderNumber?: number
-}
+export type CreateSubscriptionWithOrderResult =
+  | {
+      created: true
+      orderId: number
+      orderNumber: number
+    }
+  | {
+      created: false
+    }
 
 export interface ExecuteSubscriptionActivationParams {
   subscriptionId: Hash
@@ -174,8 +178,6 @@ export class SubscriptionRepository {
       ...row,
       transactionHash: row.transactionHash as Hash,
       subscriptionId: row.subscriptionId as Hash,
-      gasUsed: row.gasUsed ?? undefined,
-      createdAt: row.createdAt ?? undefined,
     }
   }
 
@@ -377,10 +379,16 @@ export class SubscriptionRepository {
         return { created: false }
       }
 
+      // Batch succeeded - both order id and orderNumber must exist
+      const createdOrder = orderResult[0]
+      if (!createdOrder?.id || !createdOrder?.orderNumber) {
+        throw new Error("Order creation failed - missing id or orderNumber")
+      }
+
       return {
         created: true,
-        orderId: orderResult[0]?.id,
-        orderNumber: orderResult[0]?.orderNumber,
+        orderId: createdOrder.id,
+        orderNumber: createdOrder.orderNumber,
       }
     } catch {
       // Batch failed (likely UNIQUE constraint violation from race condition)
