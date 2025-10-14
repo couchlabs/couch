@@ -1,4 +1,4 @@
-name: Preview
+name: CI
 
 on:
   pull_request:
