@@ -120,7 +120,8 @@ jobs:
           fi
 
           # Extract API URL from output (alchemy.run.ts logs "API_URL=<url>" for non-dev stages)
-          API_URL=$(echo "$OUTPUT" | grep "^API_URL=" | cut -d'=' -f2)
+          # Turbo prefixes output with "backend infra:deploy: " so we need to handle that
+          API_URL=$(echo "$OUTPUT" | grep "API_URL=" | head -1 | sed 's/.*API_URL=//')
 
           if [ -z "$API_URL" ]; then
             echo "Error: Failed to extract API URL from deployment output"

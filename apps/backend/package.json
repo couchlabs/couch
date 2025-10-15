@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "alchemy dev --stage dev --adopt --app couch-backend",
     "infra:deploy": "alchemy deploy --stage $STAGE --adopt --app couch-backend",
-    "infra:destroy": "alchemy destroy --stage $STAGE --adopt --app couch-backend",
+    "infra:destroy": "alchemy destroy --stage $STAGE --app couch-backend",
     "db:generate": "drizzle-kit generate",
     "test:unit": "bun test",
     "typecheck": "tsc --noEmit"

@@ -310,12 +310,18 @@ if (app.stage === "dev") {
     [WEBHOOK_DLQ_NAME]: webhookDLQ,
     [WEBHOOK_DLQ_CONSUMER_NAME]: webhookDLQConsumer,
   })
-} else {
-  // Machine-readable format for CI/CD workflows
-  console.log(`API_URL=${api.url}`)
 }
 
 await app.finalize()
+
+// Log API URL after finalize (when URL is guaranteed to be available)
+if (app.stage !== "dev") {
+  // Machine-readable format for CI/CD workflows
+  // Write to both stdout and stderr to ensure it's captured
+  const output = `API_URL=${api.url}`
+  console.log(output)
+  console.error(output) // stderr is less likely to be buffered
+}
 
 // TODOS
 // Reconciler components - see commit ee65232 for commented implementation

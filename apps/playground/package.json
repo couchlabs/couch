@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "alchemy dev --stage dev --adopt --app couch-playground",
     "infra:deploy": "alchemy deploy --stage $STAGE --adopt --app couch-playground",
-    "infra:destroy": "alchemy destroy --stage $STAGE --adopt --app couch-playground",
+    "infra:destroy": "alchemy destroy --stage $STAGE --app couch-playground",
     "test:unit": "echo 'No tests configured'",
     "typecheck": "tsc --noEmit"
   },
