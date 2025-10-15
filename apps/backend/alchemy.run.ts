@@ -296,7 +296,7 @@ export const webhookDLQConsumer = await Worker(WEBHOOK_DLQ_CONSUMER_NAME, {
   dev: { port: 3203 },
 })
 
-// Log all resources in dev, just API URL in other stages
+// Log all resources in dev, machine-readable output in other stages
 if (app.stage === "dev") {
   console.log({
     [API_NAME]: api,
@@ -311,7 +311,8 @@ if (app.stage === "dev") {
     [WEBHOOK_DLQ_CONSUMER_NAME]: webhookDLQConsumer,
   })
 } else {
-  console.log(`API URL: ${api.url}`)
+  // Machine-readable format for CI/CD workflows
+  console.log(`API_URL=${api.url}`)
 }
 
 await app.finalize()
