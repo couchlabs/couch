@@ -48,7 +48,9 @@ export class BaseProvider implements SubscriptionProvider {
 
   async chargeSubscription(params: ChargeParams): Promise<ChargeResult> {
     try {
-      const paymasterUrl = `https://api.developer.coinbase.com/rpc/v1/base/${this.cdpConfig.clientApiKey}`
+      // Paymaster URL must match the network (base-sepolia for testnet, base for mainnet)
+      const network = this.network === "testnet" ? "base-sepolia" : "base"
+      const paymasterUrl = `https://api.developer.coinbase.com/rpc/v1/${network}/${this.cdpConfig.clientApiKey}`
 
       const result = await base.subscription.charge({
         cdpApiKeyId: this.cdpConfig.apiKeyId,
