@@ -7,7 +7,6 @@ import {
   Worker,
 } from "alchemy/cloudflare"
 import { EvmAccount, EvmSmartAccount } from "alchemy/coinbase"
-import { GitHubComment } from "alchemy/github"
 import { CloudflareStateStore } from "alchemy/state"
 import { resolveStageConfig } from "@/constants/env.constants"
 import type { Provider } from "@/providers/provider.interface"
@@ -313,28 +312,6 @@ if (app.stage === "dev") {
   })
 } else {
   console.log(`API URL: ${api.url}`)
-}
-
-// =============================================================================
-// PR PREVIEW COMMENTS
-// =============================================================================
-
-if (process.env.PULL_REQUEST) {
-  await GitHubComment("backend-preview-comment", {
-    owner: "couchlabs",
-    repository: "couch",
-    issueNumber: Number(process.env.PULL_REQUEST),
-    body: `## 🚀 Backend Preview Deployed
-
-**Stage:** \`${app.stage}\`
-**Network:** ${NETWORK === "testnet" ? "Base Sepolia (testnet)" : "Base (mainnet)"}
-
-### 📡 API Endpoint
-- **Subscription API:** https://${api.url}
-
----
-<sub>🤖 Built from commit ${process.env.GITHUB_SHA?.slice(0, 7)} • This comment updates automatically with each push</sub>`,
-  })
 }
 
 await app.finalize()

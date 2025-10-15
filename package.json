@@ -5,6 +5,7 @@
   "private": true,
   "scripts": {
     "dev": "turbo dev --ui=tui",
+    "dev:cleanup": "bun scripts/alchemy.dev.cleanup.ts",
     "test": "turbo typecheck && turbo test:unit",
     "test:unit": "turbo test:unit",
     "lint": "biome lint .",

@@ -1,9 +1,11 @@
 import path from "node:path"
 import alchemy from "alchemy"
-import { D1Database, Vite } from "alchemy/cloudflare"
+import { DurableObjectNamespace, Vite } from "alchemy/cloudflare"
 import { GitHubComment } from "alchemy/github"
 import { CloudflareStateStore } from "alchemy/state"
-import { api, spenderSmartAccount } from "backend/alchemy"
+import { api, app as backendApp, spenderSmartAccount } from "backend/alchemy"
+import { resolveStageConfig } from "@/constants/env.constants"
+import type { Store } from "@/store/do.store"
 
 // import { Stage } from "backend/constants"
 
@@ -40,20 +42,8 @@ export const app = await alchemy("couch-playground", {
 })
 const NAME_PREFIX = `${app.name}-${app.stage}`
 
-// -----------------------------------------------------------------------------
-// DATABASES
-// -----------------------------------------------------------------------------
-
-// playground-db: Main database for subscription and order data
-const DB_NAME = "playground-db"
-const db = await D1Database(DB_NAME, {
-  name: `${NAME_PREFIX}-${DB_NAME}`,
-  migrationsDir: path.join(import.meta.dirname, "migrations"),
-  primaryLocationHint: "wnam",
-  readReplication: {
-    mode: "auto",
-  },
-})
+// Cloudflare Worker Flags
+const compatibilityFlags = ["nodejs_compat", "disallow_importable_env"]
 
 // -----------------------------------------------------------------------------
 // Web App
@@ -78,8 +68,11 @@ export const website = await Vite(WEBSITE_NAME, {
     COUCH_WEBHOOK_SECRET: alchemy.secret.env.COUCH_WEBHOOK_SECRET,
     COUCH_API_KEY: alchemy.secret.env.COUCH_API_KEY,
     COUCH_API_URL: api.url,
-    DB: db,
+    STORE: DurableObjectNamespace<Store>("playground-store", {
+      className: "Store",
+    }),
   },
+  compatibilityFlags,
 })
 
 if (app.stage === "dev") {
@@ -91,20 +84,19 @@ if (app.stage === "dev") {
 // =============================================================================
 
 if (process.env.PULL_REQUEST) {
-  await GitHubComment("playground-preview-comment", {
+  const { NETWORK } = resolveStageConfig(backendApp.stage)
+
+  await GitHubComment("preview-comment", {
     owner: "couchlabs",
     repository: "couch",
     issueNumber: Number(process.env.PULL_REQUEST),
-    body: `## 🎮 Playground Preview Deployed
+    body: `## 🛋️ Preview Deployed
 
 **Stage:** \`${app.stage}\`
+**Network:** ${NETWORK}
 
-### 🌐 Preview URL
-**👉 https://${website.url}**
-
-### 🔗 Backend Integration
-- Connected to backend stage: \`${app.stage}\`
-- Subscription API: https://${api.url}
+👉 **Playground:** https://${website.url}
+👉 **Backend:** https://${api.url}
 
 ---
 <sub>🤖 Built from commit ${process.env.GITHUB_SHA?.slice(0, 7)} • This comment updates automatically with each push</sub>`,
