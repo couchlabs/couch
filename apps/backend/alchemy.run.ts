@@ -312,11 +312,24 @@ if (app.stage === "dev") {
     [WEBHOOK_DLQ_CONSUMER_NAME]: webhookDLQConsumer,
   })
 } else {
+  // Debug logging for deployment
+  console.log(`Deployment stage: ${app.stage}`)
+  console.log(`API object:`, JSON.stringify(api, null, 2))
+  console.log(`API URL available: ${!!api.url}`)
+  console.log(`API URL value: ${api.url || 'undefined'}`)
+
   // For GitHub Actions: Set output using official @actions/core package
   // This writes directly to GITHUB_OUTPUT file (only in CI)
   if (api.url) {
     core.setOutput("api_url", api.url)
-    console.log(`API URL: ${api.url}`)
+    console.log(`GitHub Output set - api_url: ${api.url}`)
+  } else {
+    console.error(`ERROR: API URL is not available after deployment`)
+    console.error(`This typically means the deployment did not complete successfully`)
+    // Still try to set a fallback URL based on naming conventions
+    const fallbackUrl = `https://${NAME_PREFIX}-api.workers.dev`
+    console.log(`Attempting fallback URL: ${fallbackUrl}`)
+    core.setOutput("api_url", fallbackUrl)
   }
 }
 
