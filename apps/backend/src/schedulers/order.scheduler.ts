@@ -3,7 +3,7 @@ import type { AlarmInvocationInfo } from "@cloudflare/workers-types"
 import { createLogger } from "@/lib/logger"
 import type { Provider } from "@/providers/provider.interface"
 
-const logger = createLogger("order-scheduler")
+const logger = createLogger("order.scheduler")
 
 // Environment interface for OrderScheduler DO
 export interface OrderSchedulerEnv {
@@ -60,20 +60,31 @@ export class OrderScheduler extends DurableObject<OrderSchedulerEnv> {
     providerId: Provider
   }): Promise<void> {
     const { orderId, dueAt, providerId } = params
-    const log = logger.with({ orderId })
+    const now = new Date()
+    const delayMs = dueAt.getTime() - Date.now()
+    const log = logger.with({ orderId, providerId })
+    const op = log.operation("Set schedule")
+
+    op.start({
+      dueAt: dueAt.toISOString(),
+      delaySeconds: Math.round(delayMs / 1000),
+    })
 
     // Use transaction for atomicity
     await this.ctx.storage.transaction(async (txn) => {
       await txn.put("order_id", orderId)
       await txn.put("provider_id", providerId as string)
-      await txn.put("scheduled_at", new Date().toISOString())
+      await txn.put("scheduled_at", now.toISOString())
       await txn.put("scheduled_for", dueAt.toISOString())
       await txn.put("alarm_processed", false) // CRITICAL: Idempotency flag
     })
 
     await this.ctx.storage.setAlarm(dueAt.getTime())
 
-    log.info("Set schedule", { dueAt: dueAt.toISOString(), providerId })
+    op.success({
+      alarmTime: dueAt.toISOString(),
+      delaySeconds: Math.round(delayMs / 1000),
+    })
   }
 
   /**
@@ -85,21 +96,30 @@ export class OrderScheduler extends DurableObject<OrderSchedulerEnv> {
   async update(params: { dueAt?: Date; providerId?: Provider }): Promise<void> {
     const orderId = await this.ctx.storage.get<number>("order_id")
     const log = logger.with({ orderId })
+    const op = log.operation("Update schedule")
+
+    op.start(params)
 
     if (params.dueAt) {
+      const delayMs = params.dueAt.getTime() - Date.now()
       await this.ctx.storage.put("scheduled_for", params.dueAt.toISOString())
       await this.ctx.storage.deleteAlarm()
       await this.ctx.storage.setAlarm(params.dueAt.getTime())
+      log.info("Updated alarm time", {
+        newDueAt: params.dueAt.toISOString(),
+        delaySeconds: Math.round(delayMs / 1000),
+      })
     }
 
     if (params.providerId) {
       await this.ctx.storage.put("provider_id", params.providerId as string)
+      log.info("Updated provider", { newProviderId: params.providerId })
     }
 
     // Reset processing state for retry
     await this.ctx.storage.put("alarm_processed", false)
 
-    log.info("Updated schedule", params)
+    op.success()
   }
 
   /**
@@ -109,12 +129,20 @@ export class OrderScheduler extends DurableObject<OrderSchedulerEnv> {
    */
   async delete(): Promise<void> {
     const orderId = await this.ctx.storage.get<number>("order_id")
-    const log = logger.with({ orderId })
+    const providerId = await this.ctx.storage.get<string>("provider_id")
+    const scheduledFor = await this.ctx.storage.get<string>("scheduled_for")
+    const log = logger.with({ orderId, providerId })
+    const op = log.operation("Delete schedule")
+
+    op.start({
+      scheduledFor,
+      wasProcessed: await this.ctx.storage.get<boolean>("alarm_processed"),
+    })
 
     await this.ctx.storage.deleteAlarm()
     await this.ctx.storage.deleteAll()
 
-    log.info("Deleted schedule")
+    op.success()
   }
 
   /**
@@ -176,27 +204,36 @@ export class OrderScheduler extends DurableObject<OrderSchedulerEnv> {
     const providerId = (await this.ctx.storage.get<string>(
       "provider_id",
     )) as Provider
+    const scheduledFor = await this.ctx.storage.get<string>("scheduled_for")
     const retryCount = alarmInfo.retryCount
     const log = logger.with({ orderId, providerId, retryCount })
+    const op = log.operation("Process alarm")
+
+    op.start({
+      scheduledFor,
+      actualTime: new Date().toISOString(),
+      isRetry: retryCount > 0,
+    })
 
     if (!orderId || !providerId) {
-      logger.error("Alarm fired but missing order data")
+      log.error("Alarm fired but missing order data", {
+        hasOrderId: !!orderId,
+        hasProviderId: !!providerId,
+      })
       return
     }
 
     // CRITICAL: Idempotency check (prevents double-charges attempts)
     const processed = await this.ctx.storage.get<boolean>("alarm_processed")
     if (processed) {
-      log.info("Already processed, skipping")
+      log.info("Already processed, skipping duplicate alarm")
       return
     }
-
-    log.info("Processing order")
 
     // Check retry limit (prevents infinite loops)
     // Cloudflare retries up to 6 times, but we cap at 3 for this operation
     if (retryCount >= 3) {
-      log.error("Max retry count (3) reached")
+      log.error("Max retry count (3) reached, marking as failed")
 
       await this.ctx.storage.transaction(async (txn) => {
         await txn.put("alarm_processed", true)
@@ -210,22 +247,32 @@ export class OrderScheduler extends DurableObject<OrderSchedulerEnv> {
     }
 
     try {
+      log.info("Sending order to queue", { orderId, providerId })
+
       // Send to ORDER_QUEUE
       await this.env.ORDER_QUEUE.send({
         orderId,
         providerId,
       })
 
-      log.info("Successfully queued order")
+      log.info("Order queued successfully")
 
       // CRITICAL: Mark as processed BEFORE cleanup
       // This ensures idempotency even if cleanup fails
       await this.ctx.storage.put("alarm_processed", true)
 
+      log.info("Cleaning up DO storage")
+
       // Clean up storage (saves space, allows DO eviction)
       await this.ctx.storage.deleteAll()
+
+      op.success({ storageCleared: true })
     } catch (error) {
-      log.error("Failed to queue order", error)
+      op.failure(error)
+
+      log.error("Will retry", {
+        willRetry: retryCount < 2,
+      })
 
       // Re-throw to trigger Cloudflare's automatic retry
       throw error
