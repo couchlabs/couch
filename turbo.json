@@ -42,7 +42,8 @@
         "CDP_CLIENT_API_KEY",
         "COUCH_WEBHOOK_SECRET",
         "COUCH_API_KEY",
-        "GITHUB_TOKEN"
+        "GITHUB_TOKEN",
+        "GITHUB_OUTPUT"
       ]
     },
     "infra:destroy": {
