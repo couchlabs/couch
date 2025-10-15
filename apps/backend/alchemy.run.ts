@@ -18,6 +18,8 @@ import drizzleConfig from "./drizzle.config"
 // CONFIGURATION & CONVENTIONS
 // =============================================================================
 
+const CI = process.env.CI === "true" || process.env.GITHUB_ACTIONS === "true"
+
 /**
  * Resource Naming Convention: {app.name}-{scope.name}-{scope.stage}-{resource}
  * Example: couch-backend-dev-subscription-api
@@ -44,8 +46,8 @@ import drizzleConfig from "./drizzle.config"
 // =============================================================================
 
 export const app = await alchemy("couch-backend", {
-  password: process.env.ALCHEMY_PASSWORD,
-  stateStore: (scope) => new CloudflareStateStore(scope),
+  password: alchemy.env.ALCHEMY_PASSWORD,
+  stateStore: CI ? (scope) => new CloudflareStateStore(scope) : undefined,
 })
 const NAME_PREFIX = `${app.name}-${app.stage}`
 const { NETWORK, LOGGING, DUNNING_MODE, WALLET_STAGE } = resolveStageConfig(
@@ -311,28 +313,9 @@ if (app.stage === "dev") {
     [WEBHOOK_DLQ_NAME]: webhookDLQ,
     [WEBHOOK_DLQ_CONSUMER_NAME]: webhookDLQConsumer,
   })
-} else {
-  // Debug logging for deployment
-  console.log(`Deployment stage: ${app.stage}`)
-  console.log(`API object:`, JSON.stringify(api, null, 2))
-  console.log(`API URL available: ${!!api.url}`)
-  console.log(`API URL value: ${api.url || "undefined"}`)
-
-  // For GitHub Actions: Set output using official @actions/core package
-  // This writes directly to GITHUB_OUTPUT file (only in CI)
-  if (api.url) {
-    core.setOutput("api_url", api.url)
-    console.log(`GitHub Output set - api_url: ${api.url}`)
-  } else {
-    console.error(`ERROR: API URL is not available after deployment`)
-    console.error(
-      `This typically means the deployment did not complete successfully`,
-    )
-    // Still try to set a fallback URL based on naming conventions
-    const fallbackUrl = `https://${NAME_PREFIX}-api.workers.dev`
-    console.log(`Attempting fallback URL: ${fallbackUrl}`)
-    core.setOutput("api_url", fallbackUrl)
-  }
+}
+if (CI) {
+  core.setOutput("api_url", api.url)
 }
 
 await app.finalize()

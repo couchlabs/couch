@@ -29,10 +29,12 @@
       "dependsOn": ["test"]
     },
     "infra:deploy": {
-      "cache": false
+      "cache": false,
+      "passThroughEnv": ["STAGE"]
     },
     "infra:destroy": {
-      "cache": false
+      "cache": false,
+      "passThroughEnv": ["STAGE"]
     }
   }
 }
