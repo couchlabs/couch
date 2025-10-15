@@ -105,30 +105,8 @@ jobs:
 
       - name: "Deploy backend"
         id: backend
-        run: |
-          # Capture deployment output
-          set +e  # Don't exit on error yet, we want to see the output
-          OUTPUT=$(bun run infra:deploy --filter=backend 2>&1)
-          EXIT_CODE=$?
-          set -e
-
-          echo "$OUTPUT"
-
-          if [ $EXIT_CODE -ne 0 ]; then
-            echo "Error: Deployment failed with exit code $EXIT_CODE"
-            exit $EXIT_CODE
-          fi
-
-          # Extract API URL from output (alchemy.run.ts logs "API_URL=<url>" for non-dev stages)
-          # Turbo prefixes output with "backend infra:deploy: " so we need to handle that
-          API_URL=$(echo "$OUTPUT" | grep "API_URL=" | head -1 | sed 's/.*API_URL=//')
-
-          if [ -z "$API_URL" ]; then
-            echo "Error: Failed to extract API URL from deployment output"
-            exit 1
-          fi
-
-          echo "api_url=$API_URL" >> $GITHUB_OUTPUT
+        run: bun run infra:deploy --filter=backend
+        # Note: api_url output is set by @actions/core in alchemy.run.ts
         env:
           STAGE: ${{ env.STAGE }}
           ALCHEMY_PASSWORD: ${{ secrets.ALCHEMY_PASSWORD }}

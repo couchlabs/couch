@@ -1,4 +1,5 @@
 import path from "node:path"
+import * as core from "@actions/core"
 import alchemy from "alchemy"
 import {
   D1Database,
@@ -310,18 +311,16 @@ if (app.stage === "dev") {
     [WEBHOOK_DLQ_NAME]: webhookDLQ,
     [WEBHOOK_DLQ_CONSUMER_NAME]: webhookDLQConsumer,
   })
+} else {
+  // For GitHub Actions: Set output using official @actions/core package
+  // This writes directly to GITHUB_OUTPUT file (only in CI)
+  if (api.url) {
+    core.setOutput("api_url", api.url)
+    console.log(`API URL: ${api.url}`)
+  }
 }
 
 await app.finalize()
-
-// Log API URL after finalize (when URL is guaranteed to be available)
-if (app.stage !== "dev") {
-  // Machine-readable format for CI/CD workflows
-  // Write to both stdout and stderr to ensure it's captured
-  const output = `API_URL=${api.url}`
-  console.log(output)
-  console.error(output) // stderr is less likely to be buffered
-}
 
 // TODOS
 // Reconciler components - see commit ee65232 for commented implementation

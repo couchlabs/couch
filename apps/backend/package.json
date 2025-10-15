@@ -28,6 +28,7 @@
     "drizzle-orm": "^0.44.6"
   },
   "devDependencies": {
+    "@actions/core": "^1.11.1",
     "@cloudflare/workers-types": "catalog:cloudflare",
     "@types/bun": "latest",
     "@types/node": "catalog:cloudflare",
