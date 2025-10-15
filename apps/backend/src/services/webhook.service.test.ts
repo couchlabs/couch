@@ -1,5 +1,4 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from "bun:test"
-import type { D1Database } from "@cloudflare/workers-types"
 import { createTestDB } from "@tests/test-db"
 import type { Address, Hash } from "viem"
 import {
@@ -7,6 +6,7 @@ import {
   SubscriptionStatus,
 } from "@/constants/subscription.constants"
 import { ErrorCode, HTTPError } from "@/errors/http.errors"
+import { Provider } from "@/providers/provider.interface"
 import { WebhookRepository } from "@/repositories/webhook.repository"
 import type { ActivationResult } from "@/services/subscription.service"
 import { WebhookService } from "./webhook.service"
@@ -15,19 +15,23 @@ import { WebhookService } from "./webhook.service"
 const mockQueueSend = mock()
 
 describe("WebhookService", () => {
-  let dispose: (() => Promise<void>) | undefined
+  let testDB: Awaited<ReturnType<typeof createTestDB>>
+  let service: WebhookService
+
   const TEST_ACCOUNT = "0xabcd" as Address
   const TEST_SUBSCRIPTION_ID = "0x1234" as Hash
   const TEST_WEBHOOK_URL = "https://example.com/webhook"
 
-  /**
-   * Helper to create WebhookService with test dependencies
-   * Sets up real database + repository, mocked queue
-   */
-  function createWebhookServiceForTest(db: D1Database): WebhookService {
-    return WebhookService.createForTesting({
+  beforeEach(async () => {
+    // Create test database with account
+    testDB = await createTestDB({
+      accounts: [TEST_ACCOUNT],
+    })
+
+    // Create service with test dependencies
+    service = WebhookService.createForTesting({
       webhookRepository: new WebhookRepository({
-        DB: db,
+        DB: testDB.db,
         LOGGING: "verbose",
       }),
       webhookQueue: {
@@ -35,31 +39,20 @@ describe("WebhookService", () => {
         // biome-ignore lint/suspicious/noExplicitAny: Test mocks
       } as any,
     })
-  }
 
-  beforeEach(() => {
     // Reset mocks before each test
     mockQueueSend.mockResolvedValue(undefined)
   })
 
   afterEach(async () => {
     // Clean up database
-    if (dispose) {
-      await dispose()
-    }
+    await testDB.dispose()
     // Reset all mocks
     mock.clearAllMocks()
   })
 
   describe("setWebhook", () => {
     it("sets webhook URL successfully and generates secret", async () => {
-      const testDB = await createTestDB({
-        accounts: [TEST_ACCOUNT],
-      })
-      dispose = testDB.dispose
-
-      const service = createWebhookServiceForTest(testDB.db)
-
       const result = await service.setWebhook({
         accountAddress: TEST_ACCOUNT,
         url: TEST_WEBHOOK_URL,
@@ -79,13 +72,6 @@ describe("WebhookService", () => {
     })
 
     it("updates existing webhook URL and generates new secret", async () => {
-      const testDB = await createTestDB({
-        accounts: [TEST_ACCOUNT],
-      })
-      dispose = testDB.dispose
-
-      const service = createWebhookServiceForTest(testDB.db)
-
       // Set initial webhook
       const result1 = await service.setWebhook({
         accountAddress: TEST_ACCOUNT,
@@ -113,13 +99,6 @@ describe("WebhookService", () => {
     })
 
     it("throws error for invalid webhook URL format", async () => {
-      const testDB = await createTestDB({
-        accounts: [TEST_ACCOUNT],
-      })
-      dispose = testDB.dispose
-
-      const service = createWebhookServiceForTest(testDB.db)
-
       await expect(
         service.setWebhook({
           accountAddress: TEST_ACCOUNT,
@@ -141,11 +120,6 @@ describe("WebhookService", () => {
 
   describe("emitSubscriptionActivated", () => {
     it("emits activation event and queues webhook", async () => {
-      const testDB = await createTestDB({
-        accounts: [TEST_ACCOUNT],
-      })
-      dispose = testDB.dispose
-
       // Set up webhook
       await testDB.db
         .prepare(
@@ -154,11 +128,10 @@ describe("WebhookService", () => {
         .bind(TEST_ACCOUNT, TEST_WEBHOOK_URL, "whsec_testsecret")
         .run()
 
-      const service = createWebhookServiceForTest(testDB.db)
-
       const activationResult: ActivationResult = {
         subscriptionId: TEST_SUBSCRIPTION_ID,
         accountAddress: TEST_ACCOUNT,
+        providerId: Provider.BASE,
         transaction: {
           hash: "0xtxhash" as Hash,
           amount: "500000",
@@ -199,16 +172,10 @@ describe("WebhookService", () => {
     })
 
     it("does not throw if no webhook configured", async () => {
-      const testDB = await createTestDB({
-        accounts: [TEST_ACCOUNT],
-      })
-      dispose = testDB.dispose
-
-      const service = createWebhookServiceForTest(testDB.db)
-
       const activationResult: ActivationResult = {
         subscriptionId: TEST_SUBSCRIPTION_ID,
         accountAddress: TEST_ACCOUNT,
+        providerId: Provider.BASE,
         transaction: { hash: "0xtxhash" as Hash, amount: "500000" },
         order: {
           id: 1,
@@ -235,11 +202,6 @@ describe("WebhookService", () => {
 
   describe("emitSubscriptionCreated", () => {
     it("emits creation event with subscription metadata only", async () => {
-      const testDB = await createTestDB({
-        accounts: [TEST_ACCOUNT],
-      })
-      dispose = testDB.dispose
-
       // Set up webhook
       await testDB.db
         .prepare(
@@ -247,8 +209,6 @@ describe("WebhookService", () => {
         )
         .bind(TEST_ACCOUNT, TEST_WEBHOOK_URL, "whsec_testsecret")
         .run()
-
-      const service = createWebhookServiceForTest(testDB.db)
 
       await service.emitSubscriptionCreated({
         accountAddress: TEST_ACCOUNT,
@@ -272,11 +232,6 @@ describe("WebhookService", () => {
 
   describe("emitPaymentProcessed", () => {
     it("emits payment success event with order and transaction", async () => {
-      const testDB = await createTestDB({
-        accounts: [TEST_ACCOUNT],
-      })
-      dispose = testDB.dispose
-
       // Set up webhook
       await testDB.db
         .prepare(
@@ -284,8 +239,6 @@ describe("WebhookService", () => {
         )
         .bind(TEST_ACCOUNT, TEST_WEBHOOK_URL, "whsec_testsecret")
         .run()
-
-      const service = createWebhookServiceForTest(testDB.db)
 
       await service.emitPaymentProcessed({
         accountAddress: TEST_ACCOUNT,
@@ -314,11 +267,6 @@ describe("WebhookService", () => {
 
   describe("emitPaymentFailed", () => {
     it("emits payment failure event with error details", async () => {
-      const testDB = await createTestDB({
-        accounts: [TEST_ACCOUNT],
-      })
-      dispose = testDB.dispose
-
       // Set up webhook
       await testDB.db
         .prepare(
@@ -326,8 +274,6 @@ describe("WebhookService", () => {
         )
         .bind(TEST_ACCOUNT, TEST_WEBHOOK_URL, "whsec_testsecret")
         .run()
-
-      const service = createWebhookServiceForTest(testDB.db)
 
       await service.emitPaymentFailed({
         accountAddress: TEST_ACCOUNT,
@@ -354,11 +300,6 @@ describe("WebhookService", () => {
     })
 
     it("includes next_retry_at when retry is scheduled", async () => {
-      const testDB = await createTestDB({
-        accounts: [TEST_ACCOUNT],
-      })
-      dispose = testDB.dispose
-
       // Set up webhook
       await testDB.db
         .prepare(
@@ -366,8 +307,6 @@ describe("WebhookService", () => {
         )
         .bind(TEST_ACCOUNT, TEST_WEBHOOK_URL, "whsec_testsecret")
         .run()
-
-      const service = createWebhookServiceForTest(testDB.db)
 
       const nextRetryDate = new Date("2025-02-02T00:00:00Z")
 
@@ -395,11 +334,6 @@ describe("WebhookService", () => {
 
   describe("emitActivationFailed", () => {
     it("sanitizes payment errors for webhook exposure", async () => {
-      const testDB = await createTestDB({
-        accounts: [TEST_ACCOUNT],
-      })
-      dispose = testDB.dispose
-
       // Set up webhook
       await testDB.db
         .prepare(
@@ -407,8 +341,6 @@ describe("WebhookService", () => {
         )
         .bind(TEST_ACCOUNT, TEST_WEBHOOK_URL, "whsec_testsecret")
         .run()
-
-      const service = createWebhookServiceForTest(testDB.db)
 
       // Payment error (402) should be exposed
       const paymentError = new HTTPError(
@@ -435,11 +367,6 @@ describe("WebhookService", () => {
     })
 
     it("hides internal errors from webhook exposure", async () => {
-      const testDB = await createTestDB({
-        accounts: [TEST_ACCOUNT],
-      })
-      dispose = testDB.dispose
-
       // Set up webhook
       await testDB.db
         .prepare(
@@ -447,8 +374,6 @@ describe("WebhookService", () => {
         )
         .bind(TEST_ACCOUNT, TEST_WEBHOOK_URL, "whsec_testsecret")
         .run()
-
-      const service = createWebhookServiceForTest(testDB.db)
 
       // Internal error (500) should be hidden
       const internalError = new HTTPError(

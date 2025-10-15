@@ -7,7 +7,6 @@ import { subscriptionRoutes } from "@/api/routes/subscriptions.routes"
 import { webhookRoutes } from "@/api/routes/webhook.routes"
 import { ErrorCode } from "@/errors/http.errors"
 import { logger } from "@/lib/logger"
-
 import type { WorkerEnv } from "@/types/api.env"
 
 const app = new Hono<{ Bindings: WorkerEnv }>().basePath("/api")
@@ -46,3 +45,6 @@ app.route("/webhook", webhookRoutes)
 app.route("/subscriptions", subscriptionRoutes)
 
 export default app
+
+// Export the OrderScheduler DO class so it's available in this worker
+export { OrderScheduler } from "@/schedulers/order.scheduler"

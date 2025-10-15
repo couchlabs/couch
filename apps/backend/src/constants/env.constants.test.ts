@@ -10,7 +10,6 @@ describe("resolveStageConfig", () => {
         NETWORK: "testnet",
         LOGGING: "verbose",
         DUNNING_MODE: "fast",
-        HTTP_TRIGGER: "true",
         WALLET_STAGE: "dev",
       })
     })
@@ -24,7 +23,6 @@ describe("resolveStageConfig", () => {
         NETWORK: "testnet",
         LOGGING: "verbose",
         DUNNING_MODE: "standard",
-        HTTP_TRIGGER: "false",
         WALLET_STAGE: "dev",
       })
     })
@@ -38,7 +36,6 @@ describe("resolveStageConfig", () => {
         NETWORK: "testnet",
         LOGGING: "minimal",
         DUNNING_MODE: "standard",
-        HTTP_TRIGGER: "false",
         WALLET_STAGE: "sandbox",
       })
     })
@@ -52,7 +49,6 @@ describe("resolveStageConfig", () => {
         NETWORK: "mainnet",
         LOGGING: "minimal",
         DUNNING_MODE: "standard",
-        HTTP_TRIGGER: "false",
         WALLET_STAGE: "prod",
       })
     })
@@ -66,7 +62,6 @@ describe("resolveStageConfig", () => {
         NETWORK: "testnet",
         LOGGING: "verbose",
         DUNNING_MODE: "fast",
-        HTTP_TRIGGER: "true",
         WALLET_STAGE: "dev",
       })
     })
@@ -78,7 +73,6 @@ describe("resolveStageConfig", () => {
         NETWORK: "testnet",
         LOGGING: "verbose",
         DUNNING_MODE: "fast",
-        HTTP_TRIGGER: "true",
         WALLET_STAGE: "dev",
       })
     })
@@ -90,7 +84,6 @@ describe("resolveStageConfig", () => {
         NETWORK: "testnet",
         LOGGING: "verbose",
         DUNNING_MODE: "fast",
-        HTTP_TRIGGER: "true",
         WALLET_STAGE: "dev",
       })
     })
@@ -158,23 +151,6 @@ describe("resolveStageConfig", () => {
       expect(stagingConfig.DUNNING_MODE).toBe("standard")
       expect(sandboxConfig.DUNNING_MODE).toBe("standard")
       expect(prodConfig.DUNNING_MODE).toBe("standard")
-    })
-
-    it("dev and preview allow HTTP trigger for testing", () => {
-      const devConfig = resolveStageConfig(Stage.DEV)
-      const previewConfig = resolveStageConfig("pr-123")
-      const stagingConfig = resolveStageConfig(Stage.STAGING)
-      const sandboxConfig = resolveStageConfig(Stage.SANDBOX)
-      const prodConfig = resolveStageConfig(Stage.PROD)
-
-      // Dev/preview allow HTTP trigger for on-demand testing
-      expect(devConfig.HTTP_TRIGGER).toBe("true")
-      expect(previewConfig.HTTP_TRIGGER).toBe("true")
-
-      // Other stages don't allow HTTP trigger
-      expect(stagingConfig.HTTP_TRIGGER).toBe("false")
-      expect(sandboxConfig.HTTP_TRIGGER).toBe("false")
-      expect(prodConfig.HTTP_TRIGGER).toBe("false")
     })
 
     it("each GitHub environment has unique wallet stage", () => {

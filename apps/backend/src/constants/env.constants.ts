@@ -18,7 +18,6 @@ export interface StageConfig {
   NETWORK: Network
   LOGGING: LoggingLevel
   DUNNING_MODE: DunningMode
-  HTTP_TRIGGER: "true" | "false"
   WALLET_STAGE: WalletStage
 }
 
@@ -51,9 +50,6 @@ export function resolveStageConfig(stage: string): StageConfig {
   const DUNNING_MODE: DunningMode =
     stage === Stage.DEV || isPreview ? "fast" : "standard"
 
-  // HTTP trigger: Allow manual scheduler triggering in dev/preview for testing
-  const HTTP_TRIGGER = stage === Stage.DEV || isPreview ? "true" : "false"
-
   // Wallet: Maps to GitHub environment (3 dedicated wallets)
   const WALLET_STAGE: WalletStage =
     stage === Stage.PROD
@@ -66,7 +62,6 @@ export function resolveStageConfig(stage: string): StageConfig {
     NETWORK,
     LOGGING,
     DUNNING_MODE,
-    HTTP_TRIGGER,
     WALLET_STAGE,
   }
 }

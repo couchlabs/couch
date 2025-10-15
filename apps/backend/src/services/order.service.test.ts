@@ -20,9 +20,25 @@ import { OrderService } from "./order.service"
 const mockChargeSubscription = mock()
 const mockGetSubscriptionStatus = mock()
 
+// Mock ORDER_SCHEDULER DO
+const mockSchedulerSet = mock(() => Promise.resolve())
+const mockSchedulerUpdate = mock(() => Promise.resolve())
+const mockSchedulerDelete = mock(() => Promise.resolve())
+const mockSchedulerStub = {
+  set: mockSchedulerSet,
+  update: mockSchedulerUpdate,
+  delete: mockSchedulerDelete,
+}
+const mockOrderScheduler = {
+  get: mock(() => mockSchedulerStub),
+  idFromName: mock((name: string) => ({ toString: () => name })),
+}
+
 describe("OrderService", () => {
   let dispose: (() => Promise<void>) | undefined
   const TEST_ACCOUNT = "0xabcd" as Address
+  const TEST_SUBSCRIPTION_ID = "0x1234" as Hash
+  const TEST_OWNER = "0x5678" as Address
 
   const MOCK_CHARGE_RESULT: ChargeResult = {
     transactionHash: "0xtxhash" as Hash,
@@ -45,6 +61,39 @@ describe("OrderService", () => {
   }
 
   /**
+   * Helper to create test database with default subscription setup
+   * Allows overriding specific fields for test variations
+   */
+  async function createTestDBWithOrder(overrides?: {
+    subscriptionStatus?: SubscriptionStatus
+    orderStatus?: OrderStatus
+    orderAttempts?: number
+  }) {
+    const testDB = await createTestDB({
+      accounts: [TEST_ACCOUNT],
+      subscriptions: [
+        {
+          subscriptionId: TEST_SUBSCRIPTION_ID,
+          ownerAddress: TEST_OWNER,
+          accountAddress: TEST_ACCOUNT,
+          providerId: Provider.BASE,
+          status: overrides?.subscriptionStatus,
+          order: {
+            type: OrderType.INITIAL,
+            dueAt: "2025-01-01T00:00:00Z",
+            amount: "1000000",
+            periodInSeconds: 2592000,
+            status: overrides?.orderStatus ?? OrderStatus.PROCESSING,
+            attempts: overrides?.orderAttempts,
+          },
+        },
+      ],
+    })
+    dispose = testDB.dispose
+    return testDB
+  }
+
+  /**
    * Helper to create OrderService with test dependencies
    * Sets up real database + repository, mocked blockchain calls
    */
@@ -57,6 +106,12 @@ describe("OrderService", () => {
       onchainRepository: {
         chargeSubscription: mockChargeSubscription,
         getSubscriptionStatus: mockGetSubscriptionStatus,
+        // biome-ignore lint/suspicious/noExplicitAny: Test mocks
+      } as any,
+      env: {
+        DB: db,
+        LOGGING: "verbose",
+        ORDER_SCHEDULER: mockOrderScheduler,
         // biome-ignore lint/suspicious/noExplicitAny: Test mocks
       } as any,
     })
@@ -76,34 +131,14 @@ describe("OrderService", () => {
 
   describe("getOrderDetails", () => {
     it("returns order details when order exists", async () => {
-      // Create test database with subscription and order
-      const testDB = await createTestDB({
-        accounts: [TEST_ACCOUNT],
-        subscriptions: [
-          {
-            subscriptionId: "0x1234" as Hash,
-            ownerAddress: "0x5678" as Address,
-            accountAddress: TEST_ACCOUNT,
-            providerId: Provider.BASE,
-            order: {
-              type: OrderType.INITIAL,
-              dueAt: "2025-01-01T00:00:00Z",
-              amount: "1000000",
-              periodInSeconds: 2592000,
-              status: OrderStatus.PROCESSING,
-            },
-          },
-        ],
-      })
-      dispose = testDB.dispose
-
+      const testDB = await createTestDBWithOrder()
       const orderService = createOrderServiceForTest(testDB.db)
       const orderId = testDB.orderIds[0]
       const orderDetails = await orderService.getOrderDetails(orderId)
 
       expect(orderDetails).toMatchObject({
         id: orderId,
-        subscriptionId: "0x1234",
+        subscriptionId: TEST_SUBSCRIPTION_ID,
         accountAddress: TEST_ACCOUNT,
         amount: "1000000",
         orderNumber: 1,
@@ -127,27 +162,9 @@ describe("OrderService", () => {
 
   describe("processOrder - Success Scenarios", () => {
     it("processes successful payment and creates next order", async () => {
-      const testDB = await createTestDB({
-        accounts: [TEST_ACCOUNT],
-        subscriptions: [
-          {
-            subscriptionId: "0x1234" as Hash,
-            ownerAddress: "0x5678" as Address,
-            accountAddress: TEST_ACCOUNT,
-            providerId: Provider.BASE,
-            status: SubscriptionStatus.ACTIVE,
-            order: {
-              type: OrderType.INITIAL,
-              dueAt: "2025-01-01T00:00:00Z",
-              amount: "1000000",
-              periodInSeconds: 2592000,
-              status: OrderStatus.PROCESSING,
-            },
-          },
-        ],
+      const testDB = await createTestDBWithOrder({
+        subscriptionStatus: SubscriptionStatus.ACTIVE,
       })
-      dispose = testDB.dispose
-
       const orderService = createOrderServiceForTest(testDB.db)
 
       const result = await orderService.processOrder({
@@ -165,7 +182,7 @@ describe("OrderService", () => {
 
       // Verify blockchain charge was called with correct params
       expect(mockChargeSubscription).toHaveBeenCalledWith({
-        subscriptionId: "0x1234" as Hash,
+        subscriptionId: TEST_SUBSCRIPTION_ID,
         amount: "1000000",
         recipient: TEST_ACCOUNT,
         providerId: Provider.BASE,
@@ -179,27 +196,9 @@ describe("OrderService", () => {
     })
 
     it("processes successful payment without creating next order when subscription cancelled", async () => {
-      const testDB = await createTestDB({
-        accounts: [TEST_ACCOUNT],
-        subscriptions: [
-          {
-            subscriptionId: "0x1234" as Hash,
-            ownerAddress: "0x5678" as Address,
-            accountAddress: TEST_ACCOUNT,
-            providerId: Provider.BASE,
-            status: SubscriptionStatus.ACTIVE,
-            order: {
-              type: OrderType.INITIAL,
-              dueAt: "2025-01-01T00:00:00Z",
-              amount: "1000000",
-              periodInSeconds: 2592000,
-              status: OrderStatus.PROCESSING,
-            },
-          },
-        ],
+      const testDB = await createTestDBWithOrder({
+        subscriptionStatus: SubscriptionStatus.ACTIVE,
       })
-      dispose = testDB.dispose
-
       const orderService = createOrderServiceForTest(testDB.db)
 
       const cancelledStatus: SubscriptionStatusResult = {
@@ -238,28 +237,11 @@ describe("OrderService", () => {
     })
 
     it("reactivates subscription when processing successful retry", async () => {
-      const testDB = await createTestDB({
-        accounts: [TEST_ACCOUNT],
-        subscriptions: [
-          {
-            subscriptionId: "0x1234" as Hash,
-            ownerAddress: "0x5678" as Address,
-            accountAddress: TEST_ACCOUNT,
-            providerId: Provider.BASE,
-            status: SubscriptionStatus.PAST_DUE,
-            order: {
-              type: OrderType.INITIAL,
-              dueAt: "2025-01-01T00:00:00Z",
-              amount: "1000000",
-              periodInSeconds: 2592000,
-              status: OrderStatus.FAILED,
-              attempts: 1,
-            },
-          },
-        ],
+      const testDB = await createTestDBWithOrder({
+        subscriptionStatus: SubscriptionStatus.PAST_DUE,
+        orderStatus: OrderStatus.FAILED,
+        orderAttempts: 1,
       })
-      dispose = testDB.dispose
-
       const orderService = createOrderServiceForTest(testDB.db)
 
       const result = await orderService.processOrder({
@@ -273,7 +255,7 @@ describe("OrderService", () => {
       // Verify subscription was actually reactivated in database
       const subStatus = await testDB.db
         .prepare("SELECT status FROM subscriptions WHERE subscription_id = ?")
-        .bind("0x1234")
+        .bind(TEST_SUBSCRIPTION_ID)
         .first<{ status: string }>()
 
       expect(subStatus?.status).toBe(SubscriptionStatus.ACTIVE)
@@ -298,26 +280,7 @@ describe("OrderService", () => {
 
   describe("processOrder - Failure Scenarios: Terminal Errors", () => {
     it("handles terminal error (PERMISSION_EXPIRED) by marking subscription canceled", async () => {
-      const testDB = await createTestDB({
-        accounts: [TEST_ACCOUNT],
-        subscriptions: [
-          {
-            subscriptionId: "0x1234" as Hash,
-            ownerAddress: "0x5678" as Address,
-            accountAddress: TEST_ACCOUNT,
-            providerId: Provider.BASE,
-            order: {
-              type: OrderType.INITIAL,
-              dueAt: "2025-01-01T00:00:00Z",
-              amount: "1000000",
-              periodInSeconds: 2592000,
-              status: OrderStatus.PROCESSING,
-            },
-          },
-        ],
-      })
-      dispose = testDB.dispose
-
+      const testDB = await createTestDBWithOrder()
       const orderService = createOrderServiceForTest(testDB.db)
 
       const terminalError = new HTTPError(
@@ -349,26 +312,7 @@ describe("OrderService", () => {
     })
 
     it("handles terminal error (PERMISSION_REVOKED) by marking subscription canceled", async () => {
-      const testDB = await createTestDB({
-        accounts: [TEST_ACCOUNT],
-        subscriptions: [
-          {
-            subscriptionId: "0x1234" as Hash,
-            ownerAddress: "0x5678" as Address,
-            accountAddress: TEST_ACCOUNT,
-            providerId: Provider.BASE,
-            order: {
-              type: OrderType.INITIAL,
-              dueAt: "2025-01-01T00:00:00Z",
-              amount: "1000000",
-              periodInSeconds: 2592000,
-              status: OrderStatus.PROCESSING,
-            },
-          },
-        ],
-      })
-      dispose = testDB.dispose
-
+      const testDB = await createTestDBWithOrder()
       const orderService = createOrderServiceForTest(testDB.db)
 
       const terminalError = new HTTPError(
@@ -392,26 +336,7 @@ describe("OrderService", () => {
     })
 
     it("handles SUBSCRIPTION_NOT_ACTIVE as other error, keeping subscription active", async () => {
-      const testDB = await createTestDB({
-        accounts: [TEST_ACCOUNT],
-        subscriptions: [
-          {
-            subscriptionId: "0x1234" as Hash,
-            ownerAddress: "0x5678" as Address,
-            accountAddress: TEST_ACCOUNT,
-            providerId: Provider.BASE,
-            order: {
-              type: OrderType.INITIAL,
-              dueAt: "2025-01-01T00:00:00Z",
-              amount: "1000000",
-              periodInSeconds: 2592000,
-              status: OrderStatus.PROCESSING,
-            },
-          },
-        ],
-      })
-      dispose = testDB.dispose
-
+      const testDB = await createTestDBWithOrder()
       const orderService = createOrderServiceForTest(testDB.db)
 
       const notActiveError = new HTTPError(
@@ -439,26 +364,7 @@ describe("OrderService", () => {
 
   describe("processOrder - Failure Scenarios: Retryable Errors", () => {
     it("schedules retry on first INSUFFICIENT_BALANCE failure", async () => {
-      const testDB = await createTestDB({
-        accounts: [TEST_ACCOUNT],
-        subscriptions: [
-          {
-            subscriptionId: "0x1234" as Hash,
-            ownerAddress: "0x5678" as Address,
-            accountAddress: TEST_ACCOUNT,
-            providerId: Provider.BASE,
-            order: {
-              type: OrderType.INITIAL,
-              dueAt: "2025-01-01T00:00:00Z",
-              amount: "1000000",
-              periodInSeconds: 2592000,
-              status: OrderStatus.PROCESSING,
-            },
-          },
-        ],
-      })
-      dispose = testDB.dispose
-
+      const testDB = await createTestDBWithOrder()
       const orderService = createOrderServiceForTest(testDB.db)
 
       const insufficientBalanceError = new HTTPError(
@@ -491,28 +397,11 @@ describe("OrderService", () => {
     })
 
     it("schedules intermediate retry with correct interval (attempt 3)", async () => {
-      const testDB = await createTestDB({
-        accounts: [TEST_ACCOUNT],
-        subscriptions: [
-          {
-            subscriptionId: "0x1234" as Hash,
-            ownerAddress: "0x5678" as Address,
-            accountAddress: TEST_ACCOUNT,
-            providerId: Provider.BASE,
-            status: SubscriptionStatus.PAST_DUE,
-            order: {
-              type: OrderType.INITIAL,
-              dueAt: "2025-01-01T00:00:00Z",
-              amount: "1000000",
-              periodInSeconds: 2592000,
-              status: OrderStatus.FAILED,
-              attempts: 2, // Third attempt (0-indexed means this is attempt 3)
-            },
-          },
-        ],
+      const testDB = await createTestDBWithOrder({
+        subscriptionStatus: SubscriptionStatus.PAST_DUE,
+        orderStatus: OrderStatus.FAILED,
+        orderAttempts: 2, // Third attempt (0-indexed means this is attempt 3)
       })
-      dispose = testDB.dispose
-
       const orderService = createOrderServiceForTest(testDB.db)
 
       const insufficientBalanceError = new HTTPError(
@@ -546,34 +435,17 @@ describe("OrderService", () => {
       // Verify subscription is still PAST_DUE (not UNPAID yet)
       const subStatus = await testDB.db
         .prepare("SELECT status FROM subscriptions WHERE subscription_id = ?")
-        .bind("0x1234")
+        .bind(TEST_SUBSCRIPTION_ID)
         .first<{ status: string }>()
 
       expect(subStatus?.status).toBe(SubscriptionStatus.PAST_DUE)
     })
 
     it("marks subscription UNPAID after max retries exhausted", async () => {
-      const testDB = await createTestDB({
-        accounts: [TEST_ACCOUNT],
-        subscriptions: [
-          {
-            subscriptionId: "0x1234" as Hash,
-            ownerAddress: "0x5678" as Address,
-            accountAddress: TEST_ACCOUNT,
-            providerId: Provider.BASE,
-            order: {
-              type: OrderType.INITIAL,
-              dueAt: "2025-01-01T00:00:00Z",
-              amount: "1000000",
-              periodInSeconds: 2592000,
-              status: OrderStatus.FAILED,
-              attempts: 5, // Already at max retries
-            },
-          },
-        ],
+      const testDB = await createTestDBWithOrder({
+        orderStatus: OrderStatus.FAILED,
+        orderAttempts: 5, // Already at max retries
       })
-      dispose = testDB.dispose
-
       const orderService = createOrderServiceForTest(testDB.db)
 
       const insufficientBalanceError = new HTTPError(
@@ -600,26 +472,7 @@ describe("OrderService", () => {
 
   describe("processOrder - Failure Scenarios: Other Errors", () => {
     it("keeps subscription active and creates next order on non-retryable error", async () => {
-      const testDB = await createTestDB({
-        accounts: [TEST_ACCOUNT],
-        subscriptions: [
-          {
-            subscriptionId: "0x1234" as Hash,
-            ownerAddress: "0x5678" as Address,
-            accountAddress: TEST_ACCOUNT,
-            providerId: Provider.BASE,
-            order: {
-              type: OrderType.INITIAL,
-              dueAt: "2025-01-01T00:00:00Z",
-              amount: "1000000",
-              periodInSeconds: 2592000,
-              status: OrderStatus.PROCESSING,
-            },
-          },
-        ],
-      })
-      dispose = testDB.dispose
-
+      const testDB = await createTestDBWithOrder()
       const orderService = createOrderServiceForTest(testDB.db)
 
       const paymentError = new HTTPError(
@@ -642,29 +495,16 @@ describe("OrderService", () => {
       }
       expect(result.subscriptionStatus).toBe(SubscriptionStatus.ACTIVE)
       expect(result.nextOrderCreated).toBe(true)
+
+      // Verify failed order's scheduler was deleted to prevent alarm retries
+      expect(mockSchedulerDelete).toHaveBeenCalledTimes(1)
+      expect(mockOrderScheduler.idFromName).toHaveBeenCalledWith(
+        String(testDB.orderIds[0]),
+      )
     })
 
     it("handles non-HTTPError as PAYMENT_FAILED", async () => {
-      const testDB = await createTestDB({
-        accounts: [TEST_ACCOUNT],
-        subscriptions: [
-          {
-            subscriptionId: "0x1234" as Hash,
-            ownerAddress: "0x5678" as Address,
-            accountAddress: TEST_ACCOUNT,
-            providerId: Provider.BASE,
-            order: {
-              type: OrderType.INITIAL,
-              dueAt: "2025-01-01T00:00:00Z",
-              amount: "1000000",
-              periodInSeconds: 2592000,
-              status: OrderStatus.PROCESSING,
-            },
-          },
-        ],
-      })
-      dispose = testDB.dispose
-
+      const testDB = await createTestDBWithOrder()
       const orderService = createOrderServiceForTest(testDB.db)
 
       const genericError = new Error("Network timeout")
@@ -686,26 +526,7 @@ describe("OrderService", () => {
     })
 
     it("handles other error without creating next order when subscription cancelled", async () => {
-      const testDB = await createTestDB({
-        accounts: [TEST_ACCOUNT],
-        subscriptions: [
-          {
-            subscriptionId: "0x1234" as Hash,
-            ownerAddress: "0x5678" as Address,
-            accountAddress: TEST_ACCOUNT,
-            providerId: Provider.BASE,
-            order: {
-              type: OrderType.INITIAL,
-              dueAt: "2025-01-01T00:00:00Z",
-              amount: "1000000",
-              periodInSeconds: 2592000,
-              status: OrderStatus.PROCESSING,
-            },
-          },
-        ],
-      })
-      dispose = testDB.dispose
-
+      const testDB = await createTestDBWithOrder()
       const orderService = createOrderServiceForTest(testDB.db)
 
       const paymentError = new HTTPError(

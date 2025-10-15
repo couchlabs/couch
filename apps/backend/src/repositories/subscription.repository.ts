@@ -400,12 +400,19 @@ export class SubscriptionRepository {
   /**
    * TRANSACTION: Finalize subscription activation
    * Updates subscription status, order, creates transaction, and next order
+   * Returns the next order ID for scheduling
    */
   async executeSubscriptionActivation(
     params: ExecuteSubscriptionActivationParams,
-  ): Promise<void> {
+  ): Promise<{ nextOrderId: number }> {
     const { subscriptionId, order, transaction, nextOrder } = params
-    await this.db.batch([
+
+    const [
+      _transactionResult,
+      _updateOrderResult,
+      nextOrderResult,
+      _subscriptionResult,
+    ] = await this.db.batch([
       // Create transaction record
       this.db
         .insert(schema.transactions)
@@ -432,7 +439,8 @@ export class SubscriptionRepository {
           amount: nextOrder.amount,
           periodLengthInSeconds: nextOrder.periodInSeconds,
           status: OrderStatus.PENDING,
-        }),
+        })
+        .returning({ id: schema.orders.id }),
       // Activate subscription
       this.db
         .update(schema.subscriptions)
@@ -442,6 +450,13 @@ export class SubscriptionRepository {
         })
         .where(eq(schema.subscriptions.subscriptionId, subscriptionId)),
     ])
+
+    const nextOrderId = nextOrderResult[0]?.id
+    if (!nextOrderId) {
+      throw new Error("Failed to create next order during activation")
+    }
+
+    return { nextOrderId }
   }
 
   /**

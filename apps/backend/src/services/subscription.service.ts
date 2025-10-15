@@ -1,6 +1,4 @@
-import type { D1Database } from "@cloudflare/workers-types"
 import type { Address, Hash } from "viem"
-import type { LoggingLevel, Network } from "@/constants/env.constants"
 import { OrderStatus, OrderType } from "@/constants/subscription.constants"
 import { ErrorCode, HTTPError } from "@/errors/http.errors"
 import { createLogger } from "@/lib/logger"
@@ -8,22 +6,21 @@ import type { Provider } from "@/providers/provider.interface"
 import {
   type ChargeResult,
   OnchainRepository,
+  type OnchainRepositoryDeps,
 } from "@/repositories/onchain.repository"
-import { SubscriptionRepository } from "@/repositories/subscription.repository"
+import {
+  SubscriptionRepository,
+  type SubscriptionRepositoryDeps,
+} from "@/repositories/subscription.repository"
+import type { WorkerEnv } from "@/types/api.env"
 
-export interface SubscriptionServiceDeps {
-  // From SubscriptionRepository
-  DB: D1Database
-  LOGGING: LoggingLevel
-  // From OnchainRepository
-  CDP_API_KEY_ID: string
-  CDP_API_KEY_SECRET: string
-  CDP_WALLET_SECRET: string
-  CDP_WALLET_NAME: string
-  CDP_CLIENT_API_KEY: string
-  CDP_SPENDER_ADDRESS: Address
-  NETWORK: Network
-}
+// Define the minimal dependencies needed by SubscriptionService
+// This service needs all repository deps + ORDER_SCHEDULER for scheduling
+// Pick ORDER_SCHEDULER from WorkerEnv to get the exact Alchemy-generated type
+export interface SubscriptionServiceDeps
+  extends SubscriptionRepositoryDeps,
+    OnchainRepositoryDeps,
+    Pick<WorkerEnv, "ORDER_SCHEDULER"> {}
 
 export interface ValidateSubscriptionIdParams {
   subscriptionId: Hash
@@ -55,7 +52,8 @@ export interface ProcessActivationChargeParams {
 
 export interface ActivationResult {
   subscriptionId: Hash
-  accountAddress: Address // Include this in the result
+  accountAddress: Address
+  providerId: Provider
   transaction: {
     hash: Hash
     amount: string
@@ -78,10 +76,12 @@ const logger = createLogger("subscription.service")
 export class SubscriptionService {
   private subscriptionRepository: SubscriptionRepository
   private onchainRepository: OnchainRepository
+  private deps: SubscriptionServiceDeps
 
-  constructor(env: SubscriptionServiceDeps) {
-    this.subscriptionRepository = new SubscriptionRepository(env)
-    this.onchainRepository = new OnchainRepository(env)
+  constructor(deps: SubscriptionServiceDeps) {
+    this.deps = deps
+    this.subscriptionRepository = new SubscriptionRepository(deps)
+    this.onchainRepository = new OnchainRepository(deps)
   }
 
   /**
@@ -104,30 +104,55 @@ export class SubscriptionService {
    * Errors are logged but not thrown since this runs in background.
    */
   async completeActivation(result: ActivationResult): Promise<void> {
+    const { subscriptionId, providerId, transaction, order, nextOrder } = result
+
     const log = logger.with({
-      subscriptionId: result.subscriptionId,
-      transactionHash: result.transaction.hash,
+      subscriptionId,
+      transactionHash: transaction.hash,
     })
 
     try {
       log.info("Completing subscription activation in background")
 
-      await this.subscriptionRepository.executeSubscriptionActivation({
-        subscriptionId: result.subscriptionId,
-        order: result.order,
-        transaction: result.transaction,
-        nextOrder: {
-          dueAt: result.nextOrder.date,
-          amount: result.nextOrder.amount,
-          periodInSeconds: result.nextOrder.periodInSeconds,
-        },
+      const { nextOrderId } =
+        await this.subscriptionRepository.executeSubscriptionActivation({
+          subscriptionId,
+          order,
+          transaction,
+          nextOrder: {
+            dueAt: nextOrder.date,
+            amount: nextOrder.amount,
+            periodInSeconds: nextOrder.periodInSeconds,
+          },
+        })
+
+      log.info("Scheduling next order via Durable Object", {
+        nextOrderId,
+        dueAt: nextOrder.date,
+        providerId,
       })
 
-      log.info("Background subscription activation completed")
+      const scheduler = this.deps.ORDER_SCHEDULER.get(
+        this.deps.ORDER_SCHEDULER.idFromName(String(nextOrderId)),
+      )
+
+      await scheduler.set({
+        orderId: nextOrderId,
+        dueAt: new Date(nextOrder.date),
+        providerId,
+      })
+
+      log.info("Background subscription activation completed", {
+        nextOrderId,
+        scheduledFor: nextOrder.date,
+      })
     } catch (error) {
       // Log but don't throw - this is background processing
       // TODO: A reconciler should handle incomplete activations
-      log.error("Background subscription activation failed", error)
+      log.error("Background subscription activation failed", {
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      })
     }
   }
 
@@ -333,6 +358,7 @@ export class SubscriptionService {
     return {
       subscriptionId,
       accountAddress,
+      providerId,
       transaction: {
         hash: transaction.transactionHash,
         amount: subscription.remainingChargeInPeriod,

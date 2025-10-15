@@ -23,6 +23,13 @@ const mockChargeSubscription = mock()
 
 describe("SubscriptionService", () => {
   let dispose: (() => Promise<void>) | undefined
+  let testDB: {
+    db: D1Database
+    orderIds: number[]
+    dispose: () => Promise<void>
+  }
+  let service: SubscriptionService
+
   const TEST_ACCOUNT = "0xabcd" as Address
   const TEST_OWNER = "0x5678" as Address
   const TEST_SUBSCRIPTION_ID = "0x1234" as Hash
@@ -68,8 +75,17 @@ describe("SubscriptionService", () => {
     })
   }
 
-  beforeEach(() => {
-    // Set default happy-path mock behaviors before each test
+  beforeEach(async () => {
+    // Create test database with base account
+    testDB = await createTestDB({
+      accounts: [TEST_ACCOUNT],
+    })
+    dispose = testDB.dispose
+
+    // Create service instance
+    service = createSubscriptionServiceForTest(testDB.db)
+
+    // Set default happy-path mock behaviors
     mockValidateSubscriptionId.mockResolvedValue(true)
     mockGetSubscriptionStatus.mockResolvedValue(MOCK_SUBSCRIPTION_STATUS)
     mockChargeSubscription.mockResolvedValue(MOCK_CHARGE_RESULT)
@@ -86,13 +102,6 @@ describe("SubscriptionService", () => {
 
   describe("validateId", () => {
     it("validates subscription ID successfully", async () => {
-      const testDB = await createTestDB({
-        accounts: [TEST_ACCOUNT],
-      })
-      dispose = testDB.dispose
-
-      const service = createSubscriptionServiceForTest(testDB.db)
-
       await service.validateId({
         subscriptionId: TEST_SUBSCRIPTION_ID,
         providerId: Provider.BASE,
@@ -105,13 +114,6 @@ describe("SubscriptionService", () => {
     })
 
     it("throws error for invalid subscription ID format", async () => {
-      const testDB = await createTestDB({
-        accounts: [TEST_ACCOUNT],
-      })
-      dispose = testDB.dispose
-
-      const service = createSubscriptionServiceForTest(testDB.db)
-
       mockValidateSubscriptionId.mockResolvedValue(false)
 
       await expect(
@@ -135,13 +137,6 @@ describe("SubscriptionService", () => {
 
   describe("createSubscription", () => {
     it("creates subscription successfully with valid onchain state", async () => {
-      const testDB = await createTestDB({
-        accounts: [TEST_ACCOUNT],
-      })
-      dispose = testDB.dispose
-
-      const service = createSubscriptionServiceForTest(testDB.db)
-
       const result = await service.createSubscription({
         subscriptionId: TEST_SUBSCRIPTION_ID,
         accountAddress: TEST_ACCOUNT,
@@ -204,13 +199,6 @@ describe("SubscriptionService", () => {
     })
 
     it("throws error if subscription not active onchain", async () => {
-      const testDB = await createTestDB({
-        accounts: [TEST_ACCOUNT],
-      })
-      dispose = testDB.dispose
-
-      const service = createSubscriptionServiceForTest(testDB.db)
-
       // Explicitly construct discriminated union with permissionExists: true, isSubscribed: false
       mockGetSubscriptionStatus.mockResolvedValue({
         subscription: {
@@ -253,13 +241,6 @@ describe("SubscriptionService", () => {
     })
 
     it("throws error if permission not found onchain", async () => {
-      const testDB = await createTestDB({
-        accounts: [TEST_ACCOUNT],
-      })
-      dispose = testDB.dispose
-
-      const service = createSubscriptionServiceForTest(testDB.db)
-
       mockGetSubscriptionStatus.mockResolvedValue({
         subscription: {
           permissionExists: false,
@@ -491,6 +472,7 @@ describe("SubscriptionService", () => {
       const activationResult = {
         subscriptionId: TEST_SUBSCRIPTION_ID,
         accountAddress: TEST_ACCOUNT,
+        providerId: Provider.BASE,
         transaction: {
           hash: "0xtxhash" as Hash,
           amount: "500000",
@@ -546,16 +528,10 @@ describe("SubscriptionService", () => {
     })
 
     it("does not throw error if activation fails (background processing)", async () => {
-      const testDB = await createTestDB({
-        accounts: [TEST_ACCOUNT],
-      })
-      dispose = testDB.dispose
-
-      const service = createSubscriptionServiceForTest(testDB.db)
-
       const activationResult = {
         subscriptionId: "0xinvalid" as Hash, // Non-existent subscription
         accountAddress: TEST_ACCOUNT,
+        providerId: Provider.BASE,
         transaction: {
           hash: "0xtxhash" as Hash,
           amount: "500000",

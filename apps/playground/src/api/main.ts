@@ -31,6 +31,22 @@ app.get("/api/subscriptions", async (c) => {
   return c.json(result.results || [])
 })
 
+// Get single subscription
+app.get("/api/subscriptions/:id", async (c) => {
+  const id = c.req.param("id")
+  const result = await c.env.DB.prepare(
+    "SELECT * FROM subscriptions WHERE id = ?",
+  )
+    .bind(id)
+    .first()
+
+  if (!result) {
+    return c.json({ error: "Subscription not found" }, 404)
+  }
+
+  return c.json(result)
+})
+
 // Get webhook events for a subscription
 app.get("/api/subscriptions/:id/events", async (c) => {
   const id = c.req.param("id")
@@ -94,7 +110,7 @@ app.post("/api/webhook", async (c) => {
   return c.text("", 200)
 })
 
-// Proxy with Authorization header injection and scheduler routing
+// Proxy with Authorization header injection
 app.all("/proxy/*", async (c) => {
   const path = c.req.path.replace(/^\/proxy\//, "")
   const clientIp =
@@ -103,17 +119,9 @@ app.all("/proxy/*", async (c) => {
     c.req.header("X-Real-IP") ||
     "127.0.0.1"
 
-  // Route scheduler endpoints using bindings (call them directly)
-  let targetUrl: string
-  if (path === "scheduled/order") {
-    targetUrl = c.env.COUCH_ORDER_SCHEDULER_URL
-  } else if (path === "scheduled/dunning") {
-    targetUrl = c.env.COUCH_DUNNING_SCHEDULER_URL
-  } else {
-    // API endpoints: append path to base URL
-    const baseUrl = c.env.COUCH_API_URL.replace(/\/+$/, "")
-    targetUrl = `${baseUrl}/${path}`
-  }
+  // API endpoints: append path to base URL
+  const baseUrl = c.env.COUCH_API_URL.replace(/\/+$/, "")
+  const targetUrl = `${baseUrl}/${path}`
 
   return proxy(targetUrl, {
     ...c.req,

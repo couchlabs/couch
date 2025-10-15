@@ -1,5 +1,4 @@
 import { useState } from "react"
-import { BackendSettings } from "@/components/BackendSettings"
 import { SubscriptionCreator } from "@/components/SubscriptionCreator"
 import { SubscriptionDetails } from "@/components/SubscriptionDetails"
 import { SubscriptionsList } from "@/components/SubscriptionsList"
@@ -35,8 +34,6 @@ export function App() {
           </div>
         </div>
       </div>
-
-      <BackendSettings />
     </div>
   )
 }

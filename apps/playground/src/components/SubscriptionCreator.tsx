@@ -165,6 +165,7 @@ export function SubscriptionCreator() {
       <CardFooter>
         <Button
           className="w-full"
+          size="lg"
           onClick={handleSubscribe}
           disabled={isSubscribing || !chargeAmount || !periodValue}
         >

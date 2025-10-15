@@ -32,15 +32,23 @@ export const ErrorCode = {
 
 export type ErrorCode = (typeof ErrorCode)[keyof typeof ErrorCode]
 
+// Additional error details that can be attached to HTTPError
+// Used for debugging and providing extra context
+export interface ErrorDetails {
+  originalError?: string
+  subscriptionId?: string
+}
+
 // HTTPError class that extends HTTPException with consistent JSON format
 export class HTTPError extends HTTPException {
   public readonly code: ErrorCode
+  public readonly details?: ErrorDetails
 
   constructor(
     status: ContentfulStatusCode,
     code: ErrorCode,
     message: string,
-    details?: unknown,
+    details?: ErrorDetails,
   ) {
     // Create consistent JSON response body
     const res = new Response(
@@ -59,5 +67,6 @@ export class HTTPError extends HTTPException {
     // - res: for custom JSON response body
     super(status, { res, message })
     this.code = code
+    this.details = details
   }
 }

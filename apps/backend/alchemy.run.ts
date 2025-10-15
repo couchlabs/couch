@@ -1,11 +1,17 @@
 import path from "node:path"
 import alchemy from "alchemy"
-import { D1Database, Queue, Worker } from "alchemy/cloudflare"
+import {
+  D1Database,
+  DurableObjectNamespace,
+  Queue,
+  Worker,
+} from "alchemy/cloudflare"
 import { EvmAccount, EvmSmartAccount } from "alchemy/coinbase"
 import { GitHubComment } from "alchemy/github"
 import { CloudflareStateStore } from "alchemy/state"
 import { resolveStageConfig } from "@/constants/env.constants"
 import type { Provider } from "@/providers/provider.interface"
+import type { OrderScheduler } from "@/schedulers/order.scheduler"
 import drizzleConfig from "./drizzle.config"
 
 // =============================================================================
@@ -42,8 +48,9 @@ export const app = await alchemy("couch-backend", {
   stateStore: (scope) => new CloudflareStateStore(scope),
 })
 const NAME_PREFIX = `${app.name}-${app.stage}`
-const { NETWORK, LOGGING, DUNNING_MODE, HTTP_TRIGGER, WALLET_STAGE } =
-  resolveStageConfig(app.stage)
+const { NETWORK, LOGGING, DUNNING_MODE, WALLET_STAGE } = resolveStageConfig(
+  app.stage,
+)
 
 // =============================================================================
 // ONCHAIN RESOURCES (Coinbase)
@@ -163,58 +170,14 @@ export const api = await Worker(API_NAME, {
     WALLET_STAGE,
     // RESOURCES:
     DB: db,
+    ORDER_QUEUE: orderQueue,
     WEBHOOK_QUEUE: webhookQueue,
+    ORDER_SCHEDULER: DurableObjectNamespace<OrderScheduler>("order-scheduler", {
+      className: "OrderScheduler",
+    }),
   },
   compatibilityFlags,
   dev: { port: 3000 },
-})
-
-// -----------------------------------------------------------------------------
-// SCHEDULERS
-// -----------------------------------------------------------------------------
-
-// order.scheduler: Schedules orders
-const ORDER_SCHEDULER_NAME = "order-scheduler"
-export const orderScheduler = await Worker(ORDER_SCHEDULER_NAME, {
-  name: `${NAME_PREFIX}-${ORDER_SCHEDULER_NAME}`,
-  entrypoint: path.join(
-    import.meta.dirname,
-    "src",
-    "schedulers",
-    "order-scheduler.ts",
-  ),
-  crons: ["*/15 * * * *"], // Run every 15 minutes
-  bindings: {
-    DB: db,
-    ORDER_QUEUE: orderQueue,
-    // STAGE CONFIGS:
-    LOGGING,
-    HTTP_TRIGGER,
-  },
-  compatibilityFlags,
-  dev: { port: 3100 },
-})
-
-// dunning.scheduler: Schedules payment retries for past_due subscriptions
-const DUNNING_SCHEDULER_NAME = "dunning-scheduler"
-export const dunningScheduler = await Worker(DUNNING_SCHEDULER_NAME, {
-  name: `${NAME_PREFIX}-${DUNNING_SCHEDULER_NAME}`,
-  entrypoint: path.join(
-    import.meta.dirname,
-    "src",
-    "schedulers",
-    "dunning-scheduler.ts",
-  ),
-  crons: ["0 * * * *"], // Run every hour
-  bindings: {
-    DB: db,
-    ORDER_QUEUE: orderQueue,
-    // STAGE CONFIGS:
-    LOGGING,
-    HTTP_TRIGGER,
-  },
-  compatibilityFlags,
-  dev: { port: 3101 },
 })
 
 // -----------------------------------------------------------------------------
@@ -339,8 +302,6 @@ if (app.stage === "dev") {
   console.log({
     [API_NAME]: api,
     [DB_NAME]: db,
-    [ORDER_SCHEDULER_NAME]: orderScheduler,
-    [DUNNING_SCHEDULER_NAME]: dunningScheduler,
     [ORDER_QUEUE_NAME]: orderQueue,
     [ORDER_CONSUMER_NAME]: orderConsumer,
     [WEBHOOK_QUEUE_NAME]: webhookQueue,
@@ -368,10 +329,8 @@ if (process.env.PULL_REQUEST) {
 **Stage:** \`${app.stage}\`
 **Network:** ${NETWORK === "testnet" ? "Base Sepolia (testnet)" : "Base (mainnet)"}
 
-### 📡 API Endpoints
+### 📡 API Endpoint
 - **Subscription API:** https://${api.url}
-- **Order Scheduler:** https://${orderScheduler.url}
-- **Dunning Scheduler:** https://${dunningScheduler.url}
 
 ---
 <sub>🤖 Built from commit ${process.env.GITHUB_SHA?.slice(0, 7)} • This comment updates automatically with each push</sub>`,

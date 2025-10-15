@@ -3,12 +3,7 @@ import alchemy from "alchemy"
 import { D1Database, Vite } from "alchemy/cloudflare"
 import { GitHubComment } from "alchemy/github"
 import { CloudflareStateStore } from "alchemy/state"
-import {
-  api,
-  dunningScheduler,
-  orderScheduler,
-  spenderSmartAccount,
-} from "backend/alchemy"
+import { api, spenderSmartAccount } from "backend/alchemy"
 
 // import { Stage } from "backend/constants"
 
@@ -65,10 +60,6 @@ const db = await D1Database(DB_NAME, {
 // -----------------------------------------------------------------------------
 
 if (!api.url) throw new Error(`${api.name} didn't expose url`)
-if (!orderScheduler.url)
-  throw new Error(`${orderScheduler.name} didn't expose url`)
-if (!dunningScheduler.url)
-  throw new Error(`${dunningScheduler.name} didn't expose url`)
 
 const WEBSITE_NAME = "website"
 export const website = await Vite(WEBSITE_NAME, {
@@ -87,8 +78,6 @@ export const website = await Vite(WEBSITE_NAME, {
     COUCH_WEBHOOK_SECRET: alchemy.secret.env.COUCH_WEBHOOK_SECRET,
     COUCH_API_KEY: alchemy.secret.env.COUCH_API_KEY,
     COUCH_API_URL: api.url,
-    COUCH_ORDER_SCHEDULER_URL: orderScheduler.url,
-    COUCH_DUNNING_SCHEDULER_URL: dunningScheduler.url,
     DB: db,
   },
 })
