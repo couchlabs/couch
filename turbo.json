@@ -30,11 +30,30 @@
     },
     "infra:deploy": {
       "cache": false,
-      "passThroughEnv": ["STAGE"]
+      "env": ["STAGE", "CI", "GITHUB_ACTIONS", "GITHUB_SHA", "PULL_REQUEST"],
+      "passThroughEnv": [
+        "ALCHEMY_PASSWORD",
+        "ALCHEMY_STATE_TOKEN",
+        "CLOUDFLARE_API_TOKEN",
+        "CLOUDFLARE_ACCOUNT_ID",
+        "CDP_API_KEY_ID",
+        "CDP_API_KEY_SECRET",
+        "CDP_WALLET_SECRET",
+        "CDP_CLIENT_API_KEY",
+        "COUCH_WEBHOOK_SECRET",
+        "COUCH_API_KEY",
+        "GITHUB_TOKEN"
+      ]
     },
     "infra:destroy": {
       "cache": false,
-      "passThroughEnv": ["STAGE"]
+      "env": ["STAGE"],
+      "passThroughEnv": [
+        "ALCHEMY_PASSWORD",
+        "ALCHEMY_STATE_TOKEN",
+        "CLOUDFLARE_API_TOKEN",
+        "CLOUDFLARE_ACCOUNT_ID"
+      ]
     }
   }
 }
