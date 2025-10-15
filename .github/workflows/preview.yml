@@ -10,6 +10,9 @@ concurrency:
 
 env:
   STAGE: pr-${{ github.event.number }}
+  TURBO_TELEMETRY_DISABLED: 1
+  ALCHEMY_TELEMETRY_DISABLED: 1
+  DO_NOT_TRACK: 1
 
 jobs:
   security-check:
@@ -189,6 +192,10 @@ jobs:
           ALCHEMY_STATE_TOKEN: ${{ secrets.ALCHEMY_STATE_TOKEN }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CDP_API_KEY_ID: ${{ secrets.CDP_API_KEY_ID }}
+          CDP_API_KEY_SECRET: ${{ secrets.CDP_API_KEY_SECRET }}
+          CDP_WALLET_SECRET: ${{ secrets.CDP_WALLET_SECRET }}
+          CDP_CLIENT_API_KEY: ${{ secrets.CDP_CLIENT_API_KEY }}
           COUCH_WEBHOOK_SECRET: ${{ steps.couch.outputs.webhook_secret }}
           COUCH_API_KEY: ${{ steps.couch.outputs.api_key }}
           PULL_REQUEST: ${{ github.event.number }}

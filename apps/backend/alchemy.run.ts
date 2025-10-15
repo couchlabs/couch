@@ -1,5 +1,5 @@
+import * as fs from "node:fs"
 import path from "node:path"
-import * as core from "@actions/core"
 import alchemy from "alchemy"
 import {
   D1Database,
@@ -315,7 +315,8 @@ if (app.stage === "dev") {
   })
 }
 if (CI) {
-  core.setOutput("api_url", api.url)
+  // Use new GitHub Actions environment file method
+  fs.appendFileSync(alchemy.env.GITHUB_OUTPUT, `api_url=${api.url}\n`)
 }
 
 await app.finalize()
