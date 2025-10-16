@@ -49,7 +49,6 @@ export function SubscriptionDetails({
   const [events, setEvents] = useState<WebhookEvent[]>([])
   const [expandedEvents, setExpandedEvents] = useState<Set<number>>(new Set())
   const [loading, setLoading] = useState(false)
-  const [pollCount, setPollCount] = useState(0)
   const [onchainExpanded, setOnchainExpanded] = useState(false)
   const [onchainStatus, setOnchainStatus] = useState<{
     isSubscribed: boolean
@@ -70,14 +69,12 @@ export function SubscriptionDetails({
       setEvents([])
       setOnchainExpanded(false)
       setOnchainStatus(null)
-      setPollCount(0)
       return
     }
 
     // Reset state when switching subscriptions
     setOnchainExpanded(false)
     setOnchainStatus(null)
-    setPollCount(0)
 
     const fetchDetails = async () => {
       setLoading(true)
@@ -88,7 +85,6 @@ export function SubscriptionDetails({
         ])
         setSubscription(subData)
         setEvents(eventsData)
-        setPollCount((prev) => prev + 1)
       } catch (error) {
         console.error("Failed to fetch subscription details:", error)
       } finally {
@@ -98,20 +94,10 @@ export function SubscriptionDetails({
 
     fetchDetails()
 
-    // Dynamic polling: fast initially (1s for first 5 polls), then slower (3s)
-    let intervalId: number
-    const setupPolling = () => {
-      const currentCount = pollCount
-      const pollInterval = currentCount < 5 ? 1000 : 3000
-      intervalId = window.setInterval(fetchDetails, pollInterval)
-    }
-
-    setupPolling()
-
-    return () => {
-      if (intervalId) clearInterval(intervalId)
-    }
-  }, [subscriptionId, pollCount])
+    // Poll for updates every 2 seconds (compromise between 1s and 3s)
+    const interval = setInterval(fetchDetails, 2000)
+    return () => clearInterval(interval)
+  }, [subscriptionId])
 
   const toggleEventExpanded = (eventId: number) => {
     setExpandedEvents((prev) => {
