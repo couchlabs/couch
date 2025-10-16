@@ -1,0 +1,180 @@
+name: Staging
+
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: deploy-staging
+  cancel-in-progress: true
+
+env:
+  STAGE: staging
+  TURBO_TELEMETRY_DISABLED: 1
+  ALCHEMY_TELEMETRY_DISABLED: 1
+  DO_NOT_TRACK: 1
+
+jobs:
+  lint:
+    name: "Lint"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Run lint
+        run: bun run lint
+
+  format:
+    name: "Format"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Check format
+        run: bun run format
+
+  typecheck:
+    name: "Type Check"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Run typecheck
+        run: bun run typecheck
+
+  test:
+    name: "Tests"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Run tests
+        run: bun run test:unit
+
+  deploy:
+    name: "Staging Deployment"
+    needs: [lint, format, typecheck, test]
+    runs-on: ubuntu-latest
+    environment: dev
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+
+      - name: "Install dependencies"
+        run: bun install
+
+      - name: "Deploy backend"
+        id: backend
+        run: bun run infra:deploy --filter=backend
+        # Note: api_url output is set by @actions/core in alchemy.run.ts
+        env:
+          STAGE: ${{ env.STAGE }}
+          ALCHEMY_PASSWORD: ${{ secrets.ALCHEMY_PASSWORD }}
+          ALCHEMY_STATE_TOKEN: ${{ secrets.ALCHEMY_STATE_TOKEN }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CDP_API_KEY_ID: ${{ secrets.CDP_API_KEY_ID }}
+          CDP_API_KEY_SECRET: ${{ secrets.CDP_API_KEY_SECRET }}
+          CDP_WALLET_SECRET: ${{ secrets.CDP_WALLET_SECRET }}
+          CDP_CLIENT_API_KEY: ${{ secrets.CDP_CLIENT_API_KEY }}
+          GITHUB_SHA: ${{ github.sha }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: "Create account and register webhook on the backend"
+        id: couch
+        run: |
+          # Create account and get API key
+          ACCOUNT_RESPONSE=$(curl -X PUT ${{ steps.backend.outputs.api_url }}/api/account \
+            -H "Content-Type: application/json" \
+            -d '{"address":"${{ secrets.MERCHANT_ADDRESS }}"}' \
+            -s -w "\n%{http_code}")
+
+          ACCOUNT_HTTP_CODE=$(echo "$ACCOUNT_RESPONSE" | tail -n1)
+          ACCOUNT_BODY=$(echo "$ACCOUNT_RESPONSE" | sed '$d')
+
+          if [ "$ACCOUNT_HTTP_CODE" != "200" ] && [ "$ACCOUNT_HTTP_CODE" != "201" ]; then
+            echo "Error: Account creation failed with HTTP $ACCOUNT_HTTP_CODE"
+            echo "$ACCOUNT_BODY"
+            exit 1
+          fi
+
+          API_KEY=$(echo "$ACCOUNT_BODY" | jq -r '.api_key')
+
+          if [ -z "$API_KEY" ] || [ "$API_KEY" = "null" ]; then
+            echo "Error: Failed to extract API key from response"
+            echo "$ACCOUNT_BODY"
+            exit 1
+          fi
+
+          # Construct playground URL from backend URL
+          # Backend: couch-backend-staging-api.workers.dev
+          # Playground: couch-playground-staging-website.workers.dev
+          BACKEND_URL="${{ steps.backend.outputs.api_url }}"
+          PLAYGROUND_URL="${BACKEND_URL/couch-backend/couch-playground}"
+          PLAYGROUND_URL="${PLAYGROUND_URL/-api/-website}"
+
+          # Create webhook with the playground URL
+          WEBHOOK_RESPONSE=$(curl -X PUT ${{ steps.backend.outputs.api_url }}/api/webhook \
+            -H "Content-Type: application/json" \
+            -H "Authorization: Bearer $API_KEY" \
+            -d "{\"url\":\"$PLAYGROUND_URL/api/webhook\"}" \
+            -s -w "\n%{http_code}")
+
+          WEBHOOK_HTTP_CODE=$(echo "$WEBHOOK_RESPONSE" | tail -n1)
+          WEBHOOK_BODY=$(echo "$WEBHOOK_RESPONSE" | sed '$d')
+
+          if [ "$WEBHOOK_HTTP_CODE" != "200" ] && [ "$WEBHOOK_HTTP_CODE" != "201" ]; then
+            echo "Error: Webhook creation failed with HTTP $WEBHOOK_HTTP_CODE"
+            echo "$WEBHOOK_BODY"
+            exit 1
+          fi
+
+          WEBHOOK_SECRET=$(echo "$WEBHOOK_BODY" | jq -r '.secret')
+
+          if [ -z "$WEBHOOK_SECRET" ] || [ "$WEBHOOK_SECRET" = "null" ]; then
+            echo "Error: Failed to extract webhook secret from response"
+            echo "$WEBHOOK_BODY"
+            exit 1
+          fi
+
+          echo "api_key=$API_KEY" >> $GITHUB_OUTPUT
+          echo "webhook_secret=$WEBHOOK_SECRET" >> $GITHUB_OUTPUT
+
+          # Output URLs for summary
+          echo "::notice::Backend deployed to ${{ steps.backend.outputs.api_url }}"
+          echo "::notice::Playground will be deployed to $PLAYGROUND_URL"
+
+      - name: "Deploy playground"
+        run: bun run infra:deploy --filter=playground
+        env:
+          STAGE: ${{ env.STAGE }}
+          ALCHEMY_PASSWORD: ${{ secrets.ALCHEMY_PASSWORD }}
+          ALCHEMY_STATE_TOKEN: ${{ secrets.ALCHEMY_STATE_TOKEN }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          CDP_API_KEY_ID: ${{ secrets.CDP_API_KEY_ID }}
+          CDP_API_KEY_SECRET: ${{ secrets.CDP_API_KEY_SECRET }}
+          CDP_WALLET_SECRET: ${{ secrets.CDP_WALLET_SECRET }}
+          CDP_CLIENT_API_KEY: ${{ secrets.CDP_CLIENT_API_KEY }}
+          COUCH_WEBHOOK_SECRET: ${{ steps.couch.outputs.webhook_secret }}
+          COUCH_API_KEY: ${{ steps.couch.outputs.api_key }}
+          GITHUB_SHA: ${{ github.sha }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
