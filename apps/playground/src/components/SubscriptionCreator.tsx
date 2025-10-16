@@ -65,7 +65,7 @@ export function SubscriptionCreator() {
       console.log("Subscription created onchain:", subscription)
 
       // Activate subscription via backend
-      const response = await fetch("/proxy/subscriptions", {
+      const response = await fetch("/proxy/api/subscriptions", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
