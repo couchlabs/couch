@@ -165,13 +165,46 @@ async function handleProxy(c: any) {
 
 // Test: Add debug routes
 app.get("/proxy-test", (c) => c.json({ message: "Proxy endpoint exists!" }))
-app.get("/proxy-health-test", (c) => handleProxy(c)) // Wrap in arrow function
 app.post("/proxy-simple", (c) => c.json({ message: "POST works!" })) // Test simple POST
 
-// Register all proxy routes explicitly with proper wrapper
-app.all("/proxy/api/subscriptions", (c) => handleProxy(c))
-app.all("/proxy/api/health", (c) => handleProxy(c))
-app.all("/proxy/*", (c) => handleProxy(c))
+// Test inline proxy logic to eliminate function reference issues
+app.post("/proxy/api/subscriptions", async (c) => {
+  console.log("POST /proxy/api/subscriptions called!")
+
+  // Check env vars first
+  if (!c.env.COUCH_API_URL) {
+    return c.json({ error: "COUCH_API_URL not configured" }, 500)
+  }
+  if (!c.env.COUCH_API_KEY) {
+    return c.json({ error: "COUCH_API_KEY not configured" }, 500)
+  }
+
+  const path = "api/subscriptions"
+  const targetUrl = `${c.env.COUCH_API_URL.replace(/\/+$/, "")}/${path}`
+
+  console.log("Proxying to:", targetUrl)
+
+  try {
+    const body = await c.req.text()
+    const response = await fetch(targetUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${c.env.COUCH_API_KEY}`,
+      },
+      body: body,
+    })
+
+    const responseBody = await response.text()
+    return new Response(responseBody, {
+      status: response.status,
+      headers: { "Content-Type": "application/json" },
+    })
+  } catch (error) {
+    console.error("Proxy error:", error)
+    return c.json({ error: "Proxy failed", details: String(error) }, 500)
+  }
+})
 
 export default app
 

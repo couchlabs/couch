@@ -64,25 +64,6 @@ export function SubscriptionCreator() {
 
       console.log("Subscription created onchain:", subscription)
 
-      // Test simpler routes first
-      console.log("Testing routes...")
-
-      // Test GET request
-      const getTest = await fetch("/proxy-health-test")
-      console.log("GET /proxy-health-test status:", getTest.status)
-
-      // Test simple POST
-      const postTest = await fetch("/proxy-simple", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ test: "data" }),
-      })
-      console.log("POST /proxy-simple status:", postTest.status)
-      if (postTest.ok) {
-        const data = await postTest.json()
-        console.log("POST response:", data)
-      }
-
       // Activate subscription via backend
       const response = await fetch("/proxy/api/subscriptions", {
         method: "POST",
