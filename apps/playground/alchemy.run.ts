@@ -55,14 +55,8 @@ const WEBSITE_NAME = "website"
 export const website = await Vite(WEBSITE_NAME, {
   name: `${NAME_PREFIX}-${WEBSITE_NAME}`,
   entrypoint: path.join(import.meta.dirname, "src", "api", "main.ts"),
-  dev: {
-    // Envs to bundle in frontend code.
-    // Need to be prefixed with `VITE_` to be included.
-    // Can be reach via `import.meta.env`
-    env: {
-      VITE_COUCH_SPENDER_ADDRESS: spenderSmartAccount.address,
-    },
-  },
+  dev: { env: { VITE_COUCH_SPENDER_ADDRESS: spenderSmartAccount.address } },
+  build: { env: { VITE_COUCH_SPENDER_ADDRESS: spenderSmartAccount.address } },
   // Envs exposed to worker only
   bindings: {
     COUCH_WEBHOOK_SECRET: alchemy.secret.env.COUCH_WEBHOOK_SECRET,
