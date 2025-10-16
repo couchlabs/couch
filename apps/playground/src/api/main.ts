@@ -1,6 +1,5 @@
 import { Hono } from "hono"
 import { cors } from "hono/cors"
-import { proxy } from "hono/proxy"
 import type { WorkerEnv } from "../../types/env"
 
 export { Store } from "../store/do.store"
@@ -128,27 +127,39 @@ app.all("/proxy/*", async (c) => {
 
   try {
     // Try using fetch instead of proxy to test
+    const requestHeaders = c.req.header()
     const response = await fetch(targetUrl, {
       method: c.req.method,
       headers: {
-        ...Object.fromEntries(c.req.header()),
+        ...requestHeaders,
         "X-Forwarded-For": clientIp,
         "X-Forwarded-Host": c.req.header("host") || "",
         Authorization: `Bearer ${c.env.COUCH_API_KEY}`,
       },
-      body: c.req.method !== "GET" && c.req.method !== "HEAD"
-        ? await c.req.text()
-        : undefined,
+      body:
+        c.req.method !== "GET" && c.req.method !== "HEAD"
+          ? await c.req.text()
+          : undefined,
     })
 
     const responseBody = await response.text()
-    return c.text(responseBody, response.status, Object.fromEntries(response.headers))
+    const responseHeaders: Record<string, string> = {}
+    response.headers.forEach((value, key) => {
+      responseHeaders[key] = value
+    })
+    return new Response(responseBody, {
+      status: response.status,
+      headers: responseHeaders,
+    })
   } catch (error) {
     console.error("Proxy error:", error)
-    return c.json({
-      error: "Proxy failed",
-      details: error instanceof Error ? error.message : String(error)
-    }, 500)
+    return c.json(
+      {
+        error: "Proxy failed",
+        details: error instanceof Error ? error.message : String(error),
+      },
+      500,
+    )
   }
 })
 
