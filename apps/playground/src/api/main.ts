@@ -136,8 +136,6 @@ app.get("/test-binding", async (c) => {
 
 // RPC-style backend API call using service binding
 app.post("/activate", async (c) => {
-  console.log("POST /activate called - using service binding!")
-
   if (!c.env.BACKEND_API) {
     return c.json({ error: "Backend API binding not configured" }, 500)
   }
@@ -146,7 +144,6 @@ app.post("/activate", async (c) => {
     const body = await c.req.text()
 
     // Use service binding for RPC-style call
-    // Clone headers from the original request
     const headers = new Headers(c.req.header())
     headers.set("Authorization", `Bearer ${c.env.COUCH_API_KEY}`)
 
@@ -160,24 +157,15 @@ app.post("/activate", async (c) => {
     )
     const responseBody = await response.text()
 
-    console.log("Backend response status:", response.status)
-
     return new Response(responseBody, {
       status: response.status,
       headers: { "Content-Type": "application/json" },
     })
   } catch (error) {
     console.error("Service binding error:", error)
-    // Better error details
     const errorMessage = error instanceof Error ? error.message : String(error)
-    const errorStack = error instanceof Error ? error.stack : undefined
-
     return c.json(
-      {
-        error: "Service binding failed",
-        message: errorMessage,
-        stack: errorStack,
-      },
+      { error: "Service binding failed", message: errorMessage },
       500,
     )
   }
