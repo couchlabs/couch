@@ -165,22 +165,13 @@ async function handleProxy(c: any) {
 
 // Test: Add debug routes
 app.get("/proxy-test", (c) => c.json({ message: "Proxy endpoint exists!" }))
-app.post("/proxy-subscriptions", handleProxy) // Test without nested path
+app.get("/proxy-health-test", handleProxy) // Test GET with proxy handler
+app.post("/proxy-simple", (c) => c.json({ message: "POST works!" })) // Test simple POST
 
-// Try using a middleware approach instead of individual routes
-app.use("*", async (c, next) => {
-  const path = c.req.path
-  console.log("Incoming request:", { path, method: c.req.method })
-
-  // Check if this is a proxy request
-  if (path.startsWith("/proxy/")) {
-    console.log("Matched proxy path, handling...")
-    return handleProxy(c)
-  }
-
-  // Otherwise continue to next handler
-  return next()
-})
+// Register all proxy routes explicitly
+app.all("/proxy/api/subscriptions", handleProxy)
+app.all("/proxy/api/health", handleProxy)
+app.all("/proxy/*", handleProxy)
 
 export default app
 
