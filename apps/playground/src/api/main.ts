@@ -165,7 +165,7 @@ async function handleProxy(c: any) {
 
 // Test simple async route without DO
 app.get("/test-async", async (c) => {
-  await new Promise(resolve => setTimeout(resolve, 10))
+  await new Promise((resolve) => setTimeout(resolve, 10))
   return c.json({ message: "Async works!" })
 })
 
@@ -185,11 +185,14 @@ app.post("/backend-subscriptions", async (c) => {
 
   // Return early with env check
   if (!c.env.COUCH_API_URL || !c.env.COUCH_API_KEY) {
-    return c.json({
-      error: "Environment variables not configured",
-      COUCH_API_URL: c.env.COUCH_API_URL ? "SET" : "NOT SET",
-      COUCH_API_KEY: c.env.COUCH_API_KEY ? "SET" : "NOT SET",
-    }, 500)
+    return c.json(
+      {
+        error: "Environment variables not configured",
+        COUCH_API_URL: c.env.COUCH_API_URL ? "SET" : "NOT SET",
+        COUCH_API_KEY: c.env.COUCH_API_KEY ? "SET" : "NOT SET",
+      },
+      500,
+    )
   }
 
   // Construct backend URL
