@@ -54,6 +54,11 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
       ws.current.onmessage = (event) => {
         try {
           const message = JSON.parse(event.data) as WebSocketMessage
+          // Log timing only for subscription updates
+          if (message.type === "subscription_update" && message.data) {
+            const sub = message.data as any
+            console.log(`[WS ${new Date().toISOString()}] Status: ${sub.status}`)
+          }
           setLastMessage(message)
         } catch (error) {
           console.error("Failed to parse WebSocket message:", error)
