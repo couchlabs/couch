@@ -53,7 +53,11 @@
         "ALCHEMY_PASSWORD",
         "ALCHEMY_STATE_TOKEN",
         "CLOUDFLARE_API_TOKEN",
-        "CLOUDFLARE_ACCOUNT_ID"
+        "CLOUDFLARE_ACCOUNT_ID",
+        "CDP_API_KEY_ID",
+        "CDP_API_KEY_SECRET",
+        "CDP_WALLET_SECRET",
+        "CDP_CLIENT_API_KEY"
       ]
     }
   }
