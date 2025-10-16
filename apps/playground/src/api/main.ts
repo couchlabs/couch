@@ -94,6 +94,20 @@ app.post("/api/webhook", async (c) => {
   return c.text("", 200)
 })
 
+// WebSocket endpoint for real-time updates
+app.get("/ws", async (c) => {
+  // Get the Durable Object stub
+  const store = c.env.STORE.get(c.env.STORE.idFromName("global"))
+
+  // Forward the WebSocket upgrade request to the DO
+  const response = await store.fetch(c.req.url, {
+    headers: c.req.raw.headers,
+  })
+
+  // Return the Cloudflare Response directly (includes webSocket property)
+  return response as any
+})
+
 // Health check endpoint - useful for monitoring service binding
 app.get("/test-binding", async (c) => {
   if (!c.env.BACKEND_API) {
