@@ -95,8 +95,8 @@ if (process.env.PULL_REQUEST) {
 **Stage:** \`${app.stage}\`
 **Network:** ${NETWORK}
 
-👉 **Playground:** https://${website.url}
-👉 **Backend:** https://${api.url}
+👉 **[Playground](${website.url})**
+👉 **[Backend API](${api.url})**
 
 ---
 <sub>🤖 Built from commit ${process.env.GITHUB_SHA?.slice(0, 7)} • This comment updates automatically with each push</sub>`,
