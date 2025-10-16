@@ -163,18 +163,33 @@ async function handleProxy(c: any) {
   }
 }
 
+// Test simple async route without DO
+app.get("/test-async", async (c) => {
+  await new Promise(resolve => setTimeout(resolve, 10))
+  return c.json({ message: "Async works!" })
+})
+
+// Test env variables
+app.get("/test-env", (c) => {
+  return c.json({
+    COUCH_API_URL: c.env.COUCH_API_URL ? "SET" : "NOT SET",
+    COUCH_API_KEY: c.env.COUCH_API_KEY ? "SET" : "NOT SET",
+    COUCH_WEBHOOK_SECRET: c.env.COUCH_WEBHOOK_SECRET ? "SET" : "NOT SET",
+    STORE: c.env.STORE ? "SET" : "NOT SET",
+  })
+})
+
 // Proxy endpoint - using single-segment route since nested paths don't work
 app.post("/backend-subscriptions", async (c) => {
   console.log("POST /backend-subscriptions called!")
 
-  // Check env vars first
-  if (!c.env.COUCH_API_URL) {
-    console.error("COUCH_API_URL not configured")
-    return c.json({ error: "COUCH_API_URL not configured" }, 500)
-  }
-  if (!c.env.COUCH_API_KEY) {
-    console.error("COUCH_API_KEY not configured")
-    return c.json({ error: "COUCH_API_KEY not configured" }, 500)
+  // Return early with env check
+  if (!c.env.COUCH_API_URL || !c.env.COUCH_API_KEY) {
+    return c.json({
+      error: "Environment variables not configured",
+      COUCH_API_URL: c.env.COUCH_API_URL ? "SET" : "NOT SET",
+      COUCH_API_KEY: c.env.COUCH_API_KEY ? "SET" : "NOT SET",
+    }, 500)
   }
 
   // Construct backend URL
