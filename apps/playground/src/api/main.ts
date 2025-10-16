@@ -105,7 +105,7 @@ app.get("/ws", async (c) => {
   })
 
   // Return the Cloudflare Response directly (includes webSocket property)
-  return response as any
+  return response
 })
 
 // Health check endpoint - useful for monitoring service binding
