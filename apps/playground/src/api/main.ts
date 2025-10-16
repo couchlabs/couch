@@ -167,8 +167,8 @@ async function handleProxy(c: any) {
 app.get("/proxy-test", (c) => c.json({ message: "Proxy endpoint exists!" }))
 
 // Register proxy routes - try different patterns
-app.post("/proxy/api/subscriptions", handleProxy)  // Specific route first
-app.get("/proxy/api/health", handleProxy)          // Another specific route
+app.post("/proxy/api/subscriptions", handleProxy) // Specific route first
+app.get("/proxy/api/health", handleProxy) // Another specific route
 
 // Then wildcard routes
 app.get("/proxy/*", handleProxy)
