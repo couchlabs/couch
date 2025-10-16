@@ -63,7 +63,9 @@ app.post("/api/webhook", async (c) => {
   )
 
   // Log webhook receipt timing
-  console.log(`[Webhook ${new Date().toISOString()}] Status: ${event.data.subscription.status}`)
+  console.log(
+    `[Webhook ${new Date().toISOString()}] Status: ${event.data.subscription.status}`,
+  )
 
   // Process the event
   if (event.type !== "subscription.updated") {

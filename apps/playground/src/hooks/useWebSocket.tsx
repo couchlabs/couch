@@ -57,7 +57,9 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
           // Log timing only for subscription updates
           if (message.type === "subscription_update" && message.data) {
             const sub = message.data as any
-            console.log(`[WS ${new Date().toISOString()}] Status: ${sub.status}`)
+            console.log(
+              `[WS ${new Date().toISOString()}] Status: ${sub.status}`,
+            )
           }
           setLastMessage(message)
         } catch (error) {
