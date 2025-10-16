@@ -184,6 +184,10 @@ jobs:
           echo "api_key=$API_KEY" >> $GITHUB_OUTPUT
           echo "webhook_secret=$WEBHOOK_SECRET" >> $GITHUB_OUTPUT
 
+          # Output URLs for summary
+          echo "::notice::Backend deployed to ${{ steps.backend.outputs.api_url }}"
+          echo "::notice::Playground will be deployed to $PLAYGROUND_URL"
+
       - name: "Deploy playground"
         run: bun run infra:deploy --filter=playground
         env:
