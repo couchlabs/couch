@@ -87,16 +87,17 @@ if (process.env.PULL_REQUEST) {
     owner: "couchlabs",
     repository: "couch",
     issueNumber: Number(process.env.PULL_REQUEST),
-    body: `## 🛋️ Preview Deployed
+    token: alchemy.secret.env.GITHUB_TOKEN,
+    body: `## Ahoy! Preview Deployed
 
 **Stage:** \`${app.stage}\`
 **Network:** ${NETWORK}
 
-👉 **[Playground](${website.url})**
-👉 **[Backend API](${api.url})**
+🌐 **[Playground](${website.url})**
+⚙️ **[Backend API](${api.url})**
 
 ---
-<sub>🤖 Built from commit ${process.env.GITHUB_SHA?.slice(0, 7)} • This comment updates automatically with each push</sub>`,
+<sub>🏴‍☠️ Built from commit ${process.env.GITHUB_SHA?.slice(0, 7)} • This comment updates automatically with each push</sub>`,
   })
 }
 

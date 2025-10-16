@@ -103,6 +103,13 @@ jobs:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
 
+      - name: "Generate Captain Alchemy token"
+        id: app-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.CAPTAIN_ALCHEMY_APP_ID }}
+          private-key: ${{ secrets.CAPTAIN_ALCHEMY_PRIVATE_KEY }}
+
       - name: "Install dependencies"
         run: bun install
 
@@ -122,7 +129,7 @@ jobs:
           CDP_CLIENT_API_KEY: ${{ secrets.CDP_CLIENT_API_KEY }}
           PULL_REQUEST: ${{ github.event.number }}
           GITHUB_SHA: ${{ github.sha }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
 
       - name: "Create account and register webhook on the backend"
         id: couch
@@ -204,7 +211,7 @@ jobs:
           COUCH_API_KEY: ${{ steps.couch.outputs.api_key }}
           PULL_REQUEST: ${{ github.event.number }}
           GITHUB_SHA: ${{ github.sha }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
 
   cleanup:
     name: "Cleanup preview"
