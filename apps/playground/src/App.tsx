@@ -21,11 +21,7 @@ export function App() {
         <div className="grid gap-6 lg:grid-cols-[450px_1fr]">
           {/* Left column - Create subscription + List */}
           <div className="flex flex-col gap-6">
-            <SubscriptionCreator
-              onSubscriptionCreated={(subscriptionId) => {
-                setSelectedSubscriptionId(subscriptionId)
-              }}
-            />
+            <SubscriptionCreator />
             <SubscriptionsList
               selectedId={selectedSubscriptionId}
               onSelect={setSelectedSubscriptionId}

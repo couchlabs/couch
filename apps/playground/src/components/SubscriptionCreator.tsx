@@ -18,13 +18,7 @@ import {
 } from "@/components/ui/select"
 import { Separator } from "@/components/ui/separator"
 
-interface SubscriptionCreatorProps {
-  onSubscriptionCreated?: (subscriptionId: string) => void
-}
-
-export function SubscriptionCreator({
-  onSubscriptionCreated,
-}: SubscriptionCreatorProps = {}) {
+export function SubscriptionCreator() {
   const [chargeAmount, setChargeAmount] = useState("0.0001")
   const [periodValue, setPeriodValue] = useState("60")
   const [periodUnit, setPeriodUnit] = useState<
@@ -92,22 +86,9 @@ export function SubscriptionCreator({
         )
       }
 
-      const data = (await response.json()) as {
-        subscription_id?: string
-        status?: string
-        order_id?: number
-        order_number?: number
-      }
+      await response.json() // Confirm response was parsed successfully
 
-      // Success - immediately select the created subscription
-      if (onSubscriptionCreated && data.subscription_id) {
-        onSubscriptionCreated(data.subscription_id)
-      } else if (onSubscriptionCreated && subscription.id) {
-        // Fallback to the onchain subscription ID if backend doesn't return it
-        onSubscriptionCreated(subscription.id)
-      }
-
-      // Reset loading state
+      // Success - reset loading state
       setIsSubscribing(false)
     } catch (error) {
       console.error("Failed to create subscription:", error)
