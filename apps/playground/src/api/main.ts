@@ -112,6 +112,28 @@ app.get("/test-env", (c) => {
   })
 })
 
+// Test service binding with health check
+app.get("/test-binding", async (c) => {
+  if (!c.env.BACKEND_API) {
+    return c.json({ error: "Backend API binding not configured" }, 500)
+  }
+
+  try {
+    const response = await c.env.BACKEND_API.fetch("https://backend/api/health")
+    const data = await response.json()
+    return c.json({
+      success: true,
+      backend_status: response.status,
+      backend_data: data,
+    })
+  } catch (error) {
+    return c.json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+    })
+  }
+})
+
 // RPC-style backend API call using service binding
 app.post("/activate", async (c) => {
   console.log("POST /activate called - using service binding!")
@@ -146,8 +168,16 @@ app.post("/activate", async (c) => {
     })
   } catch (error) {
     console.error("Service binding error:", error)
+    // Better error details
+    const errorMessage = error instanceof Error ? error.message : String(error)
+    const errorStack = error instanceof Error ? error.stack : undefined
+
     return c.json(
-      { error: "Service binding failed", details: String(error) },
+      {
+        error: "Service binding failed",
+        message: errorMessage,
+        stack: errorStack,
+      },
       500,
     )
   }
