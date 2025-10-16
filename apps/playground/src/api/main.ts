@@ -106,30 +106,49 @@ app.all("/proxy/*", async (c) => {
     "127.0.0.1"
 
   // API endpoints: append path to base URL
-  const baseUrl = c.env.COUCH_API_URL.replace(/\/+$/, "")
+  const baseUrl = c.env.COUCH_API_URL?.replace(/\/+$/, "") || ""
   const targetUrl = `${baseUrl}/${path}`
 
   console.log("Proxy request debug:", {
     COUCH_API_URL: c.env.COUCH_API_URL,
+    COUCH_API_KEY: c.env.COUCH_API_KEY ? "SET" : "NOT SET",
     path: path,
     baseUrl: baseUrl,
     targetUrl: targetUrl,
     method: c.req.method,
   })
 
+  // Check if env vars are properly set
+  if (!c.env.COUCH_API_URL) {
+    return c.json({ error: "COUCH_API_URL not configured" }, 500)
+  }
+  if (!c.env.COUCH_API_KEY) {
+    return c.json({ error: "COUCH_API_KEY not configured" }, 500)
+  }
+
   try {
-    return proxy(targetUrl, {
-      ...c.req,
+    // Try using fetch instead of proxy to test
+    const response = await fetch(targetUrl, {
+      method: c.req.method,
       headers: {
-        ...c.req.header(),
+        ...Object.fromEntries(c.req.header()),
         "X-Forwarded-For": clientIp,
-        "X-Forwarded-Host": c.req.header("host"),
+        "X-Forwarded-Host": c.req.header("host") || "",
         Authorization: `Bearer ${c.env.COUCH_API_KEY}`,
       },
+      body: c.req.method !== "GET" && c.req.method !== "HEAD"
+        ? await c.req.text()
+        : undefined,
     })
+
+    const responseBody = await response.text()
+    return c.text(responseBody, response.status, Object.fromEntries(response.headers))
   } catch (error) {
     console.error("Proxy error:", error)
-    throw error
+    return c.json({
+      error: "Proxy failed",
+      details: error instanceof Error ? error.message : String(error)
+    }, 500)
   }
 })
 
