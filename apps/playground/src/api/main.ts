@@ -124,17 +124,20 @@ app.post("/activate", async (c) => {
     const body = await c.req.text()
 
     // Use service binding for RPC-style call
-    const response = await c.env.BACKEND_API.fetch(
-      "https://backend/api/subscriptions",
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${c.env.COUCH_API_KEY}`,
-        },
-        body: body,
-      },
-    )
+    // Pass the request directly to the backend worker
+    const backendRequest = new Request(c.req.raw)
+    backendRequest.headers.set("Authorization", `Bearer ${c.env.COUCH_API_KEY}`)
+
+    // Replace the URL with the backend route
+    const url = new URL(backendRequest.url)
+    url.hostname = "backend"
+    url.pathname = "/api/subscriptions"
+
+    const response = await c.env.BACKEND_API.fetch(url.toString(), {
+      method: "POST",
+      headers: backendRequest.headers,
+      body: body,
+    })
     const responseBody = await response.text()
 
     console.log("Backend response status:", response.status)
