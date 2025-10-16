@@ -163,26 +163,25 @@ async function handleProxy(c: any) {
   }
 }
 
-// Test: Add debug routes
-app.get("/proxy-test", (c) => c.json({ message: "Proxy endpoint exists!" }))
-app.post("/proxy-simple", (c) => c.json({ message: "POST works!" })) // Test simple POST
-
-// Test inline proxy logic to eliminate function reference issues
-app.post("/proxy/api/subscriptions", async (c) => {
-  console.log("POST /proxy/api/subscriptions called!")
+// Proxy endpoint - using single-segment route since nested paths don't work
+app.post("/backend-subscriptions", async (c) => {
+  console.log("POST /backend-subscriptions called!")
 
   // Check env vars first
   if (!c.env.COUCH_API_URL) {
+    console.error("COUCH_API_URL not configured")
     return c.json({ error: "COUCH_API_URL not configured" }, 500)
   }
   if (!c.env.COUCH_API_KEY) {
+    console.error("COUCH_API_KEY not configured")
     return c.json({ error: "COUCH_API_KEY not configured" }, 500)
   }
 
-  const path = "api/subscriptions"
-  const targetUrl = `${c.env.COUCH_API_URL.replace(/\/+$/, "")}/${path}`
+  // Construct backend URL
+  const baseUrl = c.env.COUCH_API_URL.replace(/\/+$/, "")
+  const targetUrl = `${baseUrl}/api/subscriptions`
 
-  console.log("Proxying to:", targetUrl)
+  console.log("Proxying to backend:", targetUrl)
 
   try {
     const body = await c.req.text()
@@ -196,6 +195,8 @@ app.post("/proxy/api/subscriptions", async (c) => {
     })
 
     const responseBody = await response.text()
+    console.log("Backend response status:", response.status)
+
     return new Response(responseBody, {
       status: response.status,
       headers: { "Content-Type": "application/json" },
@@ -203,6 +204,26 @@ app.post("/proxy/api/subscriptions", async (c) => {
   } catch (error) {
     console.error("Proxy error:", error)
     return c.json({ error: "Proxy failed", details: String(error) }, 500)
+  }
+})
+
+// Also add GET endpoint for health check testing
+app.get("/backend-health", async (c) => {
+  if (!c.env.COUCH_API_URL) {
+    return c.json({ error: "COUCH_API_URL not configured" }, 500)
+  }
+
+  const targetUrl = `${c.env.COUCH_API_URL.replace(/\/+$/, "")}/api/health`
+
+  try {
+    const response = await fetch(targetUrl)
+    const data = await response.text()
+    return new Response(data, {
+      status: response.status,
+      headers: { "Content-Type": "application/json" },
+    })
+  } catch (error) {
+    return c.json({ error: "Health check failed", details: String(error) }, 500)
   }
 })
 
