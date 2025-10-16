@@ -6,13 +6,13 @@
   "scripts": {
     "dev": "turbo dev --ui=tui",
     "dev:cleanup": "bun scripts/alchemy.dev.cleanup.ts",
+    "dev:faucet": "bun node_modules/alchemy/src/coinbase/faucet.ts",
     "test": "turbo typecheck && turbo test:unit",
     "test:unit": "turbo test:unit",
     "lint": "biome lint .",
     "format": "biome format .",
     "typecheck": "turbo typecheck",
     "fix": "biome check . --write",
-    "dev:faucet": "bun node_modules/alchemy/src/coinbase/faucet.ts",
     "gh:setup:dev": "alchemy deploy scripts/github.dev.environment.ts",
     "gh:setup:sandbox": "alchemy deploy scripts/github.sandbox.environment.ts",
     "gh:setup:prod": "alchemy deploy scripts/github.prod.environment.ts",
@@ -25,15 +25,15 @@
       "apps/*"
     ],
     "catalog": {
-      "alchemy": "^0.72.0",
+      "alchemy": "^0.74.0",
       "typescript": "^5.9.3"
     },
     "catalogs": {
       "cloudflare": {
         "miniflare": "^4.20251008.0",
-        "@cloudflare/workers-types": "^4.20251008.0",
-        "@types/node": "^24.7.1",
-        "hono": "^4.9.10"
+        "@cloudflare/workers-types": "^4.20251011.0",
+        "@types/node": "^24.7.2",
+        "hono": "^4.9.12"
       },
       "coinbase": {
         "@base-org/account": "^2.4.0",

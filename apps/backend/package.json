@@ -24,7 +24,7 @@
     "@base-org/account": "catalog:coinbase",
     "@coinbase/cdp-sdk": "catalog:coinbase",
     "hono": "catalog:cloudflare",
-    "viem": "^2.38.0",
+    "viem": "^2.38.2",
     "drizzle-orm": "^0.44.6"
   },
   "devDependencies": {
