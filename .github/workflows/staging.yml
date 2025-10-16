@@ -1,39 +1,22 @@
-name: CI - Preview
+name: CI - Staging
 
 on:
-  pull_request:
-    types: [opened, reopened, synchronize, closed]
+  push:
+    branches: [main]
 
 concurrency:
-  group: deploy-${{ github.ref }}
-  cancel-in-progress: false
+  group: deploy-staging
+  cancel-in-progress: true
 
 env:
-  STAGE: pr-${{ github.event.number }}
+  STAGE: staging
   TURBO_TELEMETRY_DISABLED: 1
   ALCHEMY_TELEMETRY_DISABLED: 1
   DO_NOT_TRACK: 1
 
 jobs:
-  security-check:
-    name: "Security check"
-    runs-on: ubuntu-latest
-    outputs:
-      is-fork: ${{ steps.check.outputs.is-fork }}
-    steps:
-      - id: check
-        run: |
-          if [ "${{ github.event.pull_request.head.repo.full_name }}" != "${{ github.repository }}" ]; then
-            echo "is-fork=true" >> $GITHUB_OUTPUT
-            echo "::warning::PR from fork - limited workflow access"
-          else
-            echo "is-fork=false" >> $GITHUB_OUTPUT
-          fi
-
   lint:
     name: "Lint"
-    needs: security-check
-    if: ${{ github.event.action != 'closed' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -47,8 +30,6 @@ jobs:
 
   format:
     name: "Format"
-    needs: security-check
-    if: ${{ github.event.action != 'closed' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -62,8 +43,6 @@ jobs:
 
   typecheck:
     name: "Type Check"
-    needs: security-check
-    if: ${{ github.event.action != 'closed' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -77,8 +56,6 @@ jobs:
 
   test:
     name: "Tests"
-    needs: security-check
-    if: ${{ github.event.action != 'closed' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -91,14 +68,12 @@ jobs:
         run: bun run test:unit
 
   deploy:
-    name: "Preview Deployment"
-    needs: [security-check, lint, format, typecheck, test]
-    if: ${{ github.event.action != 'closed' && needs.security-check.outputs.is-fork == 'false' }}
+    name: "Staging Deployment"
+    needs: [lint, format, typecheck, test]
     runs-on: ubuntu-latest
     environment: dev
     permissions:
       contents: read
-      pull-requests: write
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
@@ -120,7 +95,6 @@ jobs:
           CDP_API_KEY_SECRET: ${{ secrets.CDP_API_KEY_SECRET }}
           CDP_WALLET_SECRET: ${{ secrets.CDP_WALLET_SECRET }}
           CDP_CLIENT_API_KEY: ${{ secrets.CDP_CLIENT_API_KEY }}
-          PULL_REQUEST: ${{ github.event.number }}
           GITHUB_SHA: ${{ github.sha }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -151,8 +125,8 @@ jobs:
           fi
 
           # Construct playground URL from backend URL
-          # Backend: couch-backend-pr-5-api.workers.dev
-          # Playground: couch-playground-pr-5-website.workers.dev
+          # Backend: couch-backend-staging-api.workers.dev
+          # Playground: couch-playground-staging-website.workers.dev
           BACKEND_URL="${{ steps.backend.outputs.api_url }}"
           PLAYGROUND_URL="${BACKEND_URL/couch-backend/couch-playground}"
           PLAYGROUND_URL="${PLAYGROUND_URL/-api/-website}"
@@ -184,6 +158,10 @@ jobs:
           echo "api_key=$API_KEY" >> $GITHUB_OUTPUT
           echo "webhook_secret=$WEBHOOK_SECRET" >> $GITHUB_OUTPUT
 
+          # Output URLs for summary
+          echo "::notice::Backend deployed to ${{ steps.backend.outputs.api_url }}"
+          echo "::notice::Playground will be deployed to $PLAYGROUND_URL"
+
       - name: "Deploy playground"
         run: bun run infra:deploy --filter=playground
         env:
@@ -198,33 +176,5 @@ jobs:
           CDP_CLIENT_API_KEY: ${{ secrets.CDP_CLIENT_API_KEY }}
           COUCH_WEBHOOK_SECRET: ${{ steps.couch.outputs.webhook_secret }}
           COUCH_API_KEY: ${{ steps.couch.outputs.api_key }}
-          PULL_REQUEST: ${{ github.event.number }}
           GITHUB_SHA: ${{ github.sha }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-  cleanup:
-    name: "Cleanup preview"
-    runs-on: ubuntu-latest
-    if: ${{ github.event.action == 'closed' }}
-    environment: dev
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@v4
-      - uses: oven-sh/setup-bun@v2
-
-      - name: Install dependencies
-        run: bun install
-
-      - name: Destroy preview
-        run: bun run infra:destroy
-        env:
-          STAGE: ${{ env.STAGE }}
-          ALCHEMY_PASSWORD: ${{ secrets.ALCHEMY_PASSWORD }}
-          ALCHEMY_STATE_TOKEN: ${{ secrets.ALCHEMY_STATE_TOKEN }}
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          CDP_API_KEY_ID: ${{ secrets.CDP_API_KEY_ID }}
-          CDP_API_KEY_SECRET: ${{ secrets.CDP_API_KEY_SECRET }}
-          CDP_WALLET_SECRET: ${{ secrets.CDP_WALLET_SECRET }}
-          CDP_CLIENT_API_KEY: ${{ secrets.CDP_CLIENT_API_KEY }}
