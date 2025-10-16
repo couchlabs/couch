@@ -169,6 +169,12 @@ app.get("/test-async", async (c) => {
   return c.json({ message: "Async works!" })
 })
 
+// Test simple POST
+app.post("/test-post", async (c) => {
+  const body = await c.req.text()
+  return c.json({ message: "POST works!", received: body })
+})
+
 // Test env variables
 app.get("/test-env", (c) => {
   return c.json({
@@ -177,6 +183,50 @@ app.get("/test-env", (c) => {
     COUCH_WEBHOOK_SECRET: c.env.COUCH_WEBHOOK_SECRET ? "SET" : "NOT SET",
     STORE: c.env.STORE ? "SET" : "NOT SET",
   })
+})
+
+// Also try with simpler name
+app.post("/activate", async (c) => {
+  console.log("POST /activate called!")
+
+  if (!c.env.COUCH_API_URL || !c.env.COUCH_API_KEY) {
+    return c.json(
+      {
+        error: "Environment variables not configured",
+        COUCH_API_URL: c.env.COUCH_API_URL ? "SET" : "NOT SET",
+        COUCH_API_KEY: c.env.COUCH_API_KEY ? "SET" : "NOT SET",
+      },
+      500,
+    )
+  }
+
+  const baseUrl = c.env.COUCH_API_URL.replace(/\/+$/, "")
+  const targetUrl = `${baseUrl}/api/subscriptions`
+
+  console.log("Proxying to backend:", targetUrl)
+
+  try {
+    const body = await c.req.text()
+    const response = await fetch(targetUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${c.env.COUCH_API_KEY}`,
+      },
+      body: body,
+    })
+
+    const responseBody = await response.text()
+    console.log("Backend response status:", response.status)
+
+    return new Response(responseBody, {
+      status: response.status,
+      headers: { "Content-Type": "application/json" },
+    })
+  } catch (error) {
+    console.error("Proxy error:", error)
+    return c.json({ error: "Proxy failed", details: String(error) }, 500)
+  }
 })
 
 // Proxy endpoint - using single-segment route since nested paths don't work
