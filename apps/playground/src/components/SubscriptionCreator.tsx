@@ -65,7 +65,7 @@ export function SubscriptionCreator() {
       console.log("Subscription created onchain:", subscription)
 
       // Use service binding through our /activate endpoint (RPC-style)
-      const response = await fetch('/activate', {
+      const response = await fetch("/activate", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

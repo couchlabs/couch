@@ -95,7 +95,6 @@ app.post("/api/webhook", async (c) => {
   return c.text("", 200)
 })
 
-
 // Test simple async route without DO
 app.get("/test-async", async (c) => {
   await new Promise((resolve) => setTimeout(resolve, 10))
@@ -125,14 +124,17 @@ app.post("/activate", async (c) => {
     const body = await c.req.text()
 
     // Use service binding for RPC-style call
-    const response = await c.env.BACKEND_API.fetch("https://backend/api/subscriptions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${c.env.COUCH_API_KEY}`,
+    const response = await c.env.BACKEND_API.fetch(
+      "https://backend/api/subscriptions",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${c.env.COUCH_API_KEY}`,
+        },
+        body: body,
       },
-      body: body,
-    })
+    )
     const responseBody = await response.text()
 
     console.log("Backend response status:", response.status)
@@ -143,10 +145,12 @@ app.post("/activate", async (c) => {
     })
   } catch (error) {
     console.error("Service binding error:", error)
-    return c.json({ error: "Service binding failed", details: String(error) }, 500)
+    return c.json(
+      { error: "Service binding failed", details: String(error) },
+      500,
+    )
   }
 })
-
 
 export default app
 
