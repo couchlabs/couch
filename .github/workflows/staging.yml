@@ -1,4 +1,4 @@
-name: Staging
+name: CI - Staging
 
 on:
   push:
@@ -84,7 +84,7 @@ jobs:
       - name: "Deploy backend"
         id: backend
         run: bun run infra:deploy --filter=backend
-        # Note: api_url output is set by @actions/core in alchemy.run.ts
+        # Note: api_url output is set in alchemy.run.ts
         env:
           STAGE: ${{ env.STAGE }}
           ALCHEMY_PASSWORD: ${{ secrets.ALCHEMY_PASSWORD }}
