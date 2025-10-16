@@ -95,73 +95,6 @@ app.post("/api/webhook", async (c) => {
   return c.text("", 200)
 })
 
-// Helper function to handle proxy requests
-async function handleProxy(c: any) {
-  const path = c.req.path.replace(/^\/proxy\//, "")
-  const clientIp =
-    c.req.header("CF-Connecting-IP") ||
-    c.req.header("X-Forwarded-For") ||
-    c.req.header("X-Real-IP") ||
-    "127.0.0.1"
-
-  // API endpoints: append path to base URL
-  const baseUrl = c.env.COUCH_API_URL?.replace(/\/+$/, "") || ""
-  const targetUrl = `${baseUrl}/${path}`
-
-  console.log("Proxy request debug:", {
-    COUCH_API_URL: c.env.COUCH_API_URL,
-    COUCH_API_KEY: c.env.COUCH_API_KEY ? "SET" : "NOT SET",
-    path: path,
-    baseUrl: baseUrl,
-    targetUrl: targetUrl,
-    method: c.req.method,
-  })
-
-  // Check if env vars are properly set
-  if (!c.env.COUCH_API_URL) {
-    return c.json({ error: "COUCH_API_URL not configured" }, 500)
-  }
-  if (!c.env.COUCH_API_KEY) {
-    return c.json({ error: "COUCH_API_KEY not configured" }, 500)
-  }
-
-  try {
-    // Try using fetch instead of proxy to test
-    const requestHeaders = c.req.header()
-    const response = await fetch(targetUrl, {
-      method: c.req.method,
-      headers: {
-        ...requestHeaders,
-        "X-Forwarded-For": clientIp,
-        "X-Forwarded-Host": c.req.header("host") || "",
-        Authorization: `Bearer ${c.env.COUCH_API_KEY}`,
-      },
-      body:
-        c.req.method !== "GET" && c.req.method !== "HEAD"
-          ? await c.req.text()
-          : undefined,
-    })
-
-    const responseBody = await response.text()
-    const responseHeaders: Record<string, string> = {}
-    response.headers.forEach((value, key) => {
-      responseHeaders[key] = value
-    })
-    return new Response(responseBody, {
-      status: response.status,
-      headers: responseHeaders,
-    })
-  } catch (error) {
-    console.error("Proxy error:", error)
-    return c.json(
-      {
-        error: "Proxy failed",
-        details: error instanceof Error ? error.message : String(error),
-      },
-      500,
-    )
-  }
-}
 
 // Test simple async route without DO
 app.get("/test-async", async (c) => {
@@ -169,15 +102,10 @@ app.get("/test-async", async (c) => {
   return c.json({ message: "Async works!" })
 })
 
-// Test simple POST
-app.post("/test-post", async (c) => {
-  const body = await c.req.text()
-  return c.json({ message: "POST works!", received: body })
-})
-
 // Test env variables
 app.get("/test-env", (c) => {
   return c.json({
+    BACKEND_API: c.env.BACKEND_API ? "SET" : "NOT SET",
     COUCH_API_URL: c.env.COUCH_API_URL ? "SET" : "NOT SET",
     COUCH_API_KEY: c.env.COUCH_API_KEY ? "SET" : "NOT SET",
     COUCH_WEBHOOK_SECRET: c.env.COUCH_WEBHOOK_SECRET ? "SET" : "NOT SET",
@@ -185,29 +113,19 @@ app.get("/test-env", (c) => {
   })
 })
 
-// Also try with simpler name
+// RPC-style backend API call using service binding
 app.post("/activate", async (c) => {
-  console.log("POST /activate called!")
+  console.log("POST /activate called - using service binding!")
 
-  if (!c.env.COUCH_API_URL || !c.env.COUCH_API_KEY) {
-    return c.json(
-      {
-        error: "Environment variables not configured",
-        COUCH_API_URL: c.env.COUCH_API_URL ? "SET" : "NOT SET",
-        COUCH_API_KEY: c.env.COUCH_API_KEY ? "SET" : "NOT SET",
-      },
-      500,
-    )
+  if (!c.env.BACKEND_API) {
+    return c.json({ error: "Backend API binding not configured" }, 500)
   }
-
-  const baseUrl = c.env.COUCH_API_URL.replace(/\/+$/, "")
-  const targetUrl = `${baseUrl}/api/subscriptions`
-
-  console.log("Proxying to backend:", targetUrl)
 
   try {
     const body = await c.req.text()
-    const response = await fetch(targetUrl, {
+
+    // Use service binding for RPC-style call
+    const response = await c.env.BACKEND_API.fetch("https://backend/api/subscriptions", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -215,8 +133,8 @@ app.post("/activate", async (c) => {
       },
       body: body,
     })
-
     const responseBody = await response.text()
+
     console.log("Backend response status:", response.status)
 
     return new Response(responseBody, {
@@ -224,76 +142,11 @@ app.post("/activate", async (c) => {
       headers: { "Content-Type": "application/json" },
     })
   } catch (error) {
-    console.error("Proxy error:", error)
-    return c.json({ error: "Proxy failed", details: String(error) }, 500)
+    console.error("Service binding error:", error)
+    return c.json({ error: "Service binding failed", details: String(error) }, 500)
   }
 })
 
-// Proxy endpoint - using single-segment route since nested paths don't work
-app.post("/backend-subscriptions", async (c) => {
-  console.log("POST /backend-subscriptions called!")
-
-  // Return early with env check
-  if (!c.env.COUCH_API_URL || !c.env.COUCH_API_KEY) {
-    return c.json(
-      {
-        error: "Environment variables not configured",
-        COUCH_API_URL: c.env.COUCH_API_URL ? "SET" : "NOT SET",
-        COUCH_API_KEY: c.env.COUCH_API_KEY ? "SET" : "NOT SET",
-      },
-      500,
-    )
-  }
-
-  // Construct backend URL
-  const baseUrl = c.env.COUCH_API_URL.replace(/\/+$/, "")
-  const targetUrl = `${baseUrl}/api/subscriptions`
-
-  console.log("Proxying to backend:", targetUrl)
-
-  try {
-    const body = await c.req.text()
-    const response = await fetch(targetUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${c.env.COUCH_API_KEY}`,
-      },
-      body: body,
-    })
-
-    const responseBody = await response.text()
-    console.log("Backend response status:", response.status)
-
-    return new Response(responseBody, {
-      status: response.status,
-      headers: { "Content-Type": "application/json" },
-    })
-  } catch (error) {
-    console.error("Proxy error:", error)
-    return c.json({ error: "Proxy failed", details: String(error) }, 500)
-  }
-})
-
-// Also add GET endpoint for health check testing
-app.get("/backend-health", async (c) => {
-  if (!c.env.COUCH_API_URL) {
-    return c.json({ error: "COUCH_API_URL not configured" }, 500)
-  }
-
-  const targetUrl = `${c.env.COUCH_API_URL.replace(/\/+$/, "")}/api/health`
-
-  try {
-    const response = await fetch(targetUrl)
-    const data = await response.text()
-    return new Response(data, {
-      status: response.status,
-      headers: { "Content-Type": "application/json" },
-    })
-  } catch (error) {
-    return c.json({ error: "Health check failed", details: String(error) }, 500)
-  }
-})
 
 export default app
 

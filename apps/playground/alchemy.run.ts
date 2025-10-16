@@ -62,6 +62,7 @@ export const website = await Vite(WEBSITE_NAME, {
     COUCH_WEBHOOK_SECRET: alchemy.secret.env.COUCH_WEBHOOK_SECRET,
     COUCH_API_KEY: alchemy.secret.env.COUCH_API_KEY,
     COUCH_API_URL: api.url,
+    BACKEND_API: api, // Service binding for RPC-style calls
     STORE: DurableObjectNamespace<Store>("playground-store", {
       className: "Store",
     }),

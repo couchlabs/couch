@@ -64,8 +64,8 @@ export function SubscriptionCreator() {
 
       console.log("Subscription created onchain:", subscription)
 
-      // Activate subscription via backend (using single-segment route)
-      const response = await fetch("/backend-subscriptions", {
+      // Use service binding through our /activate endpoint (RPC-style)
+      const response = await fetch('/activate', {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

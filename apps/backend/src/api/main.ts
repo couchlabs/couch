@@ -11,7 +11,7 @@ import type { WorkerEnv } from "@/types/api.env"
 
 const app = new Hono<{ Bindings: WorkerEnv }>().basePath("/api")
 
-// CORS middleware
+// CORS middleware - only needed for external clients, not service bindings
 app.use(cors())
 
 // Error handler middleware
