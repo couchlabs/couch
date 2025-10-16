@@ -109,15 +109,28 @@ app.all("/proxy/*", async (c) => {
   const baseUrl = c.env.COUCH_API_URL.replace(/\/+$/, "")
   const targetUrl = `${baseUrl}/${path}`
 
-  return proxy(targetUrl, {
-    ...c.req,
-    headers: {
-      ...c.req.header(),
-      "X-Forwarded-For": clientIp,
-      "X-Forwarded-Host": c.req.header("host"),
-      Authorization: `Bearer ${c.env.COUCH_API_KEY}`,
-    },
+  console.log("Proxy request debug:", {
+    COUCH_API_URL: c.env.COUCH_API_URL,
+    path: path,
+    baseUrl: baseUrl,
+    targetUrl: targetUrl,
+    method: c.req.method,
   })
+
+  try {
+    return proxy(targetUrl, {
+      ...c.req,
+      headers: {
+        ...c.req.header(),
+        "X-Forwarded-For": clientIp,
+        "X-Forwarded-Host": c.req.header("host"),
+        Authorization: `Bearer ${c.env.COUCH_API_KEY}`,
+      },
+    })
+  } catch (error) {
+    console.error("Proxy error:", error)
+    throw error
+  }
 })
 
 export default app
