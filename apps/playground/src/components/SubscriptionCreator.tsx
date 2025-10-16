@@ -64,6 +64,15 @@ export function SubscriptionCreator() {
 
       console.log("Subscription created onchain:", subscription)
 
+      // Test simpler route first
+      console.log("Testing proxy-subscriptions route...")
+      const testResponse = await fetch("/proxy-subscriptions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ test: "data" }),
+      })
+      console.log("Test response status:", testResponse.status)
+
       // Activate subscription via backend
       const response = await fetch("/proxy/api/subscriptions", {
         method: "POST",
