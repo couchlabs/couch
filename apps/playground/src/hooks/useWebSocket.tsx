@@ -41,7 +41,6 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
       ws.current = new WebSocket(`${protocol}//${host}/ws`)
 
       ws.current.onopen = () => {
-        console.log("WebSocket connected")
         setIsConnected(true)
 
         // Start ping/pong heartbeat
@@ -55,7 +54,6 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
       ws.current.onmessage = (event) => {
         try {
           const message = JSON.parse(event.data) as WebSocketMessage
-          console.log("WebSocket message:", message)
           setLastMessage(message)
         } catch (error) {
           console.error("Failed to parse WebSocket message:", error)
@@ -63,7 +61,6 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
       }
 
       ws.current.onclose = () => {
-        console.log("WebSocket disconnected")
         setIsConnected(false)
 
         // Clear ping interval
@@ -73,7 +70,6 @@ export function WebSocketProvider({ children }: { children: ReactNode }) {
 
         // Attempt to reconnect after 2 seconds
         reconnectTimeout.current = setTimeout(() => {
-          console.log("Attempting to reconnect WebSocket...")
           connect()
         }, 2000)
       }
