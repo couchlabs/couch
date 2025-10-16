@@ -3,7 +3,7 @@ import * as schema from "@database/schema"
 import { eq } from "drizzle-orm"
 import { drizzle } from "drizzle-orm/d1"
 import { type Address, getAddress } from "viem"
-import { Stage } from "@/constants/env.constants"
+import type { LoggingLevel } from "@/constants/env.constants"
 import { DrizzleLogger } from "@/lib/logger"
 
 // Re-export schema type
@@ -12,7 +12,7 @@ export type Account = schema.Account
 // Custom parameter types
 export interface AccountRepositoryDeps {
   DB: D1Database
-  STAGE: Stage
+  LOGGING: LoggingLevel
 }
 
 export interface CreateAccountParams {
@@ -35,7 +35,7 @@ export class AccountRepository {
     this.db = drizzle(deps.DB, {
       schema,
       logger:
-        deps.STAGE === Stage.DEV || deps.STAGE === Stage.STAGING
+        deps.LOGGING === "verbose"
           ? new DrizzleLogger("account.repository")
           : undefined,
     })

@@ -1,6 +1,7 @@
 import type { WebhookQueueMessage } from "@alchemy.run"
-import type { Queue } from "@cloudflare/workers-types"
+import type { D1Database, Queue } from "@cloudflare/workers-types"
 import type { Address, Hash } from "viem"
+import type { LoggingLevel } from "@/constants/env.constants"
 import {
   OrderType,
   SubscriptionStatus,
@@ -10,6 +11,12 @@ import { getErrorMessage, isExposableError } from "@/errors/subscription.errors"
 import { createLogger } from "@/lib/logger"
 import { WebhookRepository } from "@/repositories/webhook.repository"
 import type { ActivationResult } from "@/services/subscription.service"
+
+export interface WebhookServiceDeps {
+  DB: D1Database
+  LOGGING: LoggingLevel
+  WEBHOOK_QUEUE: Queue<WebhookQueueMessage>
+}
 
 /**
  * Webhook event types for v1
@@ -120,9 +127,23 @@ export class WebhookService {
   private webhookRepository: WebhookRepository
   private webhookQueue: Queue<WebhookQueueMessage>
 
-  constructor(env) {
+  constructor(env: WebhookServiceDeps) {
     this.webhookRepository = new WebhookRepository(env)
     this.webhookQueue = env.WEBHOOK_QUEUE
+  }
+
+  /**
+   * Create WebhookService with injected dependencies for testing
+   * Allows mocking repositories and queue without touching production constructor
+   */
+  static createForTesting(deps: {
+    webhookRepository: WebhookRepository
+    webhookQueue: Queue<WebhookQueueMessage>
+  }): WebhookService {
+    const service = Object.create(WebhookService.prototype)
+    service.webhookRepository = deps.webhookRepository
+    service.webhookQueue = deps.webhookQueue
+    return service
   }
 
   /**

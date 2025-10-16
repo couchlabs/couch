@@ -1,8 +1,8 @@
 import { Hono } from "hono"
 import { cors } from "hono/cors"
-import { proxy } from "hono/proxy"
 import type { WorkerEnv } from "../../types/env"
 
+export { Store } from "../store/do.store"
 export const app = new Hono<{ Bindings: WorkerEnv }>()
 
 app.use(cors())
@@ -25,36 +25,30 @@ app.onError((err, c) => {
 
 // Get all subscriptions
 app.get("/api/subscriptions", async (c) => {
-  const result = await c.env.DB.prepare(
-    "SELECT * FROM subscriptions ORDER BY created_at DESC",
-  ).all()
-  return c.json(result.results || [])
+  const store = c.env.STORE.get(c.env.STORE.idFromName("global"))
+  const subscriptions = await store.getSubscriptions()
+  return c.json(subscriptions)
 })
 
 // Get single subscription
 app.get("/api/subscriptions/:id", async (c) => {
   const id = c.req.param("id")
-  const result = await c.env.DB.prepare(
-    "SELECT * FROM subscriptions WHERE id = ?",
-  )
-    .bind(id)
-    .first()
+  const store = c.env.STORE.get(c.env.STORE.idFromName("global"))
+  const subscription = await store.getSubscription(id)
 
-  if (!result) {
+  if (!subscription) {
     return c.json({ error: "Subscription not found" }, 404)
   }
-  return c.json(result)
+
+  return c.json(subscription)
 })
 
 // Get webhook events for a subscription
 app.get("/api/subscriptions/:id/events", async (c) => {
   const id = c.req.param("id")
-  const result = await c.env.DB.prepare(
-    "SELECT * FROM webhook_events WHERE subscription_id = ? ORDER BY created_at DESC",
-  )
-    .bind(id)
-    .all()
-  return c.json(result.results || [])
+  const store = c.env.STORE.get(c.env.STORE.idFromName("global"))
+  const events = await store.getWebhookEvents(id)
+  return c.json(events)
 })
 
 app.post("/api/webhook", async (c) => {
@@ -70,74 +64,107 @@ app.post("/api/webhook", async (c) => {
 
   // Process the event
   if (event.type !== "subscription.updated") {
-    console.log("Unknown event type:", event.type)
+    // Unknown event type - might add more event types in the future
   }
-  console.log(JSON.stringify(event, null, 2))
 
-  // Save to database
+  // Save to Durable Object store
   const subscriptionId = event.data.subscription.id
   const status = event.data.subscription.status
   const amount = event.data.subscription.amount
   const periodInSeconds = event.data.subscription.period_in_seconds
 
+  const store = c.env.STORE.get(c.env.STORE.idFromName("global"))
+
   // Upsert subscription
-  // Only set transaction_hash, amount, and period_in_seconds on INSERT (initial order), never update them
-  await c.env.DB.prepare(
-    `INSERT INTO subscriptions (id, status, transaction_hash, amount, period_in_seconds, created_at, updated_at)
-     VALUES (?, ?, ?, ?, ?, datetime('now'), datetime('now'))
-     ON CONFLICT(id) DO UPDATE SET
-       status = excluded.status,
-       updated_at = datetime('now')`,
-  )
-    .bind(
-      subscriptionId,
-      status,
-      event.data.transaction?.hash || null,
-      amount,
-      periodInSeconds,
-    )
-    .run()
+  await store.upsertSubscription({
+    id: subscriptionId,
+    status,
+    transaction_hash: event.data.transaction?.hash,
+    amount,
+    period_in_seconds: periodInSeconds,
+  })
 
   // Insert webhook event
-  await c.env.DB.prepare(
-    `INSERT INTO webhook_events (subscription_id, event_type, event_data, created_at)
-     VALUES (?, ?, ?, datetime('now'))`,
-  )
-    .bind(subscriptionId, event.type, body)
-    .run()
+  await store.addWebhookEvent({
+    subscription_id: subscriptionId,
+    event_type: event.type,
+    event_data: body,
+  })
 
   return c.text("", 200)
 })
 
-// Proxy with Authorization header injection and scheduler routing
-app.all("/proxy/*", async (c) => {
-  let path = c.req.path.replace(/^\/proxy\//, "")
-  const clientIp =
-    c.req.header("CF-Connecting-IP") ||
-    c.req.header("X-Forwarded-For") ||
-    c.req.header("X-Real-IP") ||
-    "127.0.0.1"
+// WebSocket endpoint for real-time updates
+app.get("/ws", async (c) => {
+  // Get the Durable Object stub
+  const store = c.env.STORE.get(c.env.STORE.idFromName("global"))
 
-  let baseUrl = c.env.COUCH_API_URL.replace(/\/+$/, "")
+  // Forward the WebSocket upgrade request to the DO
+  const response = await store.fetch(c.req.url, {
+    headers: c.req.raw.headers,
+  })
 
-  // Route scheduler endpoints to appropriate ports
-  if (path === "scheduled/order") {
-    baseUrl = baseUrl.replace(":3000", ":3100") // order-scheduler
-    path = "__scheduled"
-  } else if (path === "scheduled/dunning") {
-    baseUrl = baseUrl.replace(":3000", ":3101") // dunning-scheduler
-    path = "__scheduled"
+  // Return the Cloudflare Response directly (includes webSocket property)
+  return response as any
+})
+
+// Health check endpoint - useful for monitoring service binding
+app.get("/test-binding", async (c) => {
+  if (!c.env.BACKEND_API) {
+    return c.json({ error: "Backend API binding not configured" }, 500)
   }
 
-  return proxy(`${baseUrl}/${path}`, {
-    ...c.req,
-    headers: {
-      ...c.req.header(),
-      "X-Forwarded-For": clientIp,
-      "X-Forwarded-Host": c.req.header("host"),
-      Authorization: `Bearer ${c.env.COUCH_API_KEY}`,
-    },
-  })
+  try {
+    const response = await c.env.BACKEND_API.fetch("https://backend/api/health")
+    const data = await response.json()
+    return c.json({
+      success: true,
+      backend_status: response.status,
+      backend_data: data,
+    })
+  } catch (error) {
+    return c.json({
+      success: false,
+      error: error instanceof Error ? error.message : String(error),
+    })
+  }
+})
+
+// RPC-style backend API call using service binding
+app.post("/activate", async (c) => {
+  if (!c.env.BACKEND_API) {
+    return c.json({ error: "Backend API binding not configured" }, 500)
+  }
+
+  try {
+    const body = await c.req.text()
+
+    // Use service binding for RPC-style call
+    const headers = new Headers(c.req.header())
+    headers.set("Authorization", `Bearer ${c.env.COUCH_API_KEY}`)
+
+    const response = await c.env.BACKEND_API.fetch(
+      "https://backend/api/subscriptions",
+      {
+        method: "POST",
+        headers: headers,
+        body: body,
+      },
+    )
+    const responseBody = await response.text()
+
+    return new Response(responseBody, {
+      status: response.status,
+      headers: { "Content-Type": "application/json" },
+    })
+  } catch (error) {
+    console.error("Service binding error:", error)
+    const errorMessage = error instanceof Error ? error.message : String(error)
+    return c.json(
+      { error: "Service binding failed", message: errorMessage },
+      500,
+    )
+  }
 })
 
 export default app

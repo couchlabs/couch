@@ -6,8 +6,21 @@ import type { Provider } from "@/providers/provider.interface"
 import {
   type ChargeResult,
   OnchainRepository,
+  type OnchainRepositoryDeps,
 } from "@/repositories/onchain.repository"
-import { SubscriptionRepository } from "@/repositories/subscription.repository"
+import {
+  SubscriptionRepository,
+  type SubscriptionRepositoryDeps,
+} from "@/repositories/subscription.repository"
+import type { WorkerEnv } from "@/types/api.env"
+
+// Define the minimal dependencies needed by SubscriptionService
+// This service needs all repository deps + ORDER_SCHEDULER for scheduling
+// Pick ORDER_SCHEDULER from WorkerEnv to get the exact Alchemy-generated type
+export interface SubscriptionServiceDeps
+  extends SubscriptionRepositoryDeps,
+    OnchainRepositoryDeps,
+    Pick<WorkerEnv, "ORDER_SCHEDULER"> {}
 
 export interface ValidateSubscriptionIdParams {
   subscriptionId: Hash
@@ -39,7 +52,8 @@ export interface ProcessActivationChargeParams {
 
 export interface ActivationResult {
   subscriptionId: Hash
-  accountAddress: Address // Include this in the result
+  accountAddress: Address
+  providerId: Provider
   transaction: {
     hash: Hash
     amount: string
@@ -62,10 +76,26 @@ const logger = createLogger("subscription.service")
 export class SubscriptionService {
   private subscriptionRepository: SubscriptionRepository
   private onchainRepository: OnchainRepository
+  private deps: SubscriptionServiceDeps
 
-  constructor(env) {
-    this.subscriptionRepository = new SubscriptionRepository(env)
-    this.onchainRepository = new OnchainRepository(env)
+  constructor(deps: SubscriptionServiceDeps) {
+    this.deps = deps
+    this.subscriptionRepository = new SubscriptionRepository(deps)
+    this.onchainRepository = new OnchainRepository(deps)
+  }
+
+  /**
+   * Create SubscriptionService with injected dependencies for testing
+   * Allows mocking repositories without touching production constructor
+   */
+  static createForTesting(deps: {
+    subscriptionRepository: SubscriptionRepository
+    onchainRepository: OnchainRepository
+  }): SubscriptionService {
+    const service = Object.create(SubscriptionService.prototype)
+    service.subscriptionRepository = deps.subscriptionRepository
+    service.onchainRepository = deps.onchainRepository
+    return service
   }
 
   /**
@@ -74,30 +104,55 @@ export class SubscriptionService {
    * Errors are logged but not thrown since this runs in background.
    */
   async completeActivation(result: ActivationResult): Promise<void> {
+    const { subscriptionId, providerId, transaction, order, nextOrder } = result
+
     const log = logger.with({
-      subscriptionId: result.subscriptionId,
-      transactionHash: result.transaction.hash,
+      subscriptionId,
+      transactionHash: transaction.hash,
     })
 
     try {
       log.info("Completing subscription activation in background")
 
-      await this.subscriptionRepository.executeSubscriptionActivation({
-        subscriptionId: result.subscriptionId,
-        order: result.order,
-        transaction: result.transaction,
-        nextOrder: {
-          dueAt: result.nextOrder.date,
-          amount: result.nextOrder.amount,
-          periodInSeconds: result.nextOrder.periodInSeconds,
-        },
+      const { nextOrderId } =
+        await this.subscriptionRepository.executeSubscriptionActivation({
+          subscriptionId,
+          order,
+          transaction,
+          nextOrder: {
+            dueAt: nextOrder.date,
+            amount: nextOrder.amount,
+            periodInSeconds: nextOrder.periodInSeconds,
+          },
+        })
+
+      log.info("Scheduling next order via Durable Object", {
+        nextOrderId,
+        dueAt: nextOrder.date,
+        providerId,
       })
 
-      log.info("Background subscription activation completed")
+      const scheduler = this.deps.ORDER_SCHEDULER.get(
+        this.deps.ORDER_SCHEDULER.idFromName(String(nextOrderId)),
+      )
+
+      await scheduler.set({
+        orderId: nextOrderId,
+        dueAt: new Date(nextOrder.date),
+        providerId,
+      })
+
+      log.info("Background subscription activation completed", {
+        nextOrderId,
+        scheduledFor: nextOrder.date,
+      })
     } catch (error) {
       // Log but don't throw - this is background processing
       // TODO: A reconciler should handle incomplete activations
-      log.error("Background subscription activation failed", error)
+      log.error("Background subscription activation failed", {
+        error: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      })
     }
   }
 
@@ -168,6 +223,17 @@ export class SubscriptionService {
       },
     )
 
+    // Check if permission exists in indexer
+    if (!subscription.permissionExists) {
+      throw new HTTPError(
+        404,
+        ErrorCode.PERMISSION_NOT_FOUND,
+        "Subscription permission not found onchain",
+        { subscriptionId },
+      )
+    }
+
+    // Check if subscription is active
     if (!subscription.isSubscribed) {
       throw new HTTPError(
         403,
@@ -177,31 +243,9 @@ export class SubscriptionService {
       )
     }
 
-    // Validate all required fields are present
-    if (!subscription.remainingChargeInPeriod) {
-      logger.error("Missing remaining charge in period", { subscriptionId })
-      throw new Error(
-        "Invalid subscription configuration: missing remainingChargeInPeriod",
-      )
-    }
-
-    if (!subscription.recurringCharge) {
-      logger.error("Missing recurring charge", { subscriptionId })
-      throw new Error(
-        "Invalid subscription configuration: missing recurringCharge",
-      )
-    }
-
-    if (!subscription.periodInSeconds) {
-      logger.error("Missing period in seconds", { subscriptionId })
-      throw new Error(
-        "Invalid subscription configuration: missing periodInSeconds",
-      )
-    }
-
     // Create subscription and initial order in DB
     log.info("Creating subscription and order")
-    const { created, orderId, orderNumber } =
+    const result =
       await this.subscriptionRepository.createSubscriptionWithOrder({
         subscriptionId,
         ownerAddress: subscription.subscriptionOwner,
@@ -217,7 +261,7 @@ export class SubscriptionService {
         },
       })
 
-    if (!created || !orderId || !orderNumber) {
+    if (!result.created) {
       throw new HTTPError(
         409,
         ErrorCode.SUBSCRIPTION_EXISTS,
@@ -227,8 +271,8 @@ export class SubscriptionService {
     }
 
     return {
-      orderId,
-      orderNumber,
+      orderId: result.orderId,
+      orderNumber: result.orderNumber,
       subscriptionMetadata: {
         amount: String(subscription.recurringCharge),
         periodInSeconds: subscription.periodInSeconds,
@@ -257,39 +301,21 @@ export class SubscriptionService {
       },
     )
 
-    // Validate required fields are present
-    if (!subscription.remainingChargeInPeriod) {
-      logger.error("Missing remaining charge in period", { subscriptionId })
-      throw new Error(
-        "Invalid subscription configuration: missing remainingChargeInPeriod",
+    // Validate permission exists
+    if (!subscription.permissionExists) {
+      throw new HTTPError(
+        404,
+        ErrorCode.PERMISSION_NOT_FOUND,
+        "Subscription permission not found onchain",
+        { subscriptionId },
       )
     }
 
-    if (!subscription.periodInSeconds) {
-      logger.error("Missing period in seconds", { subscriptionId })
-      throw new Error(
-        "Invalid subscription configuration: missing periodInSeconds",
-      )
-    }
-
-    if (!subscription.currentPeriodStart) {
-      logger.error("Missing current period start", { subscriptionId })
-      throw new Error(
-        "Invalid subscription configuration: missing currentPeriodStart",
-      )
-    }
-
+    // Validate nextPeriodStart exists (required for scheduling next charge)
     if (!subscription.nextPeriodStart) {
       logger.error("Missing next period start", { subscriptionId })
       throw new Error(
         "Invalid subscription configuration: missing nextPeriodStart",
-      )
-    }
-
-    if (!subscription.recurringCharge) {
-      logger.error("Missing recurring charge", { subscriptionId })
-      throw new Error(
-        "Invalid subscription configuration: missing recurringCharge",
       )
     }
 
@@ -332,6 +358,7 @@ export class SubscriptionService {
     return {
       subscriptionId,
       accountAddress,
+      providerId,
       transaction: {
         hash: transaction.transactionHash,
         amount: subscription.remainingChargeInPeriod,

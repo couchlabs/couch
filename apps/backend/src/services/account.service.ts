@@ -1,8 +1,11 @@
 import { type Address, getAddress, isAddress } from "viem"
-import type { Stage } from "@/constants/env.constants"
+import type { Network } from "@/constants/env.constants"
 import { ErrorCode, HTTPError } from "@/errors/http.errors"
 import { logger } from "@/lib/logger"
-import { AccountRepository } from "@/repositories/account.repository"
+import {
+  AccountRepository,
+  type AccountRepositoryDeps,
+} from "@/repositories/account.repository"
 
 export interface CreateOrRotateAccountParams {
   address: string
@@ -12,24 +15,28 @@ export interface AccountResult {
   apiKey: string
 }
 
+export interface AccountServiceDeps extends AccountRepositoryDeps {
+  NETWORK: Network
+}
+
 export class AccountService {
   private accountRepository: AccountRepository
-  private stage: Stage
+  private network: Network
 
-  constructor(env) {
+  constructor(env: AccountServiceDeps) {
     this.accountRepository = new AccountRepository(env)
-    this.stage = env.STAGE
+    this.network = env.NETWORK
   }
 
   /**
-   * Generates a new API key with stage-based prefix
+   * Generates a new API key with network-based prefix (ck_testnet_ or ck_mainnet_)
    * Returns both the full key and the hash of the secret part
    */
   private async generateApiKey(): Promise<{
     apiKey: string
     keyHash: string
   }> {
-    const prefix = `ck_${this.stage}_`
+    const prefix = `ck_${this.network}_`
     const secretPart = crypto.randomUUID().replace(/-/g, "")
     const apiKey = `${prefix}${secretPart}`
 

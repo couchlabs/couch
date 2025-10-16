@@ -1,14 +1,19 @@
 import path from "node:path"
-
 import alchemy from "alchemy"
-import { D1Database, Vite } from "alchemy/cloudflare"
-import { api, spenderSmartAccount } from "backend/alchemy"
+import { DurableObjectNamespace, Vite } from "alchemy/cloudflare"
+import { GitHubComment } from "alchemy/github"
+import { CloudflareStateStore } from "alchemy/state"
+import { api, app as backendApp, spenderSmartAccount } from "backend/alchemy"
+import { resolveStageConfig } from "@/constants/env.constants"
+import type { Store } from "@/store/do.store"
 
 // import { Stage } from "backend/constants"
 
 // =============================================================================
 // CONFIGURATION & CONVENTIONS
 // =============================================================================
+
+const CI = process.env.CI === "true" || process.env.GITHUB_ACTIONS === "true"
 
 /**
  * Resource Naming Convention: {app.name}-{scope.name}-{scope.stage}-{resource}
@@ -35,23 +40,12 @@ import { api, spenderSmartAccount } from "backend/alchemy"
 
 export const app = await alchemy("couch-playground", {
   password: process.env.ALCHEMY_PASSWORD,
+  stateStore: CI ? (scope) => new CloudflareStateStore(scope) : undefined,
 })
 const NAME_PREFIX = `${app.name}-${app.stage}`
 
-// -----------------------------------------------------------------------------
-// DATABASES
-// -----------------------------------------------------------------------------
-
-// playground-db: Main database for subscription and order data
-const DB_NAME = "playground-db"
-const db = await D1Database(DB_NAME, {
-  name: `${NAME_PREFIX}-${DB_NAME}`,
-  migrationsDir: path.join(import.meta.dirname, "migrations"),
-  primaryLocationHint: "wnam",
-  readReplication: {
-    mode: "auto",
-  },
-})
+// Cloudflare Worker Flags
+const compatibilityFlags = ["nodejs_compat", "disallow_importable_env"]
 
 // -----------------------------------------------------------------------------
 // Web App
@@ -63,23 +57,46 @@ const WEBSITE_NAME = "website"
 export const website = await Vite(WEBSITE_NAME, {
   name: `${NAME_PREFIX}-${WEBSITE_NAME}`,
   entrypoint: path.join(import.meta.dirname, "src", "api", "main.ts"),
-  dev: {
-    // Envs to bundle in frontend code.
-    // Need to be prefixed with `VITE_` to be included.
-    // Can be reach via `import.meta.env`
-    env: {
-      VITE_COUCH_SPENDER_ADDRESS: spenderSmartAccount.address,
-    },
-  },
+  dev: { env: { VITE_COUCH_SPENDER_ADDRESS: spenderSmartAccount.address } },
+  build: { env: { VITE_COUCH_SPENDER_ADDRESS: spenderSmartAccount.address } },
   // Envs exposed to worker only
   bindings: {
-    COUCH_WEBHOOK_SECRET: alchemy.secret(process.env.COUCH_WEBHOOK_SECRET),
-    COUCH_API_KEY: alchemy.secret(process.env.COUCH_API_KEY),
-    COUCH_API_URL: api.url,
-    DB: db,
+    COUCH_WEBHOOK_SECRET: alchemy.secret.env.COUCH_WEBHOOK_SECRET,
+    COUCH_API_KEY: alchemy.secret.env.COUCH_API_KEY,
+    BACKEND_API: api, // Service binding for RPC-style calls (includes api.url if needed)
+    STORE: DurableObjectNamespace<Store>("playground-store", {
+      className: "Store",
+    }),
   },
+  compatibilityFlags,
 })
 
-console.log({ [WEBSITE_NAME]: website })
+if (app.stage === "dev") {
+  console.log({ [WEBSITE_NAME]: website })
+}
+
+// =============================================================================
+// PR PREVIEW COMMENTS
+// =============================================================================
+
+if (process.env.PULL_REQUEST) {
+  const { NETWORK } = resolveStageConfig(backendApp.stage)
+
+  await GitHubComment("preview-comment", {
+    owner: "couchlabs",
+    repository: "couch",
+    issueNumber: Number(process.env.PULL_REQUEST),
+    body: `## 🛋️ Preview Deployed
+
+**Stage:** \`${app.stage}\`
+**Network:** ${NETWORK}
+
+👉 **[Playground](${website.url})**
+👉 **[Backend API](${api.url})**
+
+---
+<sub>🤖 Built from commit ${process.env.GITHUB_SHA?.slice(0, 7)} • This comment updates automatically with each push</sub>`,
+  })
+}
 
 await app.finalize()

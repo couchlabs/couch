@@ -30,6 +30,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip"
+import { useWebSocket } from "@/hooks/useWebSocket"
 import { getSubscription, getSubscriptionEvents } from "@/lib/api"
 import { formatPeriod } from "@/lib/formatPeriod"
 import type {
@@ -49,6 +50,7 @@ export function SubscriptionDetails({
   const [events, setEvents] = useState<WebhookEvent[]>([])
   const [expandedEvents, setExpandedEvents] = useState<Set<number>>(new Set())
   const [loading, setLoading] = useState(false)
+  const { lastMessage } = useWebSocket()
   const [onchainExpanded, setOnchainExpanded] = useState(false)
   const [onchainStatus, setOnchainStatus] = useState<{
     isSubscribed: boolean
@@ -63,6 +65,7 @@ export function SubscriptionDetails({
   const [revokeLoading, setRevokeLoading] = useState(false)
   const [copiedEventId, setCopiedEventId] = useState<number | null>(null)
 
+  // Fetch subscription details on mount or when ID changes
   useEffect(() => {
     if (!subscriptionId) {
       setSubscription(null)
@@ -72,7 +75,7 @@ export function SubscriptionDetails({
       return
     }
 
-    // Reset onchain state when switching subscriptions
+    // Reset state when switching subscriptions
     setOnchainExpanded(false)
     setOnchainStatus(null)
 
@@ -93,11 +96,36 @@ export function SubscriptionDetails({
     }
 
     fetchDetails()
-
-    // Poll for updates when a subscription is selected
-    const interval = setInterval(fetchDetails, 3000)
-    return () => clearInterval(interval)
   }, [subscriptionId])
+
+  // Handle real-time updates from WebSocket
+  useEffect(() => {
+    if (!lastMessage || !subscriptionId) return
+
+    // Update subscription when it changes
+    if (lastMessage.type === "subscription_update" && lastMessage.data) {
+      const updatedSub = lastMessage.data as Subscription
+      if (updatedSub.id === subscriptionId) {
+        setSubscription(updatedSub)
+      }
+    }
+
+    // Add new webhook events
+    if (lastMessage.type === "webhook_event" && lastMessage.data) {
+      const newEvent = lastMessage.data as WebhookEvent
+      if (newEvent.subscription_id === subscriptionId) {
+        setEvents((prev) => {
+          // Check if event already exists (by id)
+          const exists = prev.some((e) => e.id === newEvent.id)
+          if (!exists) {
+            // Add new event at the beginning (newest first)
+            return [newEvent, ...prev]
+          }
+          return prev
+        })
+      }
+    }
+  }, [lastMessage, subscriptionId])
 
   const toggleEventExpanded = (eventId: number) => {
     setExpandedEvents((prev) => {
@@ -159,15 +187,10 @@ export function SubscriptionDetails({
       const provider = sdk.getProvider()
 
       // Call requestRevoke with permission and provider
-      const result = await requestRevoke({
+      await requestRevoke({
         permission,
         provider,
       })
-      const hash =
-        typeof result === "string"
-          ? result
-          : (result as { hash?: string })?.hash || String(result)
-      console.log(`Permission revoked in transaction:`, hash)
 
       // Optimistically update state - revoke was successful
       setOnchainStatus({
@@ -480,13 +503,6 @@ export function SubscriptionDetails({
                             const timestamp = Number(
                               onchainStatus.nextPeriodStart,
                             )
-                            console.log(
-                              "Raw nextPeriodStart:",
-                              onchainStatus.nextPeriodStart,
-                              "as number:",
-                              timestamp,
-                            )
-                            // Try without multiplication first
                             return new Date(timestamp).toLocaleString()
                           })()}
                         </span>

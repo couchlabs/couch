@@ -7,6 +7,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card"
+import { useWebSocket } from "@/hooks/useWebSocket"
 import { getSubscriptions } from "@/lib/api"
 import { formatSubscriptionSummary } from "@/lib/formatPeriod"
 import type { Subscription } from "@/types/subscription"
@@ -22,7 +23,9 @@ export function SubscriptionsList({
 }: SubscriptionsListProps) {
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([])
   const [loading, setLoading] = useState(true)
+  const { lastMessage } = useWebSocket()
 
+  // Initial fetch on mount
   useEffect(() => {
     const fetchSubscriptions = async () => {
       try {
@@ -36,11 +39,29 @@ export function SubscriptionsList({
     }
 
     fetchSubscriptions()
-
-    // Poll for updates every 2 seconds
-    const interval = setInterval(fetchSubscriptions, 2000)
-    return () => clearInterval(interval)
   }, [])
+
+  // Handle real-time updates from WebSocket
+  useEffect(() => {
+    if (!lastMessage) return
+
+    if (lastMessage.type === "subscription_update" && lastMessage.data) {
+      const updatedSub = lastMessage.data as Subscription
+
+      setSubscriptions((prev) => {
+        // Check if subscription exists
+        const exists = prev.some((s) => s.id === updatedSub.id)
+
+        if (exists) {
+          // Update existing subscription
+          return prev.map((s) => (s.id === updatedSub.id ? updatedSub : s))
+        } else {
+          // Add new subscription at the beginning (newest first)
+          return [updatedSub, ...prev]
+        }
+      })
+    }
+  }, [lastMessage])
 
   const getStatusIcon = (
     status: Subscription["status"],

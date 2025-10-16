@@ -23,13 +23,18 @@ class Logger {
   }
 
   private log(level: LogLevel, message: string, data?: unknown) {
+    // Silence all logs in test environment
+    if (process.env.NODE_ENV === "test") {
+      return
+    }
+
     const timestamp = new Date().toISOString()
     const logEntry = {
       timestamp,
       level,
       message,
       ...this.context,
-      ...(data && { data }),
+      ...(data != null && { data }),
     }
 
     // In production, this could send to a logging service

@@ -6,20 +6,55 @@
       "persistent": true,
       "cache": false
     },
-    "destroy": {
+    "test": {
+      "cache": false
+    },
+    "test:unit": {
+      "cache": false
+    },
+    "//#lint": {
+      "cache": false
+    },
+    "//#format": {
+      "cache": false
+    },
+    "typecheck": {
+      "cache": false
+    },
+    "//#fix": {
       "cache": false
     },
     "db:generate": {
       "cache": false,
-      "dependsOn": [
-        "check"
+      "dependsOn": ["test"]
+    },
+    "infra:deploy": {
+      "cache": false,
+      "env": ["STAGE", "CI", "GITHUB_ACTIONS", "GITHUB_SHA", "PULL_REQUEST"],
+      "passThroughEnv": [
+        "ALCHEMY_PASSWORD",
+        "ALCHEMY_STATE_TOKEN",
+        "CLOUDFLARE_API_TOKEN",
+        "CLOUDFLARE_ACCOUNT_ID",
+        "CDP_API_KEY_ID",
+        "CDP_API_KEY_SECRET",
+        "CDP_WALLET_SECRET",
+        "CDP_CLIENT_API_KEY",
+        "COUCH_WEBHOOK_SECRET",
+        "COUCH_API_KEY",
+        "GITHUB_TOKEN",
+        "GITHUB_OUTPUT"
       ]
     },
-    "check": {
-      "cache": false
-    },
-    "check:fix": {
-      "cache": false
+    "infra:destroy": {
+      "cache": false,
+      "env": ["STAGE"],
+      "passThroughEnv": [
+        "ALCHEMY_PASSWORD",
+        "ALCHEMY_STATE_TOKEN",
+        "CLOUDFLARE_API_TOKEN",
+        "CLOUDFLARE_ACCOUNT_ID"
+      ]
     }
   }
 }

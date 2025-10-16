@@ -4,10 +4,11 @@
   "private": true,
   "scripts": {
     "dev": "alchemy dev --stage dev --adopt --app couch-backend",
-    "destroy": "alchemy destroy --app couch-backend",
+    "infra:deploy": "alchemy deploy --stage $STAGE --adopt --app couch-backend",
+    "infra:destroy": "alchemy destroy --stage $STAGE --app couch-backend",
     "db:generate": "drizzle-kit generate",
-    "check": "tsc --noEmit && biome check",
-    "check:fix": "bun check --write"
+    "test:unit": "bun test",
+    "typecheck": "tsc --noEmit"
   },
   "exports": {
     "./alchemy": {
@@ -27,11 +28,13 @@
     "drizzle-orm": "^0.44.6"
   },
   "devDependencies": {
-    "alchemy": "catalog:",
-    "typescript": "catalog:",
-    "miniflare": "catalog:cloudflare",
+    "@actions/core": "^1.11.1",
     "@cloudflare/workers-types": "catalog:cloudflare",
+    "@types/bun": "latest",
     "@types/node": "catalog:cloudflare",
-    "drizzle-kit": "^0.31.5"
+    "alchemy": "catalog:",
+    "drizzle-kit": "^0.31.5",
+    "miniflare": "catalog:cloudflare",
+    "typescript": "catalog:"
   }
 }

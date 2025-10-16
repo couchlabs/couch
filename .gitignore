@@ -1,6 +1,6 @@
 .alchemy/
 .turbo/
-.env
+.env*
 .DS_Store
 *.tsbuildinfo
 

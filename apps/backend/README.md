@@ -51,16 +51,12 @@ The backend starts with the following services:
 | Service | Port | Purpose |
 |---------|------|---------|
 | API Gateway | 3000 | HTTP API endpoints |
-| Order Scheduler | 3100 | Process due payments (cron: every 15 min)* |
-| Dunning Scheduler | 3101 | Process payment retries (cron: every hour)* |
 | Order Consumer | 3200 | Queue consumer for payment processing |
 | Webhook Delivery | 3201 | Queue consumer for webhook delivery |
 | Order DLQ Consumer | 3202 | Dead letter queue monitor for orders |
 | Webhook DLQ Consumer | 3203 | Dead letter queue monitor for webhooks |
 
-> **Note**: \*Cron triggers only run in production. Locally, use `GET http://localhost:3100/__scheduled` or `GET http://localhost:3101/__scheduled` to trigger manually, or use the playground app's Backend Settings dialog.
-
-> **Tip**: Run the playground app alongside (`bun run dev --filter=playground`) for a full testing environment with webhook visualization and scheduler controls.
+> **Tip**: Run the playground app alongside (`bun run dev --filter=playground`) for a full testing environment with webhook visualization.
 
 ## Architecture & Patterns
 
@@ -189,19 +185,22 @@ Asynchronous processing is handled via Cloudflare Queues with dedicated consumer
 - Log permanently failed messages
 - Alert on system errors
 
-### Schedulers
+### Order Scheduler (Durable Objects)
 
-Cron-triggered workers that query the database and enqueue work:
+Orders are scheduled using **Cloudflare Durable Objects with Alarms**:
 
-**Order Scheduler** (`schedulers/order-scheduler.ts`)
-- **Cron**: Every 15 minutes
-- **Purpose**: Find orders with `due_at <= now` and `status = pending`
-- **Action**: Push order IDs to `ORDER_QUEUE`
+**OrderScheduler** (`schedulers/order.scheduler.ts`)
+- **Pattern**: One Durable Object instance per order (identified by `orderId`)
+- **Storage**: Minimal metadata (order_id, provider_id, scheduled_for, idempotency flag)
+- **Alarm**: Fires at order's `due_at` timestamp
+- **Action**: Sends order to `ORDER_QUEUE` for processing
+- **Reliability**: Cloudflare provides at-least-once delivery with automatic retries
 
-**Dunning Scheduler** (`schedulers/dunning-scheduler.ts`)
-- **Cron**: Every hour
-- **Purpose**: Find orders with `next_retry_at <= now` and `status = failed`
-- **Action**: Push order IDs to `ORDER_QUEUE` for retry
+**Key Features:**
+- **Precise timing**: Alarms fire at exact due time (no polling required)
+- **Idempotency**: Flag prevents double-charges if alarm retries
+- **Lifecycle**: Created when order is created, deleted when processed or failed
+- **RPC support**: Type-safe calls (set/update/delete/get) without JSON serialization
 
 ## Core Concepts
 
@@ -472,18 +471,8 @@ transactions       -- Blockchain transactions
 
 **3. Process recurring orders**
 
-5. Trigger order scheduler to process recurring payments via `http://localhost:3100/__scheduled`
-
-### DEV Endpoints
-
-- `GET http://localhost:3100/__scheduled` - Trigger order scheduler to process due recurring payments
-- `GET http://localhost:3101/__scheduled` - Trigger dunning scheduler to process payment retries
-
-**Playground App Proxy Routes** (with automatic auth injection):
-- `/proxy/scheduled/order` → Routes to order-scheduler (port 3100)
-- `/proxy/scheduled/dunning` → Routes to dunning-scheduler (port 3101)
-
-**Note**: The playground app includes a settings UI to manually or automatically trigger these schedulers
+5. Wait for order `due_at` time, or manually advance system time in tests
+6. The OrderScheduler Durable Object alarm will automatically fire and queue the order for processing
 
 ### Monitoring
 

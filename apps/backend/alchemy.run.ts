@@ -1,14 +1,24 @@
+import * as fs from "node:fs"
 import path from "node:path"
 import alchemy from "alchemy"
-import { D1Database, Queue, Worker } from "alchemy/cloudflare"
+import {
+  D1Database,
+  DurableObjectNamespace,
+  Queue,
+  Worker,
+} from "alchemy/cloudflare"
 import { EvmAccount, EvmSmartAccount } from "alchemy/coinbase"
-import type { Stage } from "@/constants/env.constants"
+import { CloudflareStateStore } from "alchemy/state"
+import { resolveStageConfig } from "@/constants/env.constants"
 import type { Provider } from "@/providers/provider.interface"
+import type { OrderScheduler } from "@/schedulers/order.scheduler"
 import drizzleConfig from "./drizzle.config"
 
 // =============================================================================
 // CONFIGURATION & CONVENTIONS
 // =============================================================================
+
+const CI = process.env.CI === "true" || process.env.GITHUB_ACTIONS === "true"
 
 /**
  * Resource Naming Convention: {app.name}-{scope.name}-{scope.stage}-{resource}
@@ -36,9 +46,13 @@ import drizzleConfig from "./drizzle.config"
 // =============================================================================
 
 export const app = await alchemy("couch-backend", {
-  password: process.env.ALCHEMY_PASSWORD,
+  password: alchemy.env.ALCHEMY_PASSWORD,
+  stateStore: CI ? (scope) => new CloudflareStateStore(scope) : undefined,
 })
 const NAME_PREFIX = `${app.name}-${app.stage}`
+const { NETWORK, LOGGING, DUNNING_MODE, WALLET_STAGE } = resolveStageConfig(
+  app.stage,
+)
 
 // =============================================================================
 // ONCHAIN RESOURCES (Coinbase)
@@ -53,15 +67,18 @@ const NAME_PREFIX = `${app.name}-${app.stage}`
  * Base Account SDK requires EOA and smart account to share the same CDP wallet identifier.
  * @see https://github.com/base-org/account-sdk/blob/main/packages/account-sdk/src/interface/payment/charge.ts#L114-120
  * EvmSmartAccount inherits its name from the owner account when the name property is omitted.
+ *
+ * Wallet Strategy (via WALLET_STAGE runtime config):
+ * - dev/preview: Share test wallet (couch-backend-dev-spender-evm)
+ * - sandbox: Dedicated test wallet (couch-backend-sandbox-spender-evm)
+ * - prod: Dedicated mainnet wallet (couch-backend-prod-spender-evm)
  */
 const SPENDER_ACCOUNT_NAME = "spender-evm"
 export const spenderSmartAccount = await EvmSmartAccount(SPENDER_ACCOUNT_NAME, {
   owner: await EvmAccount(`${SPENDER_ACCOUNT_NAME}-owner`, {
-    name: `${NAME_PREFIX}-${SPENDER_ACCOUNT_NAME}`, // CDP Identifier
+    name: `${app.name}-${WALLET_STAGE}-${SPENDER_ACCOUNT_NAME}`, // CDP Identifier
   }),
-  faucet: {
-    "base-sepolia": ["eth"],
-  },
+  faucet: NETWORK === "testnet" ? { "base-sepolia": ["eth"] } : undefined,
 })
 
 // =============================================================================
@@ -79,7 +96,8 @@ const compatibilityFlags = ["nodejs_compat", "disallow_importable_env"]
 const DB_NAME = "db"
 const db = await D1Database(DB_NAME, {
   name: `${NAME_PREFIX}-${DB_NAME}`,
-  migrationsDir: path.join(import.meta.dirname, drizzleConfig.out),
+  // biome-ignore lint/style/noNonNullAssertion: drizzleConfig.out defined in drizzle.config.ts
+  migrationsDir: path.join(import.meta.dirname, drizzleConfig.out!),
   migrationsTable: drizzleConfig.migrations?.table,
   primaryLocationHint: "wnam",
   readReplication: {
@@ -144,60 +162,24 @@ export const api = await Worker(API_NAME, {
     CDP_API_KEY_ID: alchemy.secret.env.CDP_API_KEY_ID,
     CDP_API_KEY_SECRET: alchemy.secret.env.CDP_API_KEY_SECRET,
     CDP_WALLET_SECRET: alchemy.secret.env.CDP_WALLET_SECRET,
-    CDP_PAYMASTER_URL: alchemy.env.CDP_PAYMASTER_URL,
+    CDP_CLIENT_API_KEY: alchemy.env.CDP_CLIENT_API_KEY,
     CDP_WALLET_NAME: spenderSmartAccount.name,
     CDP_SPENDER_ADDRESS: spenderSmartAccount.address,
-    STAGE: app.stage as Stage,
+    // STAGE CONFIGS:
+    NETWORK,
+    LOGGING,
+    DUNNING_MODE,
+    WALLET_STAGE,
     // RESOURCES:
     DB: db,
+    ORDER_QUEUE: orderQueue,
     WEBHOOK_QUEUE: webhookQueue,
+    ORDER_SCHEDULER: DurableObjectNamespace<OrderScheduler>("order-scheduler", {
+      className: "OrderScheduler",
+    }),
   },
   compatibilityFlags,
   dev: { port: 3000 },
-})
-
-// -----------------------------------------------------------------------------
-// SCHEDULERS
-// -----------------------------------------------------------------------------
-
-// order.scheduler: Schedules orders
-const ORDER_SCHEDULER_NAME = "order-scheduler"
-export const orderScheduler = await Worker(ORDER_SCHEDULER_NAME, {
-  name: `${NAME_PREFIX}-${ORDER_SCHEDULER_NAME}`,
-  entrypoint: path.join(
-    import.meta.dirname,
-    "src",
-    "schedulers",
-    "order-scheduler.ts",
-  ),
-  crons: ["*/15 * * * *"], // Run every 15 minutes
-  bindings: {
-    DB: db,
-    ORDER_QUEUE: orderQueue,
-    STAGE: app.stage as Stage,
-  },
-  compatibilityFlags,
-  dev: { port: 3100 },
-})
-
-// dunning.scheduler: Schedules payment retries for past_due subscriptions
-const DUNNING_SCHEDULER_NAME = "dunning-scheduler"
-export const dunningScheduler = await Worker(DUNNING_SCHEDULER_NAME, {
-  name: `${NAME_PREFIX}-${DUNNING_SCHEDULER_NAME}`,
-  entrypoint: path.join(
-    import.meta.dirname,
-    "src",
-    "schedulers",
-    "dunning-scheduler.ts",
-  ),
-  crons: ["0 * * * *"], // Run every hour
-  bindings: {
-    DB: db,
-    ORDER_QUEUE: orderQueue,
-    STAGE: app.stage as Stage,
-  },
-  compatibilityFlags,
-  dev: { port: 3101 },
 })
 
 // -----------------------------------------------------------------------------
@@ -317,20 +299,25 @@ export const webhookDLQConsumer = await Worker(WEBHOOK_DLQ_CONSUMER_NAME, {
   dev: { port: 3203 },
 })
 
-console.log({
-  [API_NAME]: api,
-  [DB_NAME]: db,
-  [ORDER_SCHEDULER_NAME]: orderScheduler,
-  [DUNNING_SCHEDULER_NAME]: dunningScheduler,
-  [ORDER_QUEUE_NAME]: orderQueue,
-  [ORDER_CONSUMER_NAME]: orderConsumer,
-  [WEBHOOK_QUEUE_NAME]: webhookQueue,
-  [WEBHOOK_CONSUMER_NAME]: webhookConsumer,
-  [ORDER_DLQ_NAME]: orderDLQ,
-  [ORDER_DLQ_CONSUMER_NAME]: orderDLQConsumer,
-  [WEBHOOK_DLQ_NAME]: webhookDLQ,
-  [WEBHOOK_DLQ_CONSUMER_NAME]: webhookDLQConsumer,
-})
+// Log all resources in dev, machine-readable output in other stages
+if (app.stage === "dev") {
+  console.log({
+    [API_NAME]: api,
+    [DB_NAME]: db,
+    [ORDER_QUEUE_NAME]: orderQueue,
+    [ORDER_CONSUMER_NAME]: orderConsumer,
+    [WEBHOOK_QUEUE_NAME]: webhookQueue,
+    [WEBHOOK_CONSUMER_NAME]: webhookConsumer,
+    [ORDER_DLQ_NAME]: orderDLQ,
+    [ORDER_DLQ_CONSUMER_NAME]: orderDLQConsumer,
+    [WEBHOOK_DLQ_NAME]: webhookDLQ,
+    [WEBHOOK_DLQ_CONSUMER_NAME]: webhookDLQConsumer,
+  })
+}
+if (CI) {
+  // Use new GitHub Actions environment file method
+  fs.appendFileSync(alchemy.env.GITHUB_OUTPUT, `api_url=${api.url}\n`)
+}
 
 await app.finalize()
 

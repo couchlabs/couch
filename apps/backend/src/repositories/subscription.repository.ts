@@ -3,7 +3,7 @@ import * as schema from "@database/schema"
 import { and, eq, sql } from "drizzle-orm"
 import { drizzle } from "drizzle-orm/d1"
 import type { Address, Hash } from "viem"
-import { Stage } from "@/constants/env.constants"
+import type { LoggingLevel } from "@/constants/env.constants"
 import {
   OrderStatus,
   OrderType,
@@ -114,7 +114,7 @@ export interface DueRetry {
 
 export interface SubscriptionRepositoryDeps {
   DB: D1Database
-  STAGE: Stage
+  LOGGING: LoggingLevel
 }
 
 export interface CreateSubscriptionWithOrderParams {
@@ -125,11 +125,15 @@ export interface CreateSubscriptionWithOrderParams {
   order: CreateOrderParams
 }
 
-export interface CreateSubscriptionWithOrderResult {
-  created: boolean
-  orderId?: number
-  orderNumber?: number
-}
+export type CreateSubscriptionWithOrderResult =
+  | {
+      created: true
+      orderId: number
+      orderNumber: number
+    }
+  | {
+      created: false
+    }
 
 export interface ExecuteSubscriptionActivationParams {
   subscriptionId: Hash
@@ -160,7 +164,7 @@ export class SubscriptionRepository {
     this.db = drizzle(deps.DB, {
       schema,
       logger:
-        deps.STAGE === Stage.DEV || deps.STAGE === Stage.STAGING
+        deps.LOGGING === "verbose"
           ? new DrizzleLogger("subscription.repository")
           : undefined,
     })
@@ -174,8 +178,6 @@ export class SubscriptionRepository {
       ...row,
       transactionHash: row.transactionHash as Hash,
       subscriptionId: row.subscriptionId as Hash,
-      gasUsed: row.gasUsed ?? undefined,
-      createdAt: row.createdAt ?? undefined,
     }
   }
 
@@ -377,10 +379,16 @@ export class SubscriptionRepository {
         return { created: false }
       }
 
+      // Batch succeeded - both order id and orderNumber must exist
+      const createdOrder = orderResult[0]
+      if (!createdOrder?.id || !createdOrder?.orderNumber) {
+        throw new Error("Order creation failed - missing id or orderNumber")
+      }
+
       return {
         created: true,
-        orderId: orderResult[0]?.id,
-        orderNumber: orderResult[0]?.orderNumber,
+        orderId: createdOrder.id,
+        orderNumber: createdOrder.orderNumber,
       }
     } catch {
       // Batch failed (likely UNIQUE constraint violation from race condition)
@@ -392,12 +400,19 @@ export class SubscriptionRepository {
   /**
    * TRANSACTION: Finalize subscription activation
    * Updates subscription status, order, creates transaction, and next order
+   * Returns the next order ID for scheduling
    */
   async executeSubscriptionActivation(
     params: ExecuteSubscriptionActivationParams,
-  ): Promise<void> {
+  ): Promise<{ nextOrderId: number }> {
     const { subscriptionId, order, transaction, nextOrder } = params
-    await this.db.batch([
+
+    const [
+      _transactionResult,
+      _updateOrderResult,
+      nextOrderResult,
+      _subscriptionResult,
+    ] = await this.db.batch([
       // Create transaction record
       this.db
         .insert(schema.transactions)
@@ -424,7 +439,8 @@ export class SubscriptionRepository {
           amount: nextOrder.amount,
           periodLengthInSeconds: nextOrder.periodInSeconds,
           status: OrderStatus.PENDING,
-        }),
+        })
+        .returning({ id: schema.orders.id }),
       // Activate subscription
       this.db
         .update(schema.subscriptions)
@@ -434,6 +450,13 @@ export class SubscriptionRepository {
         })
         .where(eq(schema.subscriptions.subscriptionId, subscriptionId)),
     ])
+
+    const nextOrderId = nextOrderResult[0]?.id
+    if (!nextOrderId) {
+      throw new Error("Failed to create next order during activation")
+    }
+
+    return { nextOrderId }
   }
 
   /**
