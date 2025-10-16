@@ -95,8 +95,8 @@ app.post("/api/webhook", async (c) => {
   return c.text("", 200)
 })
 
-// Proxy with Authorization header injection
-app.all("/proxy/*", async (c) => {
+// Helper function to handle proxy requests
+async function handleProxy(c: any) {
   const path = c.req.path.replace(/^\/proxy\//, "")
   const clientIp =
     c.req.header("CF-Connecting-IP") ||
@@ -161,7 +161,21 @@ app.all("/proxy/*", async (c) => {
       500,
     )
   }
-})
+}
+
+// Test: Add a specific route to verify proxy function works
+app.get("/proxy-test", (c) => c.json({ message: "Proxy endpoint exists!" }))
+
+// Register proxy routes - try different patterns
+app.post("/proxy/api/subscriptions", handleProxy)  // Specific route first
+app.get("/proxy/api/health", handleProxy)          // Another specific route
+
+// Then wildcard routes
+app.get("/proxy/*", handleProxy)
+app.post("/proxy/*", handleProxy)
+app.put("/proxy/*", handleProxy)
+app.delete("/proxy/*", handleProxy)
+app.patch("/proxy/*", handleProxy)
 
 export default app
 
