@@ -165,13 +165,13 @@ async function handleProxy(c: any) {
 
 // Test: Add debug routes
 app.get("/proxy-test", (c) => c.json({ message: "Proxy endpoint exists!" }))
-app.get("/proxy-health-test", handleProxy) // Test GET with proxy handler
+app.get("/proxy-health-test", (c) => handleProxy(c)) // Wrap in arrow function
 app.post("/proxy-simple", (c) => c.json({ message: "POST works!" })) // Test simple POST
 
-// Register all proxy routes explicitly
-app.all("/proxy/api/subscriptions", handleProxy)
-app.all("/proxy/api/health", handleProxy)
-app.all("/proxy/*", handleProxy)
+// Register all proxy routes explicitly with proper wrapper
+app.all("/proxy/api/subscriptions", (c) => handleProxy(c))
+app.all("/proxy/api/health", (c) => handleProxy(c))
+app.all("/proxy/*", (c) => handleProxy(c))
 
 export default app
 
