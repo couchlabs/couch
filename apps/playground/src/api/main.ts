@@ -64,9 +64,8 @@ app.post("/api/webhook", async (c) => {
 
   // Process the event
   if (event.type !== "subscription.updated") {
-    console.log("Unknown event type:", event.type)
+    // Unknown event type - might add more event types in the future
   }
-  console.log(JSON.stringify(event, null, 2))
 
   // Save to Durable Object store
   const subscriptionId = event.data.subscription.id
@@ -95,24 +94,7 @@ app.post("/api/webhook", async (c) => {
   return c.text("", 200)
 })
 
-// Test simple async route without DO
-app.get("/test-async", async (c) => {
-  await new Promise((resolve) => setTimeout(resolve, 10))
-  return c.json({ message: "Async works!" })
-})
-
-// Test env variables
-app.get("/test-env", (c) => {
-  return c.json({
-    BACKEND_API: c.env.BACKEND_API ? "SET" : "NOT SET",
-    COUCH_API_URL: c.env.COUCH_API_URL ? "SET" : "NOT SET",
-    COUCH_API_KEY: c.env.COUCH_API_KEY ? "SET" : "NOT SET",
-    COUCH_WEBHOOK_SECRET: c.env.COUCH_WEBHOOK_SECRET ? "SET" : "NOT SET",
-    STORE: c.env.STORE ? "SET" : "NOT SET",
-  })
-})
-
-// Test service binding with health check
+// Health check endpoint - useful for monitoring service binding
 app.get("/test-binding", async (c) => {
   if (!c.env.BACKEND_API) {
     return c.json({ error: "Backend API binding not configured" }, 500)

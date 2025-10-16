@@ -159,15 +159,10 @@ export function SubscriptionDetails({
       const provider = sdk.getProvider()
 
       // Call requestRevoke with permission and provider
-      const result = await requestRevoke({
+      await requestRevoke({
         permission,
         provider,
       })
-      const hash =
-        typeof result === "string"
-          ? result
-          : (result as { hash?: string })?.hash || String(result)
-      console.log(`Permission revoked in transaction:`, hash)
 
       // Optimistically update state - revoke was successful
       setOnchainStatus({
@@ -480,13 +475,6 @@ export function SubscriptionDetails({
                             const timestamp = Number(
                               onchainStatus.nextPeriodStart,
                             )
-                            console.log(
-                              "Raw nextPeriodStart:",
-                              onchainStatus.nextPeriodStart,
-                              "as number:",
-                              timestamp,
-                            )
-                            // Try without multiplication first
                             return new Date(timestamp).toLocaleString()
                           })()}
                         </span>

@@ -62,8 +62,6 @@ export function SubscriptionCreator() {
         testnet: true, // Use Base Sepolia
       })
 
-      console.log("Subscription created onchain:", subscription)
-
       // Use service binding through our /activate endpoint (RPC-style)
       const response = await fetch("/activate", {
         method: "POST",
@@ -88,8 +86,7 @@ export function SubscriptionCreator() {
         )
       }
 
-      const data = await response.json()
-      console.log("Subscription activated:", data)
+      await response.json() // Confirm response was parsed successfully
 
       // Success - reset loading state immediately
       setIsSubscribing(false)
