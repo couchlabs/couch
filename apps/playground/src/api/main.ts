@@ -130,27 +130,39 @@ app.get("/test-binding", async (c) => {
   }
 })
 
-// RPC-style backend API call using service binding
+// RPC-style backend API call using service binding (or fallback for local dev)
 app.post("/activate", async (c) => {
-  if (!c.env.BACKEND_API) {
-    return c.json({ error: "Backend API binding not configured" }, 500)
-  }
-
   try {
     const body = await c.req.text()
-
-    // Use service binding for RPC-style call
     const headers = new Headers(c.req.header())
     headers.set("Authorization", `Bearer ${c.env.COUCH_API_KEY}`)
 
-    const response = await c.env.BACKEND_API.fetch(
-      "https://backend/api/subscriptions",
-      {
-        method: "POST",
-        headers: headers,
-        body: body,
-      },
-    )
+    // Use service binding if available (production)
+    if (c.env.BACKEND_API) {
+      const response = await c.env.BACKEND_API.fetch(
+        "https://backend/api/subscriptions",
+        {
+          method: "POST",
+          headers: headers,
+          body: body,
+        },
+      )
+      const responseBody = await response.text()
+
+      return new Response(responseBody, {
+        status: response.status,
+        headers: { "Content-Type": "application/json" },
+      })
+    }
+
+    // Fallback to HTTP fetch for local development
+    // In local dev, the backend should be running on a different port
+    const backendUrl = "http://localhost:8001/api/subscriptions"
+    const response = await fetch(backendUrl, {
+      method: "POST",
+      headers: headers,
+      body: body,
+    })
     const responseBody = await response.text()
 
     return new Response(responseBody, {
@@ -158,10 +170,10 @@ app.post("/activate", async (c) => {
       headers: { "Content-Type": "application/json" },
     })
   } catch (error) {
-    console.error("Service binding error:", error)
+    console.error("Backend call error:", error)
     const errorMessage = error instanceof Error ? error.message : String(error)
     return c.json(
-      { error: "Service binding failed", message: errorMessage },
+      { error: "Backend call failed", message: errorMessage },
       500,
     )
   }
