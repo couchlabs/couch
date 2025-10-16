@@ -13,6 +13,8 @@ import type { Store } from "@/store/do.store"
 // CONFIGURATION & CONVENTIONS
 // =============================================================================
 
+const CI = process.env.CI === "true" || process.env.GITHUB_ACTIONS === "true"
+
 /**
  * Resource Naming Convention: {app.name}-{scope.name}-{scope.stage}-{resource}
  * Example: couch-frontend-dev-example-site
@@ -38,7 +40,7 @@ import type { Store } from "@/store/do.store"
 
 export const app = await alchemy("couch-playground", {
   password: process.env.ALCHEMY_PASSWORD,
-  stateStore: (scope) => new CloudflareStateStore(scope),
+  stateStore: CI ? (scope) => new CloudflareStateStore(scope) : undefined,
 })
 const NAME_PREFIX = `${app.name}-${app.stage}`
 
@@ -61,8 +63,7 @@ export const website = await Vite(WEBSITE_NAME, {
   bindings: {
     COUCH_WEBHOOK_SECRET: alchemy.secret.env.COUCH_WEBHOOK_SECRET,
     COUCH_API_KEY: alchemy.secret.env.COUCH_API_KEY,
-    COUCH_API_URL: api.url,
-    BACKEND_API: api, // Service binding for RPC-style calls
+    BACKEND_API: api, // Service binding for RPC-style calls (includes api.url if needed)
     STORE: DurableObjectNamespace<Store>("playground-store", {
       className: "Store",
     }),
