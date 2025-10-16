@@ -30,7 +30,7 @@
     },
     "infra:deploy": {
       "cache": false,
-      "env": ["STAGE", "CI", "GITHUB_ACTIONS", "GITHUB_SHA", "PULL_REQUEST"],
+      "env": ["STAGE", "GITHUB_ACTIONS", "GITHUB_SHA", "PULL_REQUEST"],
       "passThroughEnv": [
         "ALCHEMY_PASSWORD",
         "ALCHEMY_STATE_TOKEN",
@@ -50,7 +50,7 @@
     },
     "infra:destroy": {
       "cache": false,
-      "env": ["STAGE", "CI", "GITHUB_ACTIONS", "GITHUB_SHA", "PULL_REQUEST"],
+      "env": ["STAGE", "GITHUB_ACTIONS", "GITHUB_SHA", "PULL_REQUEST"],
       "passThroughEnv": [
         "ALCHEMY_PASSWORD",
         "ALCHEMY_STATE_TOKEN",

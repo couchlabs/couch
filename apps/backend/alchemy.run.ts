@@ -8,7 +8,7 @@ import {
   Worker,
 } from "alchemy/cloudflare"
 import { EvmAccount, EvmSmartAccount } from "alchemy/coinbase"
-import { CloudflareStateStore } from "alchemy/state"
+import { CloudflareStateStore, FileSystemStateStore } from "alchemy/state"
 import { resolveStageConfig } from "@/constants/env.constants"
 import type { Provider } from "@/providers/provider.interface"
 import type { OrderScheduler } from "@/schedulers/order.scheduler"
@@ -17,8 +17,6 @@ import drizzleConfig from "./drizzle.config"
 // =============================================================================
 // CONFIGURATION & CONVENTIONS
 // =============================================================================
-
-const CI = process.env.CI === "true" || process.env.GITHUB_ACTIONS === "true"
 
 /**
  * Resource Naming Convention: {app.name}-{scope.name}-{scope.stage}-{resource}
@@ -47,7 +45,10 @@ const CI = process.env.CI === "true" || process.env.GITHUB_ACTIONS === "true"
 
 export const app = await alchemy("couch-backend", {
   password: alchemy.env.ALCHEMY_PASSWORD,
-  stateStore: CI ? (scope) => new CloudflareStateStore(scope) : undefined,
+  stateStore: (scope) =>
+    scope.local
+      ? new FileSystemStateStore(scope)
+      : new CloudflareStateStore(scope),
 })
 const NAME_PREFIX = `${app.name}-${app.stage}`
 const { NETWORK, LOGGING, DUNNING_MODE, WALLET_STAGE } = resolveStageConfig(
@@ -300,7 +301,7 @@ export const webhookDLQConsumer = await Worker(WEBHOOK_DLQ_CONSUMER_NAME, {
 })
 
 // Log all resources in dev, machine-readable output in other stages
-if (app.stage === "dev") {
+if (app.local) {
   console.log({
     [API_NAME]: api,
     [DB_NAME]: db,
@@ -313,8 +314,7 @@ if (app.stage === "dev") {
     [WEBHOOK_DLQ_NAME]: webhookDLQ,
     [WEBHOOK_DLQ_CONSUMER_NAME]: webhookDLQConsumer,
   })
-}
-if (CI) {
+} else {
   // Use new GitHub Actions environment file method
   fs.appendFileSync(alchemy.env.GITHUB_OUTPUT, `api_url=${api.url}\n`)
 }

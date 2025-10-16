@@ -2,7 +2,7 @@ import path from "node:path"
 import alchemy from "alchemy"
 import { DurableObjectNamespace, Vite } from "alchemy/cloudflare"
 import { GitHubComment } from "alchemy/github"
-import { CloudflareStateStore } from "alchemy/state"
+import { CloudflareStateStore, FileSystemStateStore } from "alchemy/state"
 import { api, app as backendApp, spenderSmartAccount } from "backend/alchemy"
 import { resolveStageConfig } from "@/constants/env.constants"
 import type { Store } from "@/store/do.store"
@@ -12,8 +12,6 @@ import type { Store } from "@/store/do.store"
 // =============================================================================
 // CONFIGURATION & CONVENTIONS
 // =============================================================================
-
-const CI = process.env.CI === "true" || process.env.GITHUB_ACTIONS === "true"
 
 /**
  * Resource Naming Convention: {app.name}-{scope.name}-{scope.stage}-{resource}
@@ -40,7 +38,10 @@ const CI = process.env.CI === "true" || process.env.GITHUB_ACTIONS === "true"
 
 export const app = await alchemy("couch-playground", {
   password: process.env.ALCHEMY_PASSWORD,
-  stateStore: CI ? (scope) => new CloudflareStateStore(scope) : undefined,
+  stateStore: (scope) =>
+    scope.local
+      ? new FileSystemStateStore(scope)
+      : new CloudflareStateStore(scope),
 })
 const NAME_PREFIX = `${app.name}-${app.stage}`
 
@@ -71,7 +72,7 @@ export const website = await Vite(WEBSITE_NAME, {
   compatibilityFlags,
 })
 
-if (app.stage === "dev") {
+if (app.local) {
   console.log({ [WEBSITE_NAME]: website })
 }
 
@@ -86,16 +87,17 @@ if (process.env.PULL_REQUEST) {
     owner: "couchlabs",
     repository: "couch",
     issueNumber: Number(process.env.PULL_REQUEST),
-    body: `## 🛋️ Preview Deployed
+    token: alchemy.secret.env.GITHUB_TOKEN,
+    body: `## Ahoy! Preview Deployed
 
 **Stage:** \`${app.stage}\`
 **Network:** ${NETWORK}
 
-👉 **[Playground](${website.url})**
-👉 **[Backend API](${api.url})**
+🌐 **[Playground](${website.url})**
+⚙️ **[Backend API](${api.url})**
 
 ---
-<sub>🤖 Built from commit ${process.env.GITHUB_SHA?.slice(0, 7)} • This comment updates automatically with each push</sub>`,
+<sub>🏴‍☠️ Built from commit ${process.env.GITHUB_SHA?.slice(0, 7)} • This comment updates automatically with each push</sub>`,
   })
 }
 
