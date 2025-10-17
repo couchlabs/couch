@@ -113,7 +113,7 @@ export const allowlist = await KVNamespace(ALLOWLIST_NAME, {
   title: `${NAME_PREFIX}-${ALLOWLIST_NAME}`,
   values: [
     {
-      key: alchemy.env.MERCHANT_ADDRESS,
+      key: alchemy.env.TEST_COUCH_ACCOUNT_ADDRESS,
       value: new Date().toISOString(),
     },
   ],
@@ -332,6 +332,7 @@ if (app.local) {
 } else {
   // Use new GitHub Actions environment file method
   fs.appendFileSync(alchemy.env.GITHUB_OUTPUT, `api_url=${api.url}\n`)
+  fs.appendFileSync(alchemy.env.GITHUB_OUTPUT, `db_id=${db.id}\n`)
 }
 
 await app.finalize()

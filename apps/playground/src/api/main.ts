@@ -59,7 +59,7 @@ app.post("/api/webhook", async (c) => {
   const event = await constructWebhookEvent(
     body,
     signature,
-    c.env.COUCH_WEBHOOK_SECRET,
+    c.env.TEST_COUCH_ACCOUNT_WEBHOOK_SECRET,
   )
 
   // Process the event
@@ -141,7 +141,7 @@ app.post("/activate", async (c) => {
 
     // Use service binding for RPC-style call
     const headers = new Headers(c.req.header())
-    headers.set("Authorization", `Bearer ${c.env.COUCH_API_KEY}`)
+    headers.set("Authorization", `Bearer ${c.env.TEST_COUCH_ACCOUNT_APIKEY}`)
 
     const response = await c.env.BACKEND_API.fetch(
       "https://backend/api/subscriptions",

@@ -62,8 +62,9 @@ export const website = await Vite(WEBSITE_NAME, {
   build: { env: { VITE_COUCH_SPENDER_ADDRESS: spenderSmartAccount.address } },
   // Envs exposed to worker only
   bindings: {
-    COUCH_WEBHOOK_SECRET: alchemy.secret.env.COUCH_WEBHOOK_SECRET,
-    COUCH_API_KEY: alchemy.secret.env.COUCH_API_KEY,
+    TEST_COUCH_ACCOUNT_WEBHOOK_SECRET:
+      alchemy.secret.env.TEST_COUCH_ACCOUNT_WEBHOOK_SECRET,
+    TEST_COUCH_ACCOUNT_APIKEY: alchemy.secret.env.TEST_COUCH_ACCOUNT_APIKEY,
     BACKEND_API: api, // Service binding for RPC-style calls (includes api.url if needed)
     STORE: DurableObjectNamespace<Store>("playground-store", {
       className: "Store",

@@ -30,44 +30,50 @@
     },
     "infra:deploy": {
       "cache": false,
-      "env": ["STAGE", "GITHUB_ACTIONS", "GITHUB_SHA", "PULL_REQUEST"],
-      "passThroughEnv": [
-        "ALCHEMY_PASSWORD",
-        "ALCHEMY_STATE_TOKEN",
-        "ALCHEMY_TELEMETRY_DISABLED",
+      "env": [
+        "STAGE",
         "DO_NOT_TRACK",
-        "CLOUDFLARE_API_TOKEN",
+        "PULL_REQUEST",
+        "GITHUB_ACTIONS",
+        "GITHUB_SHA",
+        "GITHUB_TOKEN",
+        "GITHUB_OUTPUT",
+        "ALCHEMY_PASSWORD",
+        "ALCHEMY_TELEMETRY_DISABLED",
+        "ALCHEMY_STATE_TOKEN",
         "CLOUDFLARE_ACCOUNT_ID",
+        "CLOUDFLARE_API_TOKEN",
         "CDP_API_KEY_ID",
         "CDP_API_KEY_SECRET",
         "CDP_WALLET_SECRET",
         "CDP_CLIENT_API_KEY",
-        "COUCH_WEBHOOK_SECRET",
-        "COUCH_API_KEY",
-        "GITHUB_TOKEN",
-        "GITHUB_OUTPUT",
-        "MERCHANT_ADDRESS"
+        "TEST_COUCH_ACCOUNT_WEBHOOK_SECRET",
+        "TEST_COUCH_ACCOUNT_ADDRESS",
+        "TEST_COUCH_ACCOUNT_APIKEY"
       ]
     },
     "infra:destroy": {
       "cache": false,
-      "env": ["STAGE", "GITHUB_ACTIONS", "GITHUB_SHA", "PULL_REQUEST"],
-      "passThroughEnv": [
-        "ALCHEMY_PASSWORD",
-        "ALCHEMY_STATE_TOKEN",
-        "ALCHEMY_TELEMETRY_DISABLED",
+      "env": [
+        "STAGE",
         "DO_NOT_TRACK",
-        "CLOUDFLARE_API_TOKEN",
+        "PULL_REQUEST",
+        "GITHUB_ACTIONS",
+        "GITHUB_SHA",
+        "GITHUB_TOKEN",
+        "GITHUB_OUTPUT",
+        "ALCHEMY_PASSWORD",
+        "ALCHEMY_TELEMETRY_DISABLED",
+        "ALCHEMY_STATE_TOKEN",
         "CLOUDFLARE_ACCOUNT_ID",
+        "CLOUDFLARE_API_TOKEN",
         "CDP_API_KEY_ID",
         "CDP_API_KEY_SECRET",
         "CDP_WALLET_SECRET",
         "CDP_CLIENT_API_KEY",
-        "COUCH_WEBHOOK_SECRET",
-        "COUCH_API_KEY",
-        "GITHUB_TOKEN",
-        "GITHUB_OUTPUT",
-        "MERCHANT_ADDRESS"
+        "TEST_COUCH_ACCOUNT_WEBHOOK_SECRET",
+        "TEST_COUCH_ACCOUNT_ADDRESS",
+        "TEST_COUCH_ACCOUNT_APIKEY"
       ]
     }
   }

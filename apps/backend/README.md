@@ -461,7 +461,7 @@ transactions       -- Blockchain transactions
 
 **2a. Subscribe using the included playground app (Recommended)**
 
-3. Set envs required for playground: `COUCH_API_KEY`, `COUCH_WEBHOOK_SECRET`
+3. Set envs required for playground: `TEST_COUCH_ACCOUNT_APIKEY`, `TEST_COUCH_ACCOUNT_WEBHOOK_SECRET`
 4. Open http://localhost:8000 in your browser and follow step to subscribe
 
 **2b. Subscribe using the SDK directly**

@@ -116,7 +116,7 @@ jobs:
       - name: "Deploy backend"
         id: backend
         run: bun run infra:deploy --filter=backend
-        # Note: api_url output is set in alchemy.run.ts
+        # Note: api_url and db_id outputs are set in alchemy.run.ts
         env:
           STAGE: ${{ env.STAGE }}
           ALCHEMY_PASSWORD: ${{ secrets.ALCHEMY_PASSWORD }}
@@ -127,36 +127,25 @@ jobs:
           CDP_API_KEY_SECRET: ${{ secrets.CDP_API_KEY_SECRET }}
           CDP_WALLET_SECRET: ${{ secrets.CDP_WALLET_SECRET }}
           CDP_CLIENT_API_KEY: ${{ secrets.CDP_CLIENT_API_KEY }}
-          MERCHANT_ADDRESS: ${{ secrets.MERCHANT_ADDRESS }}
+          TEST_COUCH_ACCOUNT_ADDRESS: ${{ secrets.TEST_COUCH_ACCOUNT_ADDRESS }}
           PULL_REQUEST: ${{ github.event.number }}
           GITHUB_SHA: ${{ github.sha }}
           GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
 
-      - name: "Create account and register webhook on the backend"
+      - name: "Seed test account in database"
+        run: .github/scripts/seed-test-account.sh
+        env:
+          DATABASE_ID: ${{ steps.backend.outputs.db_id }}
+          TEST_COUCH_ACCOUNT_ADDRESS: ${{ secrets.TEST_COUCH_ACCOUNT_ADDRESS }}
+          TEST_COUCH_ACCOUNT_APIKEY: ${{ secrets.TEST_COUCH_ACCOUNT_APIKEY }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+      - name: "Register webhook on the backend"
         id: couch
         run: |
-          # Create account and get API key
-          ACCOUNT_RESPONSE=$(curl -X POST ${{ steps.backend.outputs.api_url }}/api/account \
-            -H "Content-Type: application/json" \
-            -d '{"address":"${{ secrets.MERCHANT_ADDRESS }}"}' \
-            -s -w "\n%{http_code}")
-
-          ACCOUNT_HTTP_CODE=$(echo "$ACCOUNT_RESPONSE" | tail -n1)
-          ACCOUNT_BODY=$(echo "$ACCOUNT_RESPONSE" | sed '$d')
-
-          if [ "$ACCOUNT_HTTP_CODE" != "200" ] && [ "$ACCOUNT_HTTP_CODE" != "201" ]; then
-            echo "Error: Account creation failed with HTTP $ACCOUNT_HTTP_CODE"
-            echo "$ACCOUNT_BODY"
-            exit 1
-          fi
-
-          API_KEY=$(echo "$ACCOUNT_BODY" | jq -r '.api_key')
-
-          if [ -z "$API_KEY" ] || [ "$API_KEY" = "null" ]; then
-            echo "Error: Failed to extract API key from response"
-            echo "$ACCOUNT_BODY"
-            exit 1
-          fi
+          # Use the pre-seeded test API key
+          API_KEY="${{ secrets.TEST_COUCH_ACCOUNT_APIKEY }}"
 
           # Construct playground URL from backend URL
           # Backend: couch-backend-pr-5-api.workers.dev
@@ -165,7 +154,7 @@ jobs:
           PLAYGROUND_URL="${BACKEND_URL/couch-backend/couch-playground}"
           PLAYGROUND_URL="${PLAYGROUND_URL/-api/-website}"
 
-          # Create webhook with the playground URL
+          # Create/update webhook with the playground URL
           WEBHOOK_RESPONSE=$(curl -X PUT ${{ steps.backend.outputs.api_url }}/api/webhook \
             -H "Content-Type: application/json" \
             -H "Authorization: Bearer $API_KEY" \
@@ -176,7 +165,7 @@ jobs:
           WEBHOOK_BODY=$(echo "$WEBHOOK_RESPONSE" | sed '$d')
 
           if [ "$WEBHOOK_HTTP_CODE" != "200" ] && [ "$WEBHOOK_HTTP_CODE" != "201" ]; then
-            echo "Error: Webhook creation failed with HTTP $WEBHOOK_HTTP_CODE"
+            echo "Error: Webhook registration failed with HTTP $WEBHOOK_HTTP_CODE"
             echo "$WEBHOOK_BODY"
             exit 1
           fi
@@ -208,9 +197,9 @@ jobs:
           CDP_API_KEY_SECRET: ${{ secrets.CDP_API_KEY_SECRET }}
           CDP_WALLET_SECRET: ${{ secrets.CDP_WALLET_SECRET }}
           CDP_CLIENT_API_KEY: ${{ secrets.CDP_CLIENT_API_KEY }}
-          MERCHANT_ADDRESS: ${{ secrets.MERCHANT_ADDRESS }}
-          COUCH_WEBHOOK_SECRET: ${{ steps.couch.outputs.webhook_secret }}
-          COUCH_API_KEY: ${{ steps.couch.outputs.api_key }}
+          TEST_COUCH_ACCOUNT_ADDRESS: ${{ secrets.TEST_COUCH_ACCOUNT_ADDRESS }}
+          TEST_COUCH_ACCOUNT_WEBHOOK_SECRET: ${{ steps.couch.outputs.webhook_secret }}
+          TEST_COUCH_ACCOUNT_APIKEY: ${{ steps.couch.outputs.api_key }}
           PULL_REQUEST: ${{ github.event.number }}
           GITHUB_SHA: ${{ github.sha }}
           GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
@@ -241,4 +230,4 @@ jobs:
           CDP_API_KEY_SECRET: ${{ secrets.CDP_API_KEY_SECRET }}
           CDP_WALLET_SECRET: ${{ secrets.CDP_WALLET_SECRET }}
           CDP_CLIENT_API_KEY: ${{ secrets.CDP_CLIENT_API_KEY }}
-          MERCHANT_ADDRESS: ${{ secrets.MERCHANT_ADDRESS }}
+          TEST_COUCH_ACCOUNT_ADDRESS: ${{ secrets.TEST_COUCH_ACCOUNT_ADDRESS }}
