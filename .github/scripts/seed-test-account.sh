@@ -32,6 +32,6 @@ VALUES ('$KEY_HASH', '$TEST_COUCH_ACCOUNT_ADDRESS');
 "
 
 # Execute SQL using wrangler d1 execute
-echo "$SQL" | npx wrangler d1 execute "$DATABASE_ID" --remote
+echo "$SQL" | bunx wrangler d1 execute "$DATABASE_ID" --remote
 
 echo "✅ Test account seeded successfully"
