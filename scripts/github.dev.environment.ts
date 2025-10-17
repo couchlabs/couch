@@ -60,10 +60,14 @@ const SECRETS = validateSecrets([
     description:
       "CDP Client API Key for paymaster (shared across all environments)",
   },
-  // Couch (Playground)
+  // Couch (Test Account)
   {
-    name: "MERCHANT_ADDRESS",
-    description: "Merchant wallet address for creating accounts",
+    name: "TEST_COUCH_ACCOUNT_ADDRESS",
+    description: "Test merchant wallet address (seeded in preview/staging)",
+  },
+  {
+    name: "TEST_COUCH_ACCOUNT_APIKEY",
+    description: "Test merchant API key (seeded in preview/staging)",
   },
 ])
 

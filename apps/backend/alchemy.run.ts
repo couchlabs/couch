@@ -4,6 +4,7 @@ import alchemy from "alchemy"
 import {
   D1Database,
   DurableObjectNamespace,
+  KVNamespace,
   Queue,
   Worker,
 } from "alchemy/cloudflare"
@@ -106,6 +107,18 @@ const db = await D1Database(DB_NAME, {
   },
 })
 
+// allowlist: KV store for authorized account addresses
+const ALLOWLIST_NAME = "allowlist"
+export const allowlist = await KVNamespace(ALLOWLIST_NAME, {
+  title: `${NAME_PREFIX}-${ALLOWLIST_NAME}`,
+  values: [
+    {
+      key: alchemy.env.TEST_COUCH_ACCOUNT_ADDRESS,
+      value: "2025-10-17T22:35:26.050Z",
+    },
+  ],
+})
+
 // -----------------------------------------------------------------------------
 // QUEUES
 // -----------------------------------------------------------------------------
@@ -173,6 +186,7 @@ export const api = await Worker(API_NAME, {
     WALLET_STAGE,
     // RESOURCES:
     DB: db,
+    ALLOWLIST: allowlist,
     ORDER_QUEUE: orderQueue,
     WEBHOOK_QUEUE: webhookQueue,
     ORDER_SCHEDULER: DurableObjectNamespace<OrderScheduler>("order-scheduler", {
@@ -305,6 +319,7 @@ if (app.local) {
   console.log({
     [API_NAME]: api,
     [DB_NAME]: db,
+    [ALLOWLIST_NAME]: allowlist,
     [ORDER_QUEUE_NAME]: orderQueue,
     [ORDER_CONSUMER_NAME]: orderConsumer,
     [WEBHOOK_QUEUE_NAME]: webhookQueue,
@@ -317,6 +332,7 @@ if (app.local) {
 } else {
   // Use new GitHub Actions environment file method
   fs.appendFileSync(alchemy.env.GITHUB_OUTPUT, `api_url=${api.url}\n`)
+  fs.appendFileSync(alchemy.env.GITHUB_OUTPUT, `db_name=${db.name}\n`)
 }
 
 await app.finalize()

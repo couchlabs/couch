@@ -7,7 +7,7 @@ import {
   type AccountRepositoryDeps,
 } from "@/repositories/account.repository"
 
-export interface CreateOrRotateAccountParams {
+export interface CreateAccountParams {
   address: string
 }
 
@@ -17,15 +17,20 @@ export interface AccountResult {
 
 export interface AccountServiceDeps extends AccountRepositoryDeps {
   NETWORK: Network
+  ALLOWLIST: {
+    get: (key: string) => Promise<string | null>
+  }
 }
 
 export class AccountService {
   private accountRepository: AccountRepository
   private network: Network
+  private env: AccountServiceDeps
 
   constructor(env: AccountServiceDeps) {
     this.accountRepository = new AccountRepository(env)
     this.network = env.NETWORK
+    this.env = env
   }
 
   /**
@@ -83,23 +88,77 @@ export class AccountService {
   }
 
   /**
-   * Creates a new account or rotates the API key for an existing account
+   * Checks if an address is in the allowlist
    */
-  async createOrRotateAccount(
-    params: CreateOrRotateAccountParams,
-  ): Promise<AccountResult> {
+  async isAddressAllowed(address: Address): Promise<boolean> {
+    const exists = await this.env.ALLOWLIST.get(address)
+    return exists !== null
+  }
+
+  /**
+   * Checks if an account already exists
+   */
+  async accountExists(address: Address): Promise<boolean> {
+    const account = await this.accountRepository.getAccountByAddress(address)
+    return account !== null
+  }
+
+  /**
+   * Creates a new account (only if allowlisted and doesn't exist)
+   */
+  async createAccount(params: CreateAccountParams): Promise<AccountResult> {
     const accountAddress = this.validateAddress(params.address)
     const log = logger.with({ accountAddress })
 
-    log.info("Creating or rotating account API key")
+    // Check if address is allowlisted
+    const isAllowed = await this.isAddressAllowed(accountAddress)
+    if (!isAllowed) {
+      throw new HTTPError(
+        403,
+        ErrorCode.ADDRESS_NOT_ALLOWED,
+        "Address not authorized for account creation",
+      )
+    }
+
+    // Check if account already exists
+    const exists = await this.accountExists(accountAddress)
+    if (exists) {
+      throw new HTTPError(
+        409,
+        ErrorCode.ACCOUNT_EXISTS,
+        "Account already exists. Use /api/keys to manage API keys.",
+      )
+    }
+
+    log.info("Creating new account")
+
+    // Create account
+    await this.accountRepository.createAccount({ accountAddress })
+
+    // Set API key
+    const { apiKey, keyHash } = await this.generateApiKey()
+    await this.accountRepository.setApiKey({
+      accountAddress,
+      keyHash,
+    })
+
+    log.info("Account created successfully")
+
+    return { apiKey }
+  }
+
+  /**
+   * Rotates the API key for an authenticated account
+   */
+  async rotateApiKey(accountAddress: Address): Promise<AccountResult> {
+    const log = logger.with({ accountAddress })
+
+    log.info("Rotating account API key")
 
     const { apiKey, keyHash } = await this.generateApiKey()
 
-    // Create account if it doesn't exist
-    await this.accountRepository.createAccount({ accountAddress })
-
-    // Rotate API key (atomic delete + insert)
-    await this.accountRepository.rotateApiKey({
+    // Set API key (atomic delete + insert)
+    await this.accountRepository.setApiKey({
       accountAddress,
       keyHash,
     })
