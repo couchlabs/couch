@@ -23,15 +23,9 @@ KEY_HASH=$(echo -n "$SECRET_PART" | shasum -a 256 | awk '{print $1}')
 
 # Upsert account and API key using D1 API
 # Using INSERT OR REPLACE for idempotency
-SQL="
-INSERT OR REPLACE INTO accounts (address)
-VALUES ('$TEST_COUCH_ACCOUNT_ADDRESS');
+SQL="INSERT OR REPLACE INTO accounts (address) VALUES ('$TEST_COUCH_ACCOUNT_ADDRESS'); INSERT OR REPLACE INTO api_keys (key_hash, account_address) VALUES ('$KEY_HASH', '$TEST_COUCH_ACCOUNT_ADDRESS');"
 
-INSERT OR REPLACE INTO api_keys (key_hash, account_address)
-VALUES ('$KEY_HASH', '$TEST_COUCH_ACCOUNT_ADDRESS');
-"
-
-# Execute SQL using wrangler d1 execute
-echo "$SQL" | bunx wrangler d1 execute "$DATABASE_ID" --remote
+# Execute SQL using wrangler d1 execute with --command flag
+bunx wrangler d1 execute "$DATABASE_ID" --remote --command="$SQL"
 
 echo "✅ Test account seeded successfully"
