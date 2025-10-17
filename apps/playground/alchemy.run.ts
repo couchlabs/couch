@@ -3,11 +3,9 @@ import alchemy from "alchemy"
 import { DurableObjectNamespace, Vite } from "alchemy/cloudflare"
 import { GitHubComment } from "alchemy/github"
 import { CloudflareStateStore, FileSystemStateStore } from "alchemy/state"
-import { api, app as backendApp, spenderSmartAccount } from "backend/alchemy"
+import { api, spenderSmartAccount } from "backend/alchemy"
 import { resolveStageConfig } from "@/constants/env.constants"
 import type { Store } from "@/store/do.store"
-
-// import { Stage } from "backend/constants"
 
 // =============================================================================
 // CONFIGURATION & CONVENTIONS
@@ -82,7 +80,7 @@ if (app.local) {
 // =============================================================================
 
 if (process.env.PULL_REQUEST) {
-  const { NETWORK } = resolveStageConfig(backendApp.stage)
+  const { NETWORK } = resolveStageConfig(app.stage)
 
   await GitHubComment("preview-comment", {
     owner: "couchlabs",
