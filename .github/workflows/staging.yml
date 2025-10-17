@@ -102,7 +102,7 @@ jobs:
       - name: "Seed test account in database"
         run: .github/scripts/seed-test-account.sh
         env:
-          DATABASE_ID: ${{ steps.backend.outputs.db_id }}
+          DATABASE_NAME: ${{ steps.backend.outputs.db_name }}
           TEST_COUCH_ACCOUNT_ADDRESS: ${{ secrets.TEST_COUCH_ACCOUNT_ADDRESS }}
           TEST_COUCH_ACCOUNT_APIKEY: ${{ secrets.TEST_COUCH_ACCOUNT_APIKEY }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

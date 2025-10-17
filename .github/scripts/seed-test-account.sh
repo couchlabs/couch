@@ -5,13 +5,13 @@ set -e
 # Seeds a test merchant account in D1 database for preview/staging environments
 # Usage: seed-test-account.sh
 
-if [ -z "$DATABASE_ID" ] || [ -z "$TEST_COUCH_ACCOUNT_ADDRESS" ] || [ -z "$TEST_COUCH_ACCOUNT_APIKEY" ] || [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
+if [ -z "$DATABASE_NAME" ] || [ -z "$TEST_COUCH_ACCOUNT_ADDRESS" ] || [ -z "$TEST_COUCH_ACCOUNT_APIKEY" ] || [ -z "$CLOUDFLARE_API_TOKEN" ] || [ -z "$CLOUDFLARE_ACCOUNT_ID" ]; then
     echo "Error: Required environment variables not set"
-    echo "Required: DATABASE_ID, TEST_COUCH_ACCOUNT_ADDRESS, TEST_COUCH_ACCOUNT_APIKEY, CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID"
+    echo "Required: DATABASE_NAME, TEST_COUCH_ACCOUNT_ADDRESS, TEST_COUCH_ACCOUNT_APIKEY, CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID"
     exit 1
 fi
 
-echo "🌱 Seeding test account in database $DATABASE_ID"
+echo "🌱 Seeding test account in database $DATABASE_NAME"
 echo "   Account: $TEST_COUCH_ACCOUNT_ADDRESS"
 
 # Extract secret part from API key and hash it
@@ -26,6 +26,6 @@ KEY_HASH=$(echo -n "$SECRET_PART" | shasum -a 256 | awk '{print $1}')
 SQL="INSERT OR REPLACE INTO accounts (address) VALUES ('$TEST_COUCH_ACCOUNT_ADDRESS'); INSERT OR REPLACE INTO api_keys (key_hash, account_address) VALUES ('$KEY_HASH', '$TEST_COUCH_ACCOUNT_ADDRESS');"
 
 # Execute SQL using wrangler d1 execute with --command flag
-bunx wrangler d1 execute "$DATABASE_ID" --remote --command="$SQL"
+bunx wrangler d1 execute "$DATABASE_NAME" --remote --command="$SQL"
 
 echo "✅ Test account seeded successfully"

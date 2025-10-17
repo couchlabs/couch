@@ -332,7 +332,7 @@ if (app.local) {
 } else {
   // Use new GitHub Actions environment file method
   fs.appendFileSync(alchemy.env.GITHUB_OUTPUT, `api_url=${api.url}\n`)
-  fs.appendFileSync(alchemy.env.GITHUB_OUTPUT, `db_id=${db.id}\n`)
+  fs.appendFileSync(alchemy.env.GITHUB_OUTPUT, `db_name=${db.name}\n`)
 }
 
 await app.finalize()
