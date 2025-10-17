@@ -45,7 +45,8 @@
         "COUCH_WEBHOOK_SECRET",
         "COUCH_API_KEY",
         "GITHUB_TOKEN",
-        "GITHUB_OUTPUT"
+        "GITHUB_OUTPUT",
+        "MERCHANT_ADDRESS"
       ]
     },
     "infra:destroy": {
@@ -65,7 +66,8 @@
         "COUCH_WEBHOOK_SECRET",
         "COUCH_API_KEY",
         "GITHUB_TOKEN",
-        "GITHUB_OUTPUT"
+        "GITHUB_OUTPUT",
+        "MERCHANT_ADDRESS"
       ]
     }
   }

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from "bun:test"
 import type { D1Database } from "@cloudflare/workers-types"
-import { Hono } from "hono"
 import { createTestDB } from "@tests/test-db"
+import { Hono } from "hono"
 import { getAddress } from "viem"
 import { keysRoutes } from "@/api/routes/keys.routes"
 import { AccountService } from "@/services/account.service"
