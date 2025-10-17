@@ -208,6 +208,7 @@ jobs:
           CDP_API_KEY_SECRET: ${{ secrets.CDP_API_KEY_SECRET }}
           CDP_WALLET_SECRET: ${{ secrets.CDP_WALLET_SECRET }}
           CDP_CLIENT_API_KEY: ${{ secrets.CDP_CLIENT_API_KEY }}
+          MERCHANT_ADDRESS: ${{ secrets.MERCHANT_ADDRESS }}
           COUCH_WEBHOOK_SECRET: ${{ steps.couch.outputs.webhook_secret }}
           COUCH_API_KEY: ${{ steps.couch.outputs.api_key }}
           PULL_REQUEST: ${{ github.event.number }}
