@@ -145,6 +145,9 @@ jobs:
             exit 1
           fi
 
+          # Mask the webhook secret to prevent it from appearing in logs
+          echo "::add-mask::$WEBHOOK_SECRET"
+
           echo "api_key=$API_KEY" >> $GITHUB_OUTPUT
           echo "webhook_secret=$WEBHOOK_SECRET" >> $GITHUB_OUTPUT
 
