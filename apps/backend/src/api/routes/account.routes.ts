@@ -6,11 +6,11 @@ import type { WorkerEnv } from "@/types/api.env"
 export const accountRoutes = new Hono<{ Bindings: WorkerEnv }>()
 
 /**
- * PUT /api/account
- * Creates a new account or rotates the API key for an existing account
- * Returns the API key
+ * POST /api/account
+ * Creates a new account (only if allowlisted and doesn't exist)
+ * Returns the API key (one-time only)
  */
-accountRoutes.put("/", async (c) => {
+accountRoutes.post("/", async (c) => {
   const body = await c.req.json<{ address?: string }>()
   const address = body.address
 
@@ -19,9 +19,12 @@ accountRoutes.put("/", async (c) => {
   }
 
   const accountService = new AccountService(c.env)
-  const account = await accountService.createOrRotateAccount({ address })
+  const account = await accountService.createAccount({ address })
 
-  return c.json({
-    api_key: account.apiKey,
-  })
+  return c.json(
+    {
+      api_key: account.apiKey,
+    },
+    201,
+  )
 })

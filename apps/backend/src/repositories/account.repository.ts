@@ -19,7 +19,7 @@ export interface CreateAccountParams {
   accountAddress: Address
 }
 
-export interface RotateApiKeyParams {
+export interface SetApiKeyParams {
   accountAddress: Address
   keyHash: string
 }
@@ -63,9 +63,11 @@ export class AccountRepository {
   }
 
   /**
-   * Rotates API key for an account (atomic operation)
+   * Sets API key for an account (atomic operation)
+   * Deletes any existing keys and inserts the new one
+   * Works for both initial creation and rotation
    */
-  async rotateApiKey(params: RotateApiKeyParams): Promise<void> {
+  async setApiKey(params: SetApiKeyParams): Promise<void> {
     await this.db.batch([
       // Delete existing API key for this account (if any)
       this.db
@@ -97,5 +99,22 @@ export class AccountRepository {
     }
 
     return this.toAccountDomain({ address: result.account_address })
+  }
+
+  /**
+   * Gets account by address
+   */
+  async getAccountByAddress(address: Address): Promise<Account | null> {
+    const result = await this.db
+      .select()
+      .from(schema.accounts)
+      .where(eq(schema.accounts.address, address))
+      .get()
+
+    if (!result) {
+      return null
+    }
+
+    return this.toAccountDomain(result)
   }
 }

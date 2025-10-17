@@ -102,7 +102,7 @@ jobs:
         id: couch
         run: |
           # Create account and get API key
-          ACCOUNT_RESPONSE=$(curl -X PUT ${{ steps.backend.outputs.api_url }}/api/account \
+          ACCOUNT_RESPONSE=$(curl -X POST ${{ steps.backend.outputs.api_url }}/api/account \
             -H "Content-Type: application/json" \
             -d '{"address":"${{ secrets.MERCHANT_ADDRESS }}"}' \
             -s -w "\n%{http_code}")
