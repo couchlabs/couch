@@ -174,7 +174,7 @@ describe("WebhookService", () => {
     it("does not throw if no webhook configured", async () => {
       const activationResult: ActivationResult = {
         subscriptionId: TEST_SUBSCRIPTION_ID,
-        accountAddress: TEST_ACCOUNT,
+        creatorAddress: TEST_ACCOUNT,
         provider: Provider.BASE,
         transaction: { hash: "0xtxhash" as Hash, amount: "500000" },
         order: {
