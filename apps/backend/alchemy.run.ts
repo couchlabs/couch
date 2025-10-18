@@ -113,8 +113,8 @@ export const allowlist = await KVNamespace(ALLOWLIST_NAME, {
   title: `${NAME_PREFIX}-${ALLOWLIST_NAME}`,
   values: [
     {
-      key: alchemy.env.TEST_COUCH_ACCOUNT_ADDRESS,
-      value: "Note: TEST_COUCH_ACCOUNT_ADDRESS",
+      key: alchemy.env.COUCH_TEST_ACCOUNT_ADDRESS,
+      value: "Note: COUCH_TEST_ACCOUNT_ADDRESS",
     },
   ],
 })

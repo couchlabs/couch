@@ -59,8 +59,8 @@ curl -X PUT http://localhost:3000/api/webhook \
 Add both values to your `.env`:
 
 ```
-TEST_COUCH_ACCOUNT_APIKEY=your_api_key_here
-TEST_COUCH_ACCOUNT_WEBHOOK_SECRET=your_webhook_secret_here
+COUCH_TEST_ACCOUNT_APIKEY=your_api_key_here
+COUCH_TEST_ACCOUNT_WEBHOOK_SECRET=your_webhook_secret_here
 ```
 
 6. **Start the playground**

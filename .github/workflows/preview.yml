@@ -127,7 +127,7 @@ jobs:
           CDP_API_KEY_SECRET: ${{ secrets.CDP_API_KEY_SECRET }}
           CDP_WALLET_SECRET: ${{ secrets.CDP_WALLET_SECRET }}
           CDP_CLIENT_API_KEY: ${{ secrets.CDP_CLIENT_API_KEY }}
-          TEST_COUCH_ACCOUNT_ADDRESS: ${{ secrets.TEST_COUCH_ACCOUNT_ADDRESS }}
+          COUCH_TEST_ACCOUNT_ADDRESS: ${{ secrets.COUCH_TEST_ACCOUNT_ADDRESS }}
           PULL_REQUEST: ${{ github.event.number }}
           GITHUB_SHA: ${{ github.sha }}
           GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
@@ -136,8 +136,8 @@ jobs:
         run: .github/scripts/seed-test-account.sh
         env:
           DATABASE_NAME: ${{ steps.backend.outputs.db_name }}
-          TEST_COUCH_ACCOUNT_ADDRESS: ${{ secrets.TEST_COUCH_ACCOUNT_ADDRESS }}
-          TEST_COUCH_ACCOUNT_APIKEY: ${{ secrets.TEST_COUCH_ACCOUNT_APIKEY }}
+          COUCH_TEST_ACCOUNT_ADDRESS: ${{ secrets.COUCH_TEST_ACCOUNT_ADDRESS }}
+          COUCH_TEST_ACCOUNT_APIKEY: ${{ secrets.COUCH_TEST_ACCOUNT_APIKEY }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
@@ -145,7 +145,7 @@ jobs:
         id: couch
         run: |
           # Use the pre-seeded test API key
-          API_KEY="${{ secrets.TEST_COUCH_ACCOUNT_APIKEY }}"
+          API_KEY="${{ secrets.COUCH_TEST_ACCOUNT_APIKEY }}"
 
           # Construct playground URL from backend URL
           # Backend: couch-backend-pr-5-api.workers.dev
@@ -200,9 +200,9 @@ jobs:
           CDP_API_KEY_SECRET: ${{ secrets.CDP_API_KEY_SECRET }}
           CDP_WALLET_SECRET: ${{ secrets.CDP_WALLET_SECRET }}
           CDP_CLIENT_API_KEY: ${{ secrets.CDP_CLIENT_API_KEY }}
-          TEST_COUCH_ACCOUNT_ADDRESS: ${{ secrets.TEST_COUCH_ACCOUNT_ADDRESS }}
-          TEST_COUCH_ACCOUNT_WEBHOOK_SECRET: ${{ steps.couch.outputs.webhook_secret }}
-          TEST_COUCH_ACCOUNT_APIKEY: ${{ steps.couch.outputs.api_key }}
+          COUCH_TEST_ACCOUNT_ADDRESS: ${{ secrets.COUCH_TEST_ACCOUNT_ADDRESS }}
+          COUCH_TEST_ACCOUNT_WEBHOOK_SECRET: ${{ steps.couch.outputs.webhook_secret }}
+          COUCH_TEST_ACCOUNT_APIKEY: ${{ steps.couch.outputs.api_key }}
           PULL_REQUEST: ${{ github.event.number }}
           GITHUB_SHA: ${{ github.sha }}
           GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
@@ -233,4 +233,4 @@ jobs:
           CDP_API_KEY_SECRET: ${{ secrets.CDP_API_KEY_SECRET }}
           CDP_WALLET_SECRET: ${{ secrets.CDP_WALLET_SECRET }}
           CDP_CLIENT_API_KEY: ${{ secrets.CDP_CLIENT_API_KEY }}
-          TEST_COUCH_ACCOUNT_ADDRESS: ${{ secrets.TEST_COUCH_ACCOUNT_ADDRESS }}
+          COUCH_TEST_ACCOUNT_ADDRESS: ${{ secrets.COUCH_TEST_ACCOUNT_ADDRESS }}
