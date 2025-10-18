@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "9a42d2c0-d7f6-4b1a-9b9e-9fd705bba7a3",
+  "id": "d25e4022-6ce2-49b1-9c93-2b9c6bb8f5b3",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "accounts": {
@@ -258,8 +258,8 @@
           "notNull": true,
           "autoincrement": false
         },
-        "provider_id": {
-          "name": "provider_id",
+        "provider": {
+          "name": "provider",
           "type": "text",
           "primaryKey": false,
           "notNull": true,
@@ -322,9 +322,9 @@
           "name": "status",
           "value": "status IN ('processing', 'active', 'past_due', 'incomplete', 'canceled', 'unpaid')"
         },
-        "provider_id": {
-          "name": "provider_id",
-          "value": "provider_id IN ('base')"
+        "provider": {
+          "name": "provider",
+          "value": "provider IN ('base')"
         }
       }
     },
