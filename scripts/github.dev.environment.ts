@@ -62,11 +62,11 @@ const SECRETS = validateSecrets([
   },
   // Couch (Test Account)
   {
-    name: "TEST_COUCH_ACCOUNT_ADDRESS",
+    name: "COUCH_TEST_ACCOUNT_ADDRESS",
     description: "Test merchant wallet address (seeded in preview/staging)",
   },
   {
-    name: "TEST_COUCH_ACCOUNT_APIKEY",
+    name: "COUCH_TEST_ACCOUNT_APIKEY",
     description: "Test merchant API key (seeded in preview/staging)",
   },
 ])

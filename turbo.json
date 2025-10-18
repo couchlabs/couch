@@ -1,6 +1,16 @@
 {
   "$schema": "https://turborepo.com/schema.json",
   "ui": "stream",
+  "globalEnv": [
+    "STAGE",
+    "DO_NOT_TRACK",
+    "PULL_REQUEST",
+    "GITHUB_*",
+    "ALCHEMY_*",
+    "CLOUDFLARE_*",
+    "CDP_*",
+    "COUCH_*"
+  ],
   "tasks": {
     "dev": {
       "persistent": true,
@@ -26,59 +36,23 @@
     },
     "db:generate": {
       "cache": false,
-      "dependsOn": ["test"]
+      "dependsOn": [
+        "test"
+      ]
     },
     "infra:deploy": {
-      "dependsOn": ["^infra:deploy"],
-      "cache": false,
-      "env": [
-        "STAGE",
-        "DO_NOT_TRACK",
-        "PULL_REQUEST",
-        "GITHUB_ACTIONS",
-        "GITHUB_SHA",
-        "GITHUB_TOKEN",
-        "GITHUB_OUTPUT",
-        "ALCHEMY_PASSWORD",
-        "ALCHEMY_TELEMETRY_DISABLED",
-        "ALCHEMY_STATE_TOKEN",
-        "CLOUDFLARE_ACCOUNT_ID",
-        "CLOUDFLARE_API_TOKEN",
-        "CDP_API_KEY_ID",
-        "CDP_API_KEY_SECRET",
-        "CDP_WALLET_SECRET",
-        "CDP_CLIENT_API_KEY",
-        "TEST_COUCH_ACCOUNT_WEBHOOK_SECRET",
-        "TEST_COUCH_ACCOUNT_ADDRESS",
-        "TEST_COUCH_ACCOUNT_APIKEY"
-      ]
+      "dependsOn": [
+        "^infra:deploy"
+      ],
+      "cache": false
     },
     "infra:destroy": {
-      "cache": false,
-      "env": [
-        "STAGE",
-        "DO_NOT_TRACK",
-        "PULL_REQUEST",
-        "GITHUB_ACTIONS",
-        "GITHUB_SHA",
-        "GITHUB_TOKEN",
-        "GITHUB_OUTPUT",
-        "ALCHEMY_PASSWORD",
-        "ALCHEMY_TELEMETRY_DISABLED",
-        "ALCHEMY_STATE_TOKEN",
-        "CLOUDFLARE_ACCOUNT_ID",
-        "CLOUDFLARE_API_TOKEN",
-        "CDP_API_KEY_ID",
-        "CDP_API_KEY_SECRET",
-        "CDP_WALLET_SECRET",
-        "CDP_CLIENT_API_KEY",
-        "TEST_COUCH_ACCOUNT_WEBHOOK_SECRET",
-        "TEST_COUCH_ACCOUNT_ADDRESS",
-        "TEST_COUCH_ACCOUNT_APIKEY"
-      ]
+      "cache": false
     },
     "backend#infra:destroy": {
-      "dependsOn": ["playground#infra:destroy"],
+      "dependsOn": [
+        "playground#infra:destroy"
+      ],
       "cache": false
     },
     "playground#infra:destroy": {
