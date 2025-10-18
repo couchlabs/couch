@@ -52,9 +52,8 @@ export const app = await alchemy("couch-backend", {
       : new CloudflareStateStore(scope),
 })
 const NAME_PREFIX = `${app.name}-${app.stage}`
-const { NETWORK, LOGGING, DUNNING_MODE, WALLET_STAGE } = resolveStageConfig(
-  app.stage,
-)
+const { NETWORK, LOGGING, DUNNING_MODE, WALLET_STAGE, GH_ENVIRONMENT } =
+  resolveStageConfig(app.stage)
 
 // =============================================================================
 // ONCHAIN RESOURCES (Coinbase)
@@ -89,6 +88,7 @@ export const spenderSmartAccount = await EvmSmartAccount(SPENDER_ACCOUNT_NAME, {
 
 // Cloudflare Worker Flags
 const compatibilityFlags = ["nodejs_compat", "disallow_importable_env"]
+const url = GH_ENVIRONMENT === "dev"
 
 // -----------------------------------------------------------------------------
 // DATABASES
@@ -195,6 +195,7 @@ export const api = await Worker(API_NAME, {
   },
   compatibilityFlags,
   dev: { port: 3000 },
+  url,
 })
 
 // -----------------------------------------------------------------------------
@@ -230,6 +231,7 @@ export const orderConsumer = await Worker(ORDER_CONSUMER_NAME, {
   },
   compatibilityFlags,
   dev: { port: 3200 },
+  url,
 })
 
 // webhook.consumer: Delivers webhooks to merchant endpoints
@@ -260,6 +262,7 @@ export const webhookConsumer = await Worker(WEBHOOK_CONSUMER_NAME, {
   },
   compatibilityFlags,
   dev: { port: 3201 },
+  url,
 })
 
 // -----------------------------------------------------------------------------
@@ -288,6 +291,7 @@ export const orderDLQConsumer = await Worker(ORDER_DLQ_CONSUMER_NAME, {
   ],
   compatibilityFlags,
   dev: { port: 3202 },
+  url,
 })
 
 // webhook.dlq.consumer: Logs permanently failed webhooks (unreachable endpoints)
@@ -312,6 +316,7 @@ export const webhookDLQConsumer = await Worker(WEBHOOK_DLQ_CONSUMER_NAME, {
   ],
   compatibilityFlags,
   dev: { port: 3203 },
+  url,
 })
 
 // Log all resources in dev, machine-readable output in other stages

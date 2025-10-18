@@ -42,6 +42,7 @@ export const app = await alchemy("couch-playground", {
       : new CloudflareStateStore(scope),
 })
 const NAME_PREFIX = `${app.name}-${app.stage}`
+const { NETWORK, GH_ENVIRONMENT } = resolveStageConfig(app.stage)
 
 // Cloudflare Worker Flags
 const compatibilityFlags = ["nodejs_compat", "disallow_importable_env"]
@@ -69,6 +70,7 @@ export const website = await Vite(WEBSITE_NAME, {
     }),
   },
   compatibilityFlags,
+  url: GH_ENVIRONMENT === "dev",
 })
 
 if (app.local) {
@@ -80,8 +82,6 @@ if (app.local) {
 // =============================================================================
 
 if (process.env.PULL_REQUEST) {
-  const { NETWORK } = resolveStageConfig(app.stage)
-
   await GitHubComment("preview-comment", {
     owner: "couchlabs",
     repository: "couch",
