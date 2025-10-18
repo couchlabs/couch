@@ -49,7 +49,7 @@ subscriptionRoutes.post("/", subscriptionBody(), async (ctx) => {
       try {
         // 1. Fire created webhook FIRST
         await webhookService.emitSubscriptionCreated({
-          creatorAddress,
+          accountAddress: creatorAddress,
           subscriptionId,
           amount: subscriptionMetadata.amount,
           periodInSeconds: subscriptionMetadata.periodInSeconds,
@@ -82,7 +82,7 @@ subscriptionRoutes.post("/", subscriptionBody(), async (ctx) => {
 
         // 6. Fire activation failed webhook (service handles error sanitization)
         await webhookService.emitActivationFailed({
-          creatorAddress,
+          accountAddress: creatorAddress,
           subscriptionId,
           amount: subscriptionMetadata.amount,
           periodInSeconds: subscriptionMetadata.periodInSeconds,
