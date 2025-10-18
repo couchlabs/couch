@@ -23,7 +23,10 @@ subscriptionRoutes.use(apiKeyAuth())
  */
 subscriptionRoutes.post("/", subscriptionBody(), async (ctx) => {
   const { accountAddress } = ctx.get("auth")
-  const { subscriptionId, providerId } = ctx.get("subscription")
+  const { subscriptionId, provider, beneficiary } = ctx.get("subscription")
+
+  // Beneficiary defaults to accountAddress if not specified (self-subscription)
+  const beneficiaryAddress = beneficiary || accountAddress
 
   const subscriptionService = new SubscriptionService(ctx.env)
   const webhookService = new WebhookService(ctx.env)
@@ -33,7 +36,8 @@ subscriptionRoutes.post("/", subscriptionBody(), async (ctx) => {
     await subscriptionService.createSubscription({
       subscriptionId,
       accountAddress,
-      providerId,
+      beneficiaryAddress,
+      provider,
     })
 
   // Process activation charge and emit webhooks in background
@@ -52,7 +56,8 @@ subscriptionRoutes.post("/", subscriptionBody(), async (ctx) => {
         const activation = await subscriptionService.processActivationCharge({
           subscriptionId,
           accountAddress,
-          providerId,
+          beneficiaryAddress,
+          provider,
           orderId,
           orderNumber,
         })
@@ -87,10 +92,7 @@ subscriptionRoutes.post("/", subscriptionBody(), async (ctx) => {
   // Return immediately with processing status
   return new Response(
     JSON.stringify({
-      subscription_id: subscriptionId,
       status: "processing",
-      order_id: orderId,
-      order_number: orderNumber,
     }),
     {
       status: 201,

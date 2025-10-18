@@ -30,7 +30,7 @@ export default {
     // Process each message in the batch
     const results = await Promise.allSettled(
       batch.messages.map(async (message) => {
-        const { orderId, providerId } = message.body
+        const { orderId, provider } = message.body
 
         const messageLog = log.with({
           messageId: message.id,
@@ -48,7 +48,7 @@ export default {
           messageLog.info("Processing recurring payment")
           const result = await orderService.processOrder({
             orderId,
-            providerId,
+            provider,
           })
 
           if (result.success) {

@@ -11,6 +11,7 @@ describe("resolveStageConfig", () => {
         LOGGING: "verbose",
         DUNNING_MODE: "fast",
         WALLET_STAGE: "dev",
+        GH_ENVIRONMENT: "dev",
       })
     })
   })
@@ -24,6 +25,7 @@ describe("resolveStageConfig", () => {
         LOGGING: "verbose",
         DUNNING_MODE: "standard",
         WALLET_STAGE: "dev",
+        GH_ENVIRONMENT: "dev",
       })
     })
   })
@@ -37,6 +39,7 @@ describe("resolveStageConfig", () => {
         LOGGING: "minimal",
         DUNNING_MODE: "standard",
         WALLET_STAGE: "sandbox",
+        GH_ENVIRONMENT: "sandbox",
       })
     })
   })
@@ -50,6 +53,7 @@ describe("resolveStageConfig", () => {
         LOGGING: "minimal",
         DUNNING_MODE: "standard",
         WALLET_STAGE: "prod",
+        GH_ENVIRONMENT: "prod",
       })
     })
   })
@@ -63,6 +67,7 @@ describe("resolveStageConfig", () => {
         LOGGING: "verbose",
         DUNNING_MODE: "fast",
         WALLET_STAGE: "dev",
+        GH_ENVIRONMENT: "dev",
       })
     })
 
@@ -74,6 +79,7 @@ describe("resolveStageConfig", () => {
         LOGGING: "verbose",
         DUNNING_MODE: "fast",
         WALLET_STAGE: "dev",
+        GH_ENVIRONMENT: "dev",
       })
     })
 
@@ -85,6 +91,7 @@ describe("resolveStageConfig", () => {
         LOGGING: "verbose",
         DUNNING_MODE: "fast",
         WALLET_STAGE: "dev",
+        GH_ENVIRONMENT: "dev",
       })
     })
   })

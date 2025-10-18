@@ -69,7 +69,7 @@ export function SubscriptionCreator() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          subscription_id: subscription.id,
+          id: subscription.id,
           provider: "base",
         }),
       })

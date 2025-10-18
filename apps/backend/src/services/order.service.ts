@@ -29,7 +29,7 @@ export interface OrderServiceDeps
 
 export interface ProcessOrderParams {
   orderId: number
-  providerId: Provider
+  provider: Provider
 }
 
 export type ProcessOrderResult =
@@ -108,11 +108,11 @@ export class OrderService {
       periodInSeconds?: number
       recurringCharge: string | bigint
     }
-    providerId: Provider
+    provider: Provider
     log: ReturnType<typeof logger.with>
     logReason?: string
   }): Promise<boolean> {
-    const { subscriptionId, onchainStatus, providerId, log, logReason } = params
+    const { subscriptionId, onchainStatus, provider, log, logReason } = params
 
     if (
       !onchainStatus.isSubscribed ||
@@ -152,7 +152,7 @@ export class OrderService {
     await scheduler.set({
       orderId: nextOrderId,
       dueAt: onchainStatus.nextPeriodStart,
-      providerId,
+      provider,
     })
 
     const scheduledMessage = logReason
@@ -172,7 +172,7 @@ export class OrderService {
    * Creates next order on success, marks subscription inactive on failure
    */
   async processOrder(params: ProcessOrderParams): Promise<ProcessOrderResult> {
-    const { orderId, providerId } = params
+    const { orderId, provider } = params
 
     const log = logger.with({ orderId })
     const op = log.operation("processOrder")
@@ -195,6 +195,7 @@ export class OrderService {
     const {
       subscriptionId,
       accountAddress,
+      beneficiaryAddress,
       amount,
       status,
       orderNumber,
@@ -206,6 +207,7 @@ export class OrderService {
       log.info("Order details fetched", {
         subscriptionId,
         accountAddress,
+        beneficiaryAddress,
         amount,
         orderNumber,
       })
@@ -215,8 +217,8 @@ export class OrderService {
       const chargeResult = await this.onchainRepository.chargeSubscription({
         subscriptionId,
         amount,
-        recipient: accountAddress, // Send USDC to merchant account
-        providerId,
+        recipient: beneficiaryAddress, // Send USDC to beneficiary
+        provider,
       })
 
       // Step 3: Record successful transaction
@@ -251,14 +253,14 @@ export class OrderService {
       const { subscription: onchainStatus } =
         await this.onchainRepository.getSubscriptionStatus({
           subscriptionId,
-          providerId,
+          provider,
         })
 
       // Step 5: Create next order
       const nextOrderCreated = await this.createAndScheduleNextOrder({
         subscriptionId,
         onchainStatus,
-        providerId,
+        provider,
         log,
       })
 
@@ -346,7 +348,7 @@ export class OrderService {
           // Reschedule this order for retry via Durable Object
           await scheduler.update({
             dueAt: action.nextRetryAt,
-            providerId,
+            provider,
           })
 
           log.info("Rescheduled order for retry", {
@@ -402,14 +404,14 @@ export class OrderService {
           const { subscription: onchainStatus } =
             await this.onchainRepository.getSubscriptionStatus({
               subscriptionId,
-              providerId,
+              provider,
             })
 
           // Create next order if subscription still active
           const nextOrderCreated = await this.createAndScheduleNextOrder({
             subscriptionId,
             onchainStatus,
-            providerId,
+            provider,
             log,
             logReason: "despite failure",
           })

@@ -18,17 +18,17 @@ export interface ChargeSubscriptionParams {
   subscriptionId: Hash
   amount: string
   recipient: Address // Merchant account address to receive the USDC
-  providerId: Provider
+  provider: Provider
 }
 
 export interface GetSubscriptionStatusParams {
   subscriptionId: Hash
-  providerId: Provider
+  provider: Provider
 }
 
 export interface ValidateSubscriptionIdParams {
   subscriptionId: string
-  providerId: Provider
+  provider: Provider
 }
 
 export type SubscriptionStatusResult =
@@ -76,20 +76,29 @@ export class OnchainRepository {
   async chargeSubscription(
     params: ChargeSubscriptionParams,
   ): Promise<ChargeResult> {
-    const { subscriptionId, amount, recipient, providerId } = params
-    const log = logger.with({ subscriptionId, amount, recipient, providerId })
+    const { subscriptionId, amount, recipient, provider } = params
+    const log = logger.with({
+      subscriptionId,
+      amount,
+      recipient,
+      provider,
+    })
 
     try {
       log.info("Executing onchain charge via provider")
 
-      const provider = this.providerRegistry.get(providerId)
-      const { transactionHash, gasUsed } = await provider.chargeSubscription({
-        subscriptionId,
-        amount,
-        recipient,
-      })
+      const onchainProvider = this.providerRegistry.get(provider)
+      const { transactionHash, gasUsed } =
+        await onchainProvider.chargeSubscription({
+          subscriptionId,
+          amount,
+          recipient,
+        })
 
-      log.info("Onchain charge successful", { transactionHash, providerId })
+      log.info("Onchain charge successful", {
+        transactionHash,
+        provider,
+      })
 
       return { transactionHash, gasUsed }
     } catch (error) {
@@ -101,19 +110,21 @@ export class OnchainRepository {
   async getSubscriptionStatus(
     params: GetSubscriptionStatusParams,
   ): Promise<SubscriptionStatusResult> {
-    const { subscriptionId, providerId } = params
-    const log = logger.with({ subscriptionId, providerId })
+    const { subscriptionId, provider } = params
+    const log = logger.with({ subscriptionId, provider })
 
     try {
       log.info("Fetching onchain subscription status via provider")
 
-      const provider = this.providerRegistry.get(providerId)
-      const result = await provider.getSubscriptionStatus({ subscriptionId })
+      const onchainProvider = this.providerRegistry.get(provider)
+      const result = await onchainProvider.getSubscriptionStatus({
+        subscriptionId,
+      })
 
       log.info("Onchain subscription status retrieved", {
         permissionExists: result.permissionExists,
         isSubscribed: result.isSubscribed,
-        providerId,
+        provider,
       })
 
       // Permission not found in indexer
@@ -154,7 +165,7 @@ export class OnchainRepository {
   async validateSubscriptionId(
     params: ValidateSubscriptionIdParams,
   ): Promise<boolean> {
-    const provider = this.providerRegistry.get(params.providerId)
-    return provider.validateSubscriptionId(params.subscriptionId)
+    const onchainProvider = this.providerRegistry.get(params.provider)
+    return onchainProvider.validateSubscriptionId(params.subscriptionId)
   }
 }

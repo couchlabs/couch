@@ -131,7 +131,7 @@ describe("WebhookService", () => {
       const activationResult: ActivationResult = {
         subscriptionId: TEST_SUBSCRIPTION_ID,
         accountAddress: TEST_ACCOUNT,
-        providerId: Provider.BASE,
+        provider: Provider.BASE,
         transaction: {
           hash: "0xtxhash" as Hash,
           amount: "500000",
@@ -175,7 +175,7 @@ describe("WebhookService", () => {
       const activationResult: ActivationResult = {
         subscriptionId: TEST_SUBSCRIPTION_ID,
         accountAddress: TEST_ACCOUNT,
-        providerId: Provider.BASE,
+        provider: Provider.BASE,
         transaction: { hash: "0xtxhash" as Hash, amount: "500000" },
         order: {
           id: 1,

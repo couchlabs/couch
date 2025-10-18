@@ -13,12 +13,14 @@ export type Network = "testnet" | "mainnet"
 export type LoggingLevel = "verbose" | "minimal"
 export type DunningMode = "fast" | "standard"
 export type WalletStage = "dev" | "sandbox" | "prod"
+export type GHEnvironment = WalletStage
 
 export interface StageConfig {
   NETWORK: Network
   LOGGING: LoggingLevel
   DUNNING_MODE: DunningMode
   WALLET_STAGE: WalletStage
+  GH_ENVIRONMENT: GHEnvironment
 }
 
 /**
@@ -63,5 +65,6 @@ export function resolveStageConfig(stage: string): StageConfig {
     LOGGING,
     DUNNING_MODE,
     WALLET_STAGE,
+    GH_ENVIRONMENT: WALLET_STAGE,
   }
 }

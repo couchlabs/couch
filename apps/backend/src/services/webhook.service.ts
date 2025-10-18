@@ -90,7 +90,7 @@ export interface WebhookEvent {
 }
 
 export interface SetWebhookParams {
-  accountAddress: Address
+  accountAddress: Address // Account that receives webhooks
   url: string
 }
 
@@ -104,7 +104,7 @@ export interface WebhookResult {
  * subscriptionAmount and subscriptionPeriodInSeconds are REQUIRED - they represent immutable subscription terms
  */
 export interface EmitWebhookEventParams {
-  accountAddress: Address // From auth context
+  accountAddress: Address // Account that receives webhooks
   subscriptionId: Hash
   subscriptionStatus: SubscriptionStatus
   subscriptionAmount: string // Recurring charge amount - REQUIRED

@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "91e9669e-f31c-4854-8a3a-cf6ed6cb6d20",
+  "id": "7237717b-ac83-4005-8882-f5f62f5f552a",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "accounts": {
@@ -244,13 +244,6 @@
           "notNull": true,
           "autoincrement": false
         },
-        "owner_address": {
-          "name": "owner_address",
-          "type": "text",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false
-        },
         "account_address": {
           "name": "account_address",
           "type": "text",
@@ -258,8 +251,15 @@
           "notNull": true,
           "autoincrement": false
         },
-        "provider_id": {
-          "name": "provider_id",
+        "beneficiary_address": {
+          "name": "beneficiary_address",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "provider": {
+          "name": "provider",
           "type": "text",
           "primaryKey": false,
           "notNull": true,
@@ -283,9 +283,14 @@
         }
       },
       "indexes": {
-        "idx_subscriptions_created": {
-          "name": "idx_subscriptions_created",
-          "columns": ["created_at"],
+        "idx_subscriptions_account": {
+          "name": "idx_subscriptions_account",
+          "columns": ["account_address"],
+          "isUnique": false
+        },
+        "idx_subscriptions_beneficiary": {
+          "name": "idx_subscriptions_beneficiary",
+          "columns": ["beneficiary_address"],
           "isUnique": false
         },
         "idx_subscriptions_status": {
@@ -293,14 +298,9 @@
           "columns": ["status"],
           "isUnique": false
         },
-        "idx_subscriptions_owner": {
-          "name": "idx_subscriptions_owner",
-          "columns": ["owner_address"],
-          "isUnique": false
-        },
-        "idx_subscriptions_account": {
-          "name": "idx_subscriptions_account",
-          "columns": ["account_address"],
+        "idx_subscriptions_created": {
+          "name": "idx_subscriptions_created",
+          "columns": ["created_at"],
           "isUnique": false
         }
       },
@@ -322,9 +322,9 @@
           "name": "status",
           "value": "status IN ('processing', 'active', 'past_due', 'incomplete', 'canceled', 'unpaid')"
         },
-        "provider_id": {
-          "name": "provider_id",
-          "value": "provider_id IN ('base')"
+        "provider": {
+          "name": "provider",
+          "value": "provider IN ('base')"
         }
       }
     },
