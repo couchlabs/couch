@@ -420,8 +420,8 @@ if (signature !== expectedSignature) {
 
 - **`POST /api/subscriptions`** - Register subscription (bind onchain permission to infrastructure)
   - **Requires**: `Authorization: Bearer <api_key>` header
-  - **Body**: `{ subscription_id: string, provider: "base" }`
-  - **Returns**: Subscription details with initial transaction
+  - **Body**: `{ id: string, provider: "base", beneficiary?: string }`
+  - **Returns**: `{ status: "processing" }`
 
 - **`PUT /api/webhook`** - Set webhook URL for events
   - **Requires**: `Authorization: Bearer <api_key>` header

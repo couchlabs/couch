@@ -40,10 +40,6 @@ const providerValues = Object.values(Provider)
 // ACCOUNT TABLES
 // =============================================================================
 
-// =============================================================================
-// Accounts table - tied to merchant wallet address (checksummed 0x...)
-// =============================================================================
-
 export const accounts = sqliteTable("accounts", {
   address: text("address").primaryKey(),
 })
@@ -80,21 +76,23 @@ export const subscriptions = sqliteTable(
   {
     subscriptionId: text("subscription_id").primaryKey(),
     status: text("status").$type<SubscriptionStatus>().notNull(),
-    ownerAddress: text("owner_address").notNull(),
-    accountAddress: text("account_address")
+    // Who created this subscription in Couch
+    creatorAddress: text("creator_address")
       .notNull()
       .references(() => accounts.address),
-    providerId: text("provider_id").notNull(),
+    // Who receives payments
+    beneficiaryAddress: text("beneficiary_address").notNull(),
+    provider: text("provider").notNull(),
     createdAt: text("created_at").default(sql`CURRENT_TIMESTAMP`),
     modifiedAt: text("modified_at").default(sql`CURRENT_TIMESTAMP`),
   },
   (table) => [
-    index("idx_subscriptions_created").on(table.createdAt),
+    index("idx_subscriptions_creator").on(table.creatorAddress),
+    index("idx_subscriptions_beneficiary").on(table.beneficiaryAddress),
     index("idx_subscriptions_status").on(table.status),
-    index("idx_subscriptions_owner").on(table.ownerAddress),
-    index("idx_subscriptions_account").on(table.accountAddress),
+    index("idx_subscriptions_created").on(table.createdAt),
     check("status", sql.raw(`status IN (${subscriptionStatusValues})`)),
-    check("provider_id", sql.raw(`provider_id IN (${providerValues})`)),
+    check("provider", sql.raw(`provider IN (${providerValues})`)),
   ],
 )
 
@@ -199,11 +197,11 @@ export type NewWebhookRow = typeof webhooks.$inferInsert
 // Repositories transform between Row and Domain types
 export type Subscription = Omit<
   SubscriptionRow,
-  "subscriptionId" | "ownerAddress" | "accountAddress"
+  "subscriptionId" | "creatorAddress" | "beneficiaryAddress"
 > & {
   subscriptionId: Hash
-  ownerAddress: Address
-  accountAddress: Address
+  creatorAddress: Address
+  beneficiaryAddress: Address
 }
 
 export type Order = Omit<OrderRow, "subscriptionId"> & {

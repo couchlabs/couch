@@ -1,7 +1,7 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "91e9669e-f31c-4854-8a3a-cf6ed6cb6d20",
+  "id": "9a42d2c0-d7f6-4b1a-9b9e-9fd705bba7a3",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "accounts": {
@@ -244,15 +244,15 @@
           "notNull": true,
           "autoincrement": false
         },
-        "owner_address": {
-          "name": "owner_address",
+        "creator_address": {
+          "name": "creator_address",
           "type": "text",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
         },
-        "account_address": {
-          "name": "account_address",
+        "beneficiary_address": {
+          "name": "beneficiary_address",
           "type": "text",
           "primaryKey": false,
           "notNull": true,
@@ -283,9 +283,14 @@
         }
       },
       "indexes": {
-        "idx_subscriptions_created": {
-          "name": "idx_subscriptions_created",
-          "columns": ["created_at"],
+        "idx_subscriptions_creator": {
+          "name": "idx_subscriptions_creator",
+          "columns": ["creator_address"],
+          "isUnique": false
+        },
+        "idx_subscriptions_beneficiary": {
+          "name": "idx_subscriptions_beneficiary",
+          "columns": ["beneficiary_address"],
           "isUnique": false
         },
         "idx_subscriptions_status": {
@@ -293,23 +298,18 @@
           "columns": ["status"],
           "isUnique": false
         },
-        "idx_subscriptions_owner": {
-          "name": "idx_subscriptions_owner",
-          "columns": ["owner_address"],
-          "isUnique": false
-        },
-        "idx_subscriptions_account": {
-          "name": "idx_subscriptions_account",
-          "columns": ["account_address"],
+        "idx_subscriptions_created": {
+          "name": "idx_subscriptions_created",
+          "columns": ["created_at"],
           "isUnique": false
         }
       },
       "foreignKeys": {
-        "subscriptions_account_address_accounts_address_fk": {
-          "name": "subscriptions_account_address_accounts_address_fk",
+        "subscriptions_creator_address_accounts_address_fk": {
+          "name": "subscriptions_creator_address_accounts_address_fk",
           "tableFrom": "subscriptions",
           "tableTo": "accounts",
-          "columnsFrom": ["account_address"],
+          "columnsFrom": ["creator_address"],
           "columnsTo": ["address"],
           "onDelete": "no action",
           "onUpdate": "no action"

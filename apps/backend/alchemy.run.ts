@@ -127,7 +127,7 @@ export const allowlist = await KVNamespace(ALLOWLIST_NAME, {
 const ORDER_QUEUE_NAME = "order-queue"
 export interface OrderQueueMessage {
   orderId: number
-  providerId: Provider
+  provider: Provider
 }
 export const orderQueue = await Queue<OrderQueueMessage>(ORDER_QUEUE_NAME, {
   name: `${NAME_PREFIX}-${ORDER_QUEUE_NAME}`,

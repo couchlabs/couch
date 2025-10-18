@@ -54,7 +54,7 @@ describe("WebhookService", () => {
   describe("setWebhook", () => {
     it("sets webhook URL successfully and generates secret", async () => {
       const result = await service.setWebhook({
-        accountAddress: TEST_ACCOUNT,
+        creatorAddress: TEST_ACCOUNT,
         url: TEST_WEBHOOK_URL,
       })
 
@@ -74,13 +74,13 @@ describe("WebhookService", () => {
     it("updates existing webhook URL and generates new secret", async () => {
       // Set initial webhook
       const result1 = await service.setWebhook({
-        accountAddress: TEST_ACCOUNT,
+        creatorAddress: TEST_ACCOUNT,
         url: "https://example.com/old",
       })
 
       // Update to new URL
       const result2 = await service.setWebhook({
-        accountAddress: TEST_ACCOUNT,
+        creatorAddress: TEST_ACCOUNT,
         url: TEST_WEBHOOK_URL,
       })
 
@@ -101,14 +101,14 @@ describe("WebhookService", () => {
     it("throws error for invalid webhook URL format", async () => {
       await expect(
         service.setWebhook({
-          accountAddress: TEST_ACCOUNT,
+          creatorAddress: TEST_ACCOUNT,
           url: "not-a-valid-url",
         }),
       ).rejects.toThrow(HTTPError)
 
       try {
         await service.setWebhook({
-          accountAddress: TEST_ACCOUNT,
+          creatorAddress: TEST_ACCOUNT,
           url: "not-a-valid-url",
         })
       } catch (error) {
@@ -130,8 +130,8 @@ describe("WebhookService", () => {
 
       const activationResult: ActivationResult = {
         subscriptionId: TEST_SUBSCRIPTION_ID,
-        accountAddress: TEST_ACCOUNT,
-        providerId: Provider.BASE,
+        creatorAddress: TEST_ACCOUNT,
+        provider: Provider.BASE,
         transaction: {
           hash: "0xtxhash" as Hash,
           amount: "500000",
@@ -174,8 +174,8 @@ describe("WebhookService", () => {
     it("does not throw if no webhook configured", async () => {
       const activationResult: ActivationResult = {
         subscriptionId: TEST_SUBSCRIPTION_ID,
-        accountAddress: TEST_ACCOUNT,
-        providerId: Provider.BASE,
+        creatorAddress: TEST_ACCOUNT,
+        provider: Provider.BASE,
         transaction: { hash: "0xtxhash" as Hash, amount: "500000" },
         order: {
           id: 1,
@@ -211,7 +211,7 @@ describe("WebhookService", () => {
         .run()
 
       await service.emitSubscriptionCreated({
-        accountAddress: TEST_ACCOUNT,
+        creatorAddress: TEST_ACCOUNT,
         subscriptionId: TEST_SUBSCRIPTION_ID,
         amount: "1000000",
         periodInSeconds: 2592000,
@@ -241,7 +241,7 @@ describe("WebhookService", () => {
         .run()
 
       await service.emitPaymentProcessed({
-        accountAddress: TEST_ACCOUNT,
+        creatorAddress: TEST_ACCOUNT,
         subscriptionId: TEST_SUBSCRIPTION_ID,
         orderNumber: 2,
         amount: "1000000",
@@ -276,7 +276,7 @@ describe("WebhookService", () => {
         .run()
 
       await service.emitPaymentFailed({
-        accountAddress: TEST_ACCOUNT,
+        creatorAddress: TEST_ACCOUNT,
         subscriptionId: TEST_SUBSCRIPTION_ID,
         subscriptionStatus: SubscriptionStatus.PAST_DUE,
         orderNumber: 2,
@@ -311,7 +311,7 @@ describe("WebhookService", () => {
       const nextRetryDate = new Date("2025-02-02T00:00:00Z")
 
       await service.emitPaymentFailed({
-        accountAddress: TEST_ACCOUNT,
+        creatorAddress: TEST_ACCOUNT,
         subscriptionId: TEST_SUBSCRIPTION_ID,
         subscriptionStatus: SubscriptionStatus.PAST_DUE,
         orderNumber: 2,
@@ -350,7 +350,7 @@ describe("WebhookService", () => {
       )
 
       await service.emitActivationFailed({
-        accountAddress: TEST_ACCOUNT,
+        creatorAddress: TEST_ACCOUNT,
         subscriptionId: TEST_SUBSCRIPTION_ID,
         amount: "500000",
         periodInSeconds: 2592000,
@@ -383,7 +383,7 @@ describe("WebhookService", () => {
       )
 
       await service.emitActivationFailed({
-        accountAddress: TEST_ACCOUNT,
+        creatorAddress: TEST_ACCOUNT,
         subscriptionId: TEST_SUBSCRIPTION_ID,
         amount: "500000",
         periodInSeconds: 2592000,

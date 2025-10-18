@@ -74,9 +74,9 @@ describe("OrderService", () => {
       subscriptions: [
         {
           subscriptionId: TEST_SUBSCRIPTION_ID,
-          ownerAddress: TEST_OWNER,
-          accountAddress: TEST_ACCOUNT,
-          providerId: Provider.BASE,
+          creatorAddress: TEST_ACCOUNT,
+          beneficiaryAddress: TEST_OWNER,
+          provider: Provider.BASE,
           status: overrides?.subscriptionStatus,
           order: {
             type: OrderType.INITIAL,
@@ -139,7 +139,7 @@ describe("OrderService", () => {
       expect(orderDetails).toMatchObject({
         id: orderId,
         subscriptionId: TEST_SUBSCRIPTION_ID,
-        accountAddress: TEST_ACCOUNT,
+        creatorAddress: TEST_ACCOUNT,
         amount: "1000000",
         orderNumber: 1,
         status: OrderStatus.PROCESSING,
@@ -169,7 +169,7 @@ describe("OrderService", () => {
 
       const result = await orderService.processOrder({
         orderId: testDB.orderIds[0],
-        providerId: Provider.BASE,
+        provider: Provider.BASE,
       })
 
       expect(result).toEqual({
@@ -180,12 +180,12 @@ describe("OrderService", () => {
         subscriptionStatus: SubscriptionStatus.ACTIVE,
       })
 
-      // Verify blockchain charge was called with correct params
+      // Verify blockchain charge was called with correct params (sends to beneficiary)
       expect(mockChargeSubscription).toHaveBeenCalledWith({
         subscriptionId: TEST_SUBSCRIPTION_ID,
         amount: "1000000",
-        recipient: TEST_ACCOUNT,
-        providerId: Provider.BASE,
+        recipient: TEST_OWNER, // Beneficiary receives payment
+        provider: Provider.BASE,
       })
 
       // Verify order status via public getOrderDetails method
@@ -224,7 +224,7 @@ describe("OrderService", () => {
 
       const result = await orderService.processOrder({
         orderId: testDB.orderIds[0],
-        providerId: Provider.BASE,
+        provider: Provider.BASE,
       })
 
       expect(result).toEqual({
@@ -246,7 +246,7 @@ describe("OrderService", () => {
 
       const result = await orderService.processOrder({
         orderId: testDB.orderIds[0],
-        providerId: Provider.BASE,
+        provider: Provider.BASE,
       })
 
       expect(result.success).toBe(true)
@@ -272,7 +272,7 @@ describe("OrderService", () => {
       await expect(
         orderService.processOrder({
           orderId: 999,
-          providerId: Provider.BASE,
+          provider: Provider.BASE,
         }),
       ).rejects.toThrow("Order 999 not found")
     })
@@ -293,7 +293,7 @@ describe("OrderService", () => {
 
       const result = await orderService.processOrder({
         orderId: testDB.orderIds[0],
-        providerId: Provider.BASE,
+        provider: Provider.BASE,
       })
 
       expect(result).toMatchObject({
@@ -325,7 +325,7 @@ describe("OrderService", () => {
 
       const result = await orderService.processOrder({
         orderId: testDB.orderIds[0],
-        providerId: Provider.BASE,
+        provider: Provider.BASE,
       })
 
       expect(result.subscriptionStatus).toBe(SubscriptionStatus.CANCELED)
@@ -350,7 +350,7 @@ describe("OrderService", () => {
 
       const result = await orderService.processOrder({
         orderId: testDB.orderIds[0],
-        providerId: Provider.BASE,
+        provider: Provider.BASE,
       })
 
       expect(result.subscriptionStatus).toBe(SubscriptionStatus.ACTIVE)
@@ -377,7 +377,7 @@ describe("OrderService", () => {
 
       const result = await orderService.processOrder({
         orderId: testDB.orderIds[0],
-        providerId: Provider.BASE,
+        provider: Provider.BASE,
       })
 
       expect(result.success).toBe(false)
@@ -414,7 +414,7 @@ describe("OrderService", () => {
 
       const result = await orderService.processOrder({
         orderId: testDB.orderIds[0],
-        providerId: Provider.BASE,
+        provider: Provider.BASE,
       })
 
       expect(result.success).toBe(false)
@@ -458,7 +458,7 @@ describe("OrderService", () => {
 
       const result = await orderService.processOrder({
         orderId: testDB.orderIds[0],
-        providerId: Provider.BASE,
+        provider: Provider.BASE,
       })
 
       expect(result.success).toBe(false)
@@ -486,7 +486,7 @@ describe("OrderService", () => {
 
       const result = await orderService.processOrder({
         orderId: testDB.orderIds[0],
-        providerId: Provider.BASE,
+        provider: Provider.BASE,
       })
 
       expect(result.success).toBe(false)
@@ -514,7 +514,7 @@ describe("OrderService", () => {
 
       const result = await orderService.processOrder({
         orderId: testDB.orderIds[0],
-        providerId: Provider.BASE,
+        provider: Provider.BASE,
       })
 
       expect(result.success).toBe(false)
@@ -559,7 +559,7 @@ describe("OrderService", () => {
 
       const result = await orderService.processOrder({
         orderId: testDB.orderIds[0],
-        providerId: Provider.BASE,
+        provider: Provider.BASE,
       })
 
       expect(result.success).toBe(false)

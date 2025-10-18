@@ -8,7 +8,7 @@ const logger = createLogger("order.scheduler")
 // Environment interface for OrderScheduler DO
 export interface OrderSchedulerEnv {
   ORDER_QUEUE: {
-    send: (message: { orderId: number; providerId: Provider }) => Promise<void>
+    send: (message: { orderId: number; provider: Provider }) => Promise<void>
   }
 }
 
@@ -52,17 +52,17 @@ export class OrderScheduler extends DurableObject<OrderSchedulerEnv> {
    *
    * @param orderId - Required on first call to initialize
    * @param dueAt - When to process the order
-   * @param providerId - Which blockchain provider
+   * @param provider - Which blockchain provider
    */
   async set(params: {
     orderId: number
     dueAt: Date
-    providerId: Provider
+    provider: Provider
   }): Promise<void> {
-    const { orderId, dueAt, providerId } = params
+    const { orderId, dueAt, provider } = params
     const now = new Date()
     const delayMs = dueAt.getTime() - Date.now()
-    const log = logger.with({ orderId, providerId })
+    const log = logger.with({ orderId, provider })
     const op = log.operation("Set schedule")
 
     op.start({
@@ -73,7 +73,7 @@ export class OrderScheduler extends DurableObject<OrderSchedulerEnv> {
     // Use transaction for atomicity
     await this.ctx.storage.transaction(async (txn) => {
       await txn.put("order_id", orderId)
-      await txn.put("provider_id", providerId as string)
+      await txn.put("provider", provider as string)
       await txn.put("scheduled_at", now.toISOString())
       await txn.put("scheduled_for", dueAt.toISOString())
       await txn.put("alarm_processed", false) // CRITICAL: Idempotency flag
@@ -93,7 +93,7 @@ export class OrderScheduler extends DurableObject<OrderSchedulerEnv> {
    * Use case: Change due date or provider without recreating schedule
    * orderId is retrieved from storage (set during first .set() call)
    */
-  async update(params: { dueAt?: Date; providerId?: Provider }): Promise<void> {
+  async update(params: { dueAt?: Date; provider?: Provider }): Promise<void> {
     const orderId = await this.ctx.storage.get<number>("order_id")
     const log = logger.with({ orderId })
     const op = log.operation("Update schedule")
@@ -111,9 +111,9 @@ export class OrderScheduler extends DurableObject<OrderSchedulerEnv> {
       })
     }
 
-    if (params.providerId) {
-      await this.ctx.storage.put("provider_id", params.providerId as string)
-      log.info("Updated provider", { newProviderId: params.providerId })
+    if (params.provider) {
+      await this.ctx.storage.put("provider", params.provider as string)
+      log.info("Updated provider", { newProvider: params.provider })
     }
 
     // Reset processing state for retry
@@ -129,9 +129,9 @@ export class OrderScheduler extends DurableObject<OrderSchedulerEnv> {
    */
   async delete(): Promise<void> {
     const orderId = await this.ctx.storage.get<number>("order_id")
-    const providerId = await this.ctx.storage.get<string>("provider_id")
+    const provider = await this.ctx.storage.get<string>("provider")
     const scheduledFor = await this.ctx.storage.get<string>("scheduled_for")
-    const log = logger.with({ orderId, providerId })
+    const log = logger.with({ orderId, provider })
     const op = log.operation("Delete schedule")
 
     op.start({
@@ -152,14 +152,14 @@ export class OrderScheduler extends DurableObject<OrderSchedulerEnv> {
    */
   async get(): Promise<{
     orderId?: number
-    providerId?: string
+    provider?: string
     scheduledAt?: string
     scheduledFor?: Date
     processed: boolean
     failed: boolean
   }> {
     const orderId = await this.ctx.storage.get<number>("order_id")
-    const providerId = await this.ctx.storage.get<string>("provider_id")
+    const provider = await this.ctx.storage.get<string>("provider")
     const scheduledAt = await this.ctx.storage.get<string>("scheduled_at")
     const scheduledFor = await this.ctx.storage.get<string>("scheduled_for")
     const processed = await this.ctx.storage.get<boolean>("alarm_processed")
@@ -167,7 +167,7 @@ export class OrderScheduler extends DurableObject<OrderSchedulerEnv> {
 
     return {
       orderId,
-      providerId,
+      provider,
       scheduledAt,
       scheduledFor: scheduledFor ? new Date(scheduledFor) : undefined,
       processed: processed ?? false,
@@ -201,12 +201,12 @@ export class OrderScheduler extends DurableObject<OrderSchedulerEnv> {
    */
   async alarm(alarmInfo: AlarmInvocationInfo): Promise<void> {
     const orderId = await this.ctx.storage.get<number>("order_id")
-    const providerId = (await this.ctx.storage.get<string>(
-      "provider_id",
+    const provider = (await this.ctx.storage.get<string>(
+      "provider",
     )) as Provider
     const scheduledFor = await this.ctx.storage.get<string>("scheduled_for")
     const retryCount = alarmInfo.retryCount
-    const log = logger.with({ orderId, providerId, retryCount })
+    const log = logger.with({ orderId, provider, retryCount })
     const op = log.operation("Process alarm")
 
     op.start({
@@ -215,10 +215,10 @@ export class OrderScheduler extends DurableObject<OrderSchedulerEnv> {
       isRetry: retryCount > 0,
     })
 
-    if (!orderId || !providerId) {
+    if (!orderId || !provider) {
       log.error("Alarm fired but missing order data", {
         hasOrderId: !!orderId,
-        hasProviderId: !!providerId,
+        hasProvider: !!provider,
       })
       return
     }
@@ -247,12 +247,12 @@ export class OrderScheduler extends DurableObject<OrderSchedulerEnv> {
     }
 
     try {
-      log.info("Sending order to queue", { orderId, providerId })
+      log.info("Sending order to queue", { orderId, provider })
 
       // Send to ORDER_QUEUE
       await this.env.ORDER_QUEUE.send({
         orderId,
-        providerId,
+        provider,
       })
 
       log.info("Order queued successfully")

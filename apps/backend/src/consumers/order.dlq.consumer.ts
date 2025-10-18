@@ -33,12 +33,12 @@ export default {
     })
 
     for (const message of batch.messages) {
-      const { orderId, providerId } = message.body
+      const { orderId, provider } = message.body
 
       log.error("Order permanently failed - system error", {
         messageId: message.id,
         orderId,
-        providerId,
+        provider,
         attempts: message.attempts,
         timestamp: message.timestamp,
       })

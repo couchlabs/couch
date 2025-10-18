@@ -104,12 +104,12 @@ describe("SubscriptionService", () => {
     it("validates subscription ID successfully", async () => {
       await service.validateId({
         subscriptionId: TEST_SUBSCRIPTION_ID,
-        providerId: Provider.BASE,
+        provider: Provider.BASE,
       })
 
       expect(mockValidateSubscriptionId).toHaveBeenCalledWith({
         subscriptionId: TEST_SUBSCRIPTION_ID,
-        providerId: Provider.BASE,
+        provider: Provider.BASE,
       })
     })
 
@@ -119,14 +119,14 @@ describe("SubscriptionService", () => {
       await expect(
         service.validateId({
           subscriptionId: TEST_SUBSCRIPTION_ID,
-          providerId: Provider.BASE,
+          provider: Provider.BASE,
         }),
       ).rejects.toThrow(HTTPError)
 
       try {
         await service.validateId({
           subscriptionId: TEST_SUBSCRIPTION_ID,
-          providerId: Provider.BASE,
+          provider: Provider.BASE,
         })
       } catch (error) {
         expect(error).toBeInstanceOf(HTTPError)
@@ -139,8 +139,9 @@ describe("SubscriptionService", () => {
     it("creates subscription successfully with valid onchain state", async () => {
       const result = await service.createSubscription({
         subscriptionId: TEST_SUBSCRIPTION_ID,
-        accountAddress: TEST_ACCOUNT,
-        providerId: Provider.BASE,
+        creatorAddress: TEST_ACCOUNT,
+        beneficiaryAddress: TEST_OWNER,
+        provider: Provider.BASE,
       })
 
       expect(result).toMatchObject({
@@ -161,15 +162,44 @@ describe("SubscriptionService", () => {
       expect(subStatus?.status).toBe(SubscriptionStatus.PROCESSING)
     })
 
+    it("creates self-subscription successfully (creator = beneficiary)", async () => {
+      const result = await service.createSubscription({
+        subscriptionId: TEST_SUBSCRIPTION_ID,
+        creatorAddress: TEST_ACCOUNT,
+        beneficiaryAddress: TEST_ACCOUNT, // Self-subscription
+        provider: Provider.BASE,
+      })
+
+      expect(result).toMatchObject({
+        orderId: expect.any(Number),
+        orderNumber: 1,
+        subscriptionMetadata: {
+          amount: "1000000",
+          periodInSeconds: 2592000,
+        },
+      })
+
+      // Verify subscription was created with same creator and beneficiary
+      const subscription = await testDB.db
+        .prepare(
+          "SELECT creator_address, beneficiary_address FROM subscriptions WHERE subscription_id = ?",
+        )
+        .bind(TEST_SUBSCRIPTION_ID)
+        .first<{ creator_address: string; beneficiary_address: string }>()
+
+      expect(subscription?.creator_address).toBe(TEST_ACCOUNT)
+      expect(subscription?.beneficiary_address).toBe(TEST_ACCOUNT)
+    })
+
     it("throws error if subscription already exists", async () => {
       const testDB = await createTestDB({
         accounts: [TEST_ACCOUNT],
         subscriptions: [
           {
             subscriptionId: TEST_SUBSCRIPTION_ID,
-            ownerAddress: TEST_OWNER,
-            accountAddress: TEST_ACCOUNT,
-            providerId: Provider.BASE,
+            creatorAddress: TEST_ACCOUNT,
+            beneficiaryAddress: TEST_OWNER,
+            provider: Provider.BASE,
           },
         ],
       })
@@ -180,16 +210,18 @@ describe("SubscriptionService", () => {
       await expect(
         service.createSubscription({
           subscriptionId: TEST_SUBSCRIPTION_ID,
-          accountAddress: TEST_ACCOUNT,
-          providerId: Provider.BASE,
+          creatorAddress: TEST_ACCOUNT,
+          beneficiaryAddress: TEST_OWNER,
+          provider: Provider.BASE,
         }),
       ).rejects.toThrow(HTTPError)
 
       try {
         await service.createSubscription({
           subscriptionId: TEST_SUBSCRIPTION_ID,
-          accountAddress: TEST_ACCOUNT,
-          providerId: Provider.BASE,
+          creatorAddress: TEST_ACCOUNT,
+          beneficiaryAddress: TEST_OWNER,
+          provider: Provider.BASE,
         })
       } catch (error) {
         expect(error).toBeInstanceOf(HTTPError)
@@ -223,16 +255,18 @@ describe("SubscriptionService", () => {
       await expect(
         service.createSubscription({
           subscriptionId: TEST_SUBSCRIPTION_ID,
-          accountAddress: TEST_ACCOUNT,
-          providerId: Provider.BASE,
+          creatorAddress: TEST_ACCOUNT,
+          beneficiaryAddress: TEST_OWNER,
+          provider: Provider.BASE,
         }),
       ).rejects.toThrow(HTTPError)
 
       try {
         await service.createSubscription({
           subscriptionId: TEST_SUBSCRIPTION_ID,
-          accountAddress: TEST_ACCOUNT,
-          providerId: Provider.BASE,
+          creatorAddress: TEST_ACCOUNT,
+          beneficiaryAddress: TEST_OWNER,
+          provider: Provider.BASE,
         })
       } catch (error) {
         expect(error).toBeInstanceOf(HTTPError)
@@ -255,16 +289,18 @@ describe("SubscriptionService", () => {
       await expect(
         service.createSubscription({
           subscriptionId: TEST_SUBSCRIPTION_ID,
-          accountAddress: TEST_ACCOUNT,
-          providerId: Provider.BASE,
+          creatorAddress: TEST_ACCOUNT,
+          beneficiaryAddress: TEST_OWNER,
+          provider: Provider.BASE,
         }),
       ).rejects.toThrow(HTTPError)
 
       try {
         await service.createSubscription({
           subscriptionId: TEST_SUBSCRIPTION_ID,
-          accountAddress: TEST_ACCOUNT,
-          providerId: Provider.BASE,
+          creatorAddress: TEST_ACCOUNT,
+          beneficiaryAddress: TEST_OWNER,
+          provider: Provider.BASE,
         })
       } catch (error) {
         expect(error).toBeInstanceOf(HTTPError)
@@ -281,9 +317,9 @@ describe("SubscriptionService", () => {
         subscriptions: [
           {
             subscriptionId: TEST_SUBSCRIPTION_ID,
-            ownerAddress: TEST_OWNER,
-            accountAddress: TEST_ACCOUNT,
-            providerId: Provider.BASE,
+            creatorAddress: TEST_ACCOUNT,
+            beneficiaryAddress: TEST_OWNER,
+            provider: Provider.BASE,
             status: SubscriptionStatus.PROCESSING,
             order: {
               type: OrderType.INITIAL,
@@ -301,15 +337,16 @@ describe("SubscriptionService", () => {
 
       const result = await service.processActivationCharge({
         subscriptionId: TEST_SUBSCRIPTION_ID,
-        accountAddress: TEST_ACCOUNT,
-        providerId: Provider.BASE,
+        creatorAddress: TEST_ACCOUNT,
+        beneficiaryAddress: TEST_OWNER,
+        provider: Provider.BASE,
         orderId: testDB.orderIds[0],
         orderNumber: 1,
       })
 
       expect(result).toMatchObject({
         subscriptionId: TEST_SUBSCRIPTION_ID,
-        accountAddress: TEST_ACCOUNT,
+        creatorAddress: TEST_ACCOUNT,
         transaction: {
           hash: MOCK_CHARGE_RESULT.transactionHash,
           amount: "500000",
@@ -327,12 +364,12 @@ describe("SubscriptionService", () => {
         },
       })
 
-      // Verify charge was called with correct params
+      // Verify charge was called with correct params (sends to beneficiary)
       expect(mockChargeSubscription).toHaveBeenCalledWith({
         subscriptionId: TEST_SUBSCRIPTION_ID,
         amount: "500000",
-        recipient: TEST_ACCOUNT,
-        providerId: Provider.BASE,
+        recipient: TEST_OWNER, // Beneficiary receives payment
+        provider: Provider.BASE,
       })
     })
 
@@ -342,9 +379,9 @@ describe("SubscriptionService", () => {
         subscriptions: [
           {
             subscriptionId: TEST_SUBSCRIPTION_ID,
-            ownerAddress: TEST_OWNER,
-            accountAddress: TEST_ACCOUNT,
-            providerId: Provider.BASE,
+            creatorAddress: TEST_ACCOUNT,
+            beneficiaryAddress: TEST_OWNER,
+            provider: Provider.BASE,
             status: SubscriptionStatus.PROCESSING,
             order: {
               type: OrderType.INITIAL,
@@ -376,8 +413,9 @@ describe("SubscriptionService", () => {
 
       const result = await service.processActivationCharge({
         subscriptionId: TEST_SUBSCRIPTION_ID,
-        accountAddress: TEST_ACCOUNT,
-        providerId: Provider.BASE,
+        creatorAddress: TEST_ACCOUNT,
+        beneficiaryAddress: TEST_OWNER,
+        provider: Provider.BASE,
         orderId: testDB.orderIds[0],
         orderNumber: 1,
       })
@@ -394,9 +432,9 @@ describe("SubscriptionService", () => {
         subscriptions: [
           {
             subscriptionId: TEST_SUBSCRIPTION_ID,
-            ownerAddress: TEST_OWNER,
-            accountAddress: TEST_ACCOUNT,
-            providerId: Provider.BASE,
+            creatorAddress: TEST_ACCOUNT,
+            beneficiaryAddress: TEST_OWNER,
+            provider: Provider.BASE,
             status: SubscriptionStatus.PROCESSING,
             order: {
               type: OrderType.INITIAL,
@@ -435,8 +473,9 @@ describe("SubscriptionService", () => {
       await expect(
         service.processActivationCharge({
           subscriptionId: TEST_SUBSCRIPTION_ID,
-          accountAddress: TEST_ACCOUNT,
-          providerId: Provider.BASE,
+          creatorAddress: TEST_ACCOUNT,
+          beneficiaryAddress: TEST_OWNER,
+          provider: Provider.BASE,
           orderId: testDB.orderIds[0],
           orderNumber: 1,
         }),
@@ -451,9 +490,9 @@ describe("SubscriptionService", () => {
         subscriptions: [
           {
             subscriptionId: TEST_SUBSCRIPTION_ID,
-            ownerAddress: TEST_OWNER,
-            accountAddress: TEST_ACCOUNT,
-            providerId: Provider.BASE,
+            creatorAddress: TEST_ACCOUNT,
+            beneficiaryAddress: TEST_OWNER,
+            provider: Provider.BASE,
             status: SubscriptionStatus.PROCESSING,
             order: {
               type: OrderType.INITIAL,
@@ -471,8 +510,8 @@ describe("SubscriptionService", () => {
 
       const activationResult = {
         subscriptionId: TEST_SUBSCRIPTION_ID,
-        accountAddress: TEST_ACCOUNT,
-        providerId: Provider.BASE,
+        creatorAddress: TEST_ACCOUNT,
+        provider: Provider.BASE,
         transaction: {
           hash: "0xtxhash" as Hash,
           amount: "500000",
@@ -530,8 +569,8 @@ describe("SubscriptionService", () => {
     it("does not throw error if activation fails (background processing)", async () => {
       const activationResult = {
         subscriptionId: "0xinvalid" as Hash, // Non-existent subscription
-        accountAddress: TEST_ACCOUNT,
-        providerId: Provider.BASE,
+        creatorAddress: TEST_ACCOUNT,
+        provider: Provider.BASE,
         transaction: {
           hash: "0xtxhash" as Hash,
           amount: "500000",
@@ -563,9 +602,9 @@ describe("SubscriptionService", () => {
         subscriptions: [
           {
             subscriptionId: TEST_SUBSCRIPTION_ID,
-            ownerAddress: TEST_OWNER,
-            accountAddress: TEST_ACCOUNT,
-            providerId: Provider.BASE,
+            creatorAddress: TEST_ACCOUNT,
+            beneficiaryAddress: TEST_OWNER,
+            provider: Provider.BASE,
             status: SubscriptionStatus.PROCESSING,
             order: {
               type: OrderType.INITIAL,

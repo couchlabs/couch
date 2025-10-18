@@ -1,11 +1,13 @@
 import { createMiddleware } from "hono/factory"
-import type { Hash } from "viem"
+import type { Address, Hash } from "viem"
+import { isAddress } from "viem"
 import { ErrorCode, HTTPError } from "@/errors/http.errors"
 import { Provider } from "@/providers/provider.interface"
 
 export interface SubscriptionContext {
   subscriptionId: Hash
-  providerId: Provider
+  provider: Provider
+  beneficiaryAddress?: Address // Optional - defaults to creator if not provided
 }
 
 export const subscriptionBody = () =>
@@ -13,19 +15,15 @@ export const subscriptionBody = () =>
     Variables: { subscription: SubscriptionContext }
   }>(async (ctx, next) => {
     const body = await ctx.req.json<{
-      subscription_id?: Hash
+      id?: Hash
       provider?: string
+      beneficiary?: string
     }>()
 
-    const subscriptionId = body.subscription_id
-    const provider = body.provider
+    const { id, provider, beneficiary } = body
 
-    if (!subscriptionId) {
-      throw new HTTPError(
-        400,
-        ErrorCode.MISSING_FIELD,
-        "subscription_id is required",
-      )
+    if (!id) {
+      throw new HTTPError(400, ErrorCode.MISSING_FIELD, "id is required")
     }
 
     if (!provider) {
@@ -40,9 +38,19 @@ export const subscriptionBody = () =>
       )
     }
 
+    // Validate beneficiary address if provided
+    if (beneficiary && !isAddress(beneficiary)) {
+      throw new HTTPError(
+        400,
+        ErrorCode.INVALID_FORMAT,
+        "Invalid beneficiary address format",
+      )
+    }
+
     ctx.set("subscription", {
-      subscriptionId,
-      providerId: provider as Provider,
+      subscriptionId: id,
+      provider: provider as Provider,
+      beneficiaryAddress: beneficiary as Address | undefined,
     })
 
     await next()

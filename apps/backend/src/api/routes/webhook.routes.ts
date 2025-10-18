@@ -29,7 +29,7 @@ webhookRoutes.put("/", async (c) => {
 
   const webhookService = new WebhookService(c.env)
   const webhook = await webhookService.setWebhook({
-    accountAddress,
+    creatorAddress: accountAddress,
     url,
   })
 

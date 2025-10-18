@@ -24,13 +24,14 @@ export interface SubscriptionServiceDeps
 
 export interface ValidateSubscriptionIdParams {
   subscriptionId: Hash
-  providerId: Provider
+  provider: Provider
 }
 
 export interface CreateSubscriptionParams {
   subscriptionId: Hash
-  accountAddress: Address
-  providerId: Provider
+  creatorAddress: Address // Who activated subscription (receives webhooks)
+  beneficiaryAddress: Address // Who receives payments
+  provider: Provider
 }
 
 export interface CreateSubscriptionResult {
@@ -44,16 +45,17 @@ export interface CreateSubscriptionResult {
 
 export interface ProcessActivationChargeParams {
   subscriptionId: Hash
-  accountAddress: Address
-  providerId: Provider
+  creatorAddress: Address // Who activated subscription (receives webhooks)
+  beneficiaryAddress: Address // Who receives payments
+  provider: Provider
   orderId: number
   orderNumber: number
 }
 
 export interface ActivationResult {
   subscriptionId: Hash
-  accountAddress: Address
-  providerId: Provider
+  creatorAddress: Address // Who activated subscription (receives webhooks)
+  provider: Provider
   transaction: {
     hash: Hash
     amount: string
@@ -104,7 +106,7 @@ export class SubscriptionService {
    * Errors are logged but not thrown since this runs in background.
    */
   async completeActivation(result: ActivationResult): Promise<void> {
-    const { subscriptionId, providerId, transaction, order, nextOrder } = result
+    const { subscriptionId, provider, transaction, order, nextOrder } = result
 
     const log = logger.with({
       subscriptionId,
@@ -129,7 +131,7 @@ export class SubscriptionService {
       log.info("Scheduling next order via Durable Object", {
         nextOrderId,
         dueAt: nextOrder.date,
-        providerId,
+        provider,
       })
 
       const scheduler = this.deps.ORDER_SCHEDULER.get(
@@ -139,7 +141,7 @@ export class SubscriptionService {
       await scheduler.set({
         orderId: nextOrderId,
         dueAt: new Date(nextOrder.date),
-        providerId,
+        provider,
       })
 
       log.info("Background subscription activation completed", {
@@ -169,12 +171,12 @@ export class SubscriptionService {
   }
 
   async validateId(params: ValidateSubscriptionIdParams): Promise<void> {
-    const { subscriptionId, providerId } = params
+    const { subscriptionId, provider } = params
 
     // Use provider-specific validation
     const isValid = await this.onchainRepository.validateSubscriptionId({
       subscriptionId,
-      providerId,
+      provider,
     })
 
     if (!isValid) {
@@ -194,10 +196,11 @@ export class SubscriptionService {
   async createSubscription(
     params: CreateSubscriptionParams,
   ): Promise<CreateSubscriptionResult> {
-    const { subscriptionId, accountAddress, providerId } = params
+    const { subscriptionId, creatorAddress, beneficiaryAddress, provider } =
+      params
 
     // Validate domain constraints
-    await this.validateId({ subscriptionId, providerId })
+    await this.validateId({ subscriptionId, provider })
 
     const log = logger.with({ subscriptionId })
 
@@ -219,7 +222,7 @@ export class SubscriptionService {
     const { subscription } = await this.onchainRepository.getSubscriptionStatus(
       {
         subscriptionId,
-        providerId,
+        provider,
       },
     )
 
@@ -248,9 +251,9 @@ export class SubscriptionService {
     const result =
       await this.subscriptionRepository.createSubscriptionWithOrder({
         subscriptionId,
-        ownerAddress: subscription.subscriptionOwner,
-        accountAddress,
-        providerId,
+        creatorAddress,
+        beneficiaryAddress,
+        provider,
         order: {
           subscriptionId: subscriptionId,
           type: OrderType.INITIAL,
@@ -288,8 +291,14 @@ export class SubscriptionService {
   async processActivationCharge(
     params: ProcessActivationChargeParams,
   ): Promise<ActivationResult> {
-    const { subscriptionId, accountAddress, providerId, orderId, orderNumber } =
-      params
+    const {
+      subscriptionId,
+      creatorAddress,
+      beneficiaryAddress,
+      provider,
+      orderId,
+      orderNumber,
+    } = params
 
     const log = logger.with({ subscriptionId })
 
@@ -297,7 +306,7 @@ export class SubscriptionService {
     const { subscription } = await this.onchainRepository.getSubscriptionStatus(
       {
         subscriptionId,
-        providerId,
+        provider,
       },
     )
 
@@ -336,17 +345,17 @@ export class SubscriptionService {
         gasUsed: undefined,
       }
     } else {
-      // Execute charge
+      // Execute charge - send payment to beneficiary
       log.info("Processing charge", {
         amount: subscription.remainingChargeInPeriod,
-        recipient: accountAddress,
+        recipient: beneficiaryAddress,
       })
 
       transaction = await this.onchainRepository.chargeSubscription({
         subscriptionId,
         amount: subscription.remainingChargeInPeriod,
-        recipient: accountAddress,
-        providerId,
+        recipient: beneficiaryAddress,
+        provider,
       })
     }
 
@@ -357,8 +366,8 @@ export class SubscriptionService {
 
     return {
       subscriptionId,
-      accountAddress,
-      providerId,
+      creatorAddress,
+      provider,
       transaction: {
         hash: transaction.transactionHash,
         amount: subscription.remainingChargeInPeriod,

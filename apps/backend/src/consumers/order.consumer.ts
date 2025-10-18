@@ -30,7 +30,7 @@ export default {
     // Process each message in the batch
     const results = await Promise.allSettled(
       batch.messages.map(async (message) => {
-        const { orderId, providerId } = message.body
+        const { orderId, provider } = message.body
 
         const messageLog = log.with({
           messageId: message.id,
@@ -48,7 +48,7 @@ export default {
           messageLog.info("Processing recurring payment")
           const result = await orderService.processOrder({
             orderId,
-            providerId,
+            provider,
           })
 
           if (result.success) {
@@ -59,7 +59,7 @@ export default {
 
             // Emit webhook for successful payment
             await webhookService.emitPaymentProcessed({
-              accountAddress: orderDetails.accountAddress,
+              creatorAddress: orderDetails.creatorAddress,
               subscriptionId: orderDetails.subscriptionId,
               orderNumber: result.orderNumber, // Guaranteed to exist
               amount: orderDetails.amount,
@@ -82,7 +82,7 @@ export default {
 
             // Emit webhook for failed payment
             await webhookService.emitPaymentFailed({
-              accountAddress: orderDetails.accountAddress,
+              creatorAddress: orderDetails.creatorAddress,
               subscriptionId: orderDetails.subscriptionId,
               subscriptionStatus: result.subscriptionStatus,
               orderNumber: result.orderNumber,

@@ -103,11 +103,10 @@
               "listen": "test",
               "script": {
                 "exec": [
-                  "if (pm.response.code === 202) {",
+                  "if (pm.response.code === 201) {",
                   "    const response = pm.response.json();",
-                  "    if (response.data && response.data.subscription_id) {",
-                  "        pm.collectionVariables.set(\"testSubscriptionId\", response.data.subscription_id);",
-                  "        console.log(\"Subscription ID saved to collection variables\");",
+                  "    if (response.status === \"processing\") {",
+                  "        console.log(\"Subscription created successfully\");",
                   "    }",
                   "}"
                 ],
@@ -130,7 +129,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"subscription_id\": \"{{testSubscriptionId}}\",\n  \"provider\": \"base\"\n}"
+              "raw": "{\n  \"id\": \"{{testSubscriptionId}}\",\n  \"provider\": \"base\"\n}"
             },
             "url": {
               "raw": "{{baseUrl}}/subscriptions",

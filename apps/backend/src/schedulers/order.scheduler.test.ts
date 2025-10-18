@@ -94,11 +94,11 @@ describe("OrderScheduler", () => {
       await scheduler.set({
         orderId: TEST_ORDER_ID,
         dueAt: TEST_DUE_DATE,
-        providerId: TEST_PROVIDER_ID,
+        provider: TEST_PROVIDER_ID,
       })
 
       expect(mockStorage.get("order_id")).toBe(TEST_ORDER_ID)
-      expect(mockStorage.get("provider_id")).toBe(TEST_PROVIDER_ID)
+      expect(mockStorage.get("provider")).toBe(TEST_PROVIDER_ID)
       expect(mockStorage.get("scheduled_for")).toBe(TEST_DUE_DATE.toISOString())
       expect(mockStorage.get("alarm_processed")).toBe(false)
       expect(mockAlarmTime).toBe(TEST_DUE_DATE.getTime())
@@ -109,7 +109,7 @@ describe("OrderScheduler", () => {
       await scheduler.set({
         orderId: TEST_ORDER_ID,
         dueAt: TEST_DUE_DATE,
-        providerId: TEST_PROVIDER_ID,
+        provider: TEST_PROVIDER_ID,
       })
 
       // Mark as processed
@@ -120,7 +120,7 @@ describe("OrderScheduler", () => {
       await scheduler.set({
         orderId: TEST_ORDER_ID,
         dueAt: newDate,
-        providerId: TEST_PROVIDER_ID,
+        provider: TEST_PROVIDER_ID,
       })
 
       // Should reset flag
@@ -134,7 +134,7 @@ describe("OrderScheduler", () => {
       await scheduler.set({
         orderId: TEST_ORDER_ID,
         dueAt: TEST_DUE_DATE,
-        providerId: TEST_PROVIDER_ID,
+        provider: TEST_PROVIDER_ID,
       })
     })
 
@@ -146,10 +146,10 @@ describe("OrderScheduler", () => {
       expect(mockAlarmTime).toBe(newDate.getTime())
     })
 
-    it("updates provider ID", async () => {
-      await scheduler.update({ providerId: Provider.BASE })
+    it("updates provider", async () => {
+      await scheduler.update({ provider: Provider.BASE })
 
-      expect(mockStorage.get("provider_id")).toBe(Provider.BASE)
+      expect(mockStorage.get("provider")).toBe(Provider.BASE)
     })
 
     it("resets processing state when updating", async () => {
@@ -168,7 +168,7 @@ describe("OrderScheduler", () => {
       await scheduler.set({
         orderId: TEST_ORDER_ID,
         dueAt: TEST_DUE_DATE,
-        providerId: TEST_PROVIDER_ID,
+        provider: TEST_PROVIDER_ID,
       })
 
       await scheduler.delete()
@@ -183,14 +183,14 @@ describe("OrderScheduler", () => {
       await scheduler.set({
         orderId: TEST_ORDER_ID,
         dueAt: TEST_DUE_DATE,
-        providerId: TEST_PROVIDER_ID,
+        provider: TEST_PROVIDER_ID,
       })
 
       const status = await scheduler.get()
 
       expect(status).toMatchObject({
         orderId: TEST_ORDER_ID,
-        providerId: TEST_PROVIDER_ID,
+        provider: TEST_PROVIDER_ID,
         scheduledFor: TEST_DUE_DATE,
         processed: false,
         failed: false,
@@ -202,7 +202,7 @@ describe("OrderScheduler", () => {
 
       expect(status).toMatchObject({
         orderId: undefined,
-        providerId: undefined,
+        provider: undefined,
         scheduledAt: undefined,
         scheduledFor: undefined,
         processed: false,
@@ -216,7 +216,7 @@ describe("OrderScheduler", () => {
       await scheduler.set({
         orderId: TEST_ORDER_ID,
         dueAt: TEST_DUE_DATE,
-        providerId: TEST_PROVIDER_ID,
+        provider: TEST_PROVIDER_ID,
       })
     })
 
@@ -226,7 +226,7 @@ describe("OrderScheduler", () => {
       // Verify queue was called
       expect(mockEnv.ORDER_QUEUE.send).toHaveBeenCalledWith({
         orderId: TEST_ORDER_ID,
-        providerId: TEST_PROVIDER_ID,
+        provider: TEST_PROVIDER_ID,
       })
 
       // Verify storage was cleaned up (including alarm_processed flag)
@@ -280,7 +280,7 @@ describe("OrderScheduler", () => {
       await scheduler.set({
         orderId: TEST_ORDER_ID,
         dueAt: TEST_DUE_DATE,
-        providerId: TEST_PROVIDER_ID,
+        provider: TEST_PROVIDER_ID,
       })
 
       // First alarm fire - succeeds but cleanup fails
