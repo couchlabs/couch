@@ -74,7 +74,7 @@ describe("OrderService", () => {
       subscriptions: [
         {
           subscriptionId: TEST_SUBSCRIPTION_ID,
-          creatorAddress: TEST_ACCOUNT,
+          accountAddress: TEST_ACCOUNT,
           beneficiaryAddress: TEST_OWNER,
           provider: Provider.BASE,
           status: overrides?.subscriptionStatus,
@@ -139,7 +139,7 @@ describe("OrderService", () => {
       expect(orderDetails).toMatchObject({
         id: orderId,
         subscriptionId: TEST_SUBSCRIPTION_ID,
-        creatorAddress: TEST_ACCOUNT,
+        accountAddress: TEST_ACCOUNT,
         amount: "1000000",
         orderNumber: 1,
         status: OrderStatus.PROCESSING,

@@ -249,7 +249,7 @@ export class WebhookService {
    */
   async emitSubscriptionActivated(result: ActivationResult): Promise<void> {
     await this.emitSubscriptionUpdated({
-      accountAddress: result.creatorAddress,
+      accountAddress: result.accountAddress,
       subscriptionId: result.subscriptionId,
       subscriptionStatus: SubscriptionStatus.ACTIVE,
       subscriptionAmount: result.transaction.amount,

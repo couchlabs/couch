@@ -194,7 +194,7 @@ export class OrderService {
 
     const {
       subscriptionId,
-      creatorAddress,
+      accountAddress,
       beneficiaryAddress,
       amount,
       status,
@@ -206,7 +206,7 @@ export class OrderService {
       // Add details to logging context
       log.info("Order details fetched", {
         subscriptionId,
-        creatorAddress,
+        accountAddress,
         beneficiaryAddress,
         amount,
         orderNumber,

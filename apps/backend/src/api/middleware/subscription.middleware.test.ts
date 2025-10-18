@@ -48,11 +48,11 @@ describe("subscriptionBody middleware", () => {
     expect(data).toMatchObject({
       subscriptionId: "0x1234",
       provider: Provider.BASE,
-      beneficiaryAddress: "0xabcd1234567890123456789012345678abcd1234",
+      beneficiary: "0xabcd1234567890123456789012345678abcd1234",
     })
   })
 
-  it("omits beneficiaryAddress when not provided", async () => {
+  it("omits beneficiary when not provided", async () => {
     const response = await app.request("/test", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -63,8 +63,8 @@ describe("subscriptionBody middleware", () => {
     })
 
     expect(response.status).toBe(200)
-    const data = (await response.json()) as { beneficiaryAddress?: string }
-    expect(data.beneficiaryAddress).toBeUndefined()
+    const data = (await response.json()) as { beneficiary?: string }
+    expect(data.beneficiary).toBeUndefined()
   })
 
   it("throws error for missing id", async () => {

@@ -20,7 +20,7 @@ const MIGRATIONS_PATH = path.resolve(
 
 export interface TestSubscription {
   subscriptionId: Hash
-  creatorAddress: Address
+  accountAddress: Address
   beneficiaryAddress: Address
   provider: Provider
   status?: SubscriptionStatus
@@ -83,7 +83,7 @@ export async function createTestDB(options: CreateTestDbOptions = {}): Promise<{
         .insert(schema.subscriptions)
         .values({
           subscriptionId: sub.subscriptionId,
-          creatorAddress: sub.creatorAddress,
+          accountAddress: sub.accountAddress,
           beneficiaryAddress: sub.beneficiaryAddress,
           provider: sub.provider,
           status: sub.status ?? SubscriptionStatus.PROCESSING,

@@ -29,7 +29,7 @@ export interface ValidateSubscriptionIdParams {
 
 export interface CreateSubscriptionParams {
   subscriptionId: Hash
-  creatorAddress: Address // Who activated subscription (receives webhooks)
+  accountAddress: Address // Who activated subscription (receives webhooks)
   beneficiaryAddress: Address // Who receives payments
   provider: Provider
 }
@@ -45,7 +45,7 @@ export interface CreateSubscriptionResult {
 
 export interface ProcessActivationChargeParams {
   subscriptionId: Hash
-  creatorAddress: Address // Who activated subscription (receives webhooks)
+  accountAddress: Address // Who activated subscription (receives webhooks)
   beneficiaryAddress: Address // Who receives payments
   provider: Provider
   orderId: number
@@ -54,7 +54,7 @@ export interface ProcessActivationChargeParams {
 
 export interface ActivationResult {
   subscriptionId: Hash
-  creatorAddress: Address // Who activated subscription (receives webhooks)
+  accountAddress: Address // Who activated subscription (receives webhooks)
   provider: Provider
   transaction: {
     hash: Hash
@@ -196,7 +196,7 @@ export class SubscriptionService {
   async createSubscription(
     params: CreateSubscriptionParams,
   ): Promise<CreateSubscriptionResult> {
-    const { subscriptionId, creatorAddress, beneficiaryAddress, provider } =
+    const { subscriptionId, accountAddress, beneficiaryAddress, provider } =
       params
 
     // Validate domain constraints
@@ -251,7 +251,7 @@ export class SubscriptionService {
     const result =
       await this.subscriptionRepository.createSubscriptionWithOrder({
         subscriptionId,
-        creatorAddress,
+        accountAddress,
         beneficiaryAddress,
         provider,
         order: {
@@ -293,7 +293,7 @@ export class SubscriptionService {
   ): Promise<ActivationResult> {
     const {
       subscriptionId,
-      creatorAddress,
+      accountAddress,
       beneficiaryAddress,
       provider,
       orderId,
@@ -366,7 +366,7 @@ export class SubscriptionService {
 
     return {
       subscriptionId,
-      creatorAddress,
+      accountAddress,
       provider,
       transaction: {
         hash: transaction.transactionHash,

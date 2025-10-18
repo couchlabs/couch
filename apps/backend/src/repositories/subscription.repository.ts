@@ -31,7 +31,7 @@ export interface CreateOrderParams {
 // Method parameter interfaces
 export interface CreateSubscriptionParams {
   subscriptionId: Hash
-  creatorAddress: Address
+  accountAddress: Address
   beneficiaryAddress: Address
   provider: Provider
 }
@@ -48,7 +48,7 @@ export interface GetSuccessfulTransactionParams {
 export interface DueOrder {
   id: number
   subscriptionId: Hash
-  creatorAddress: Address
+  accountAddress: Address
   amount: string
   attempts: number
   provider: Provider
@@ -57,7 +57,7 @@ export interface DueOrder {
 export interface OrderDetails {
   id: number
   subscriptionId: Hash
-  creatorAddress: Address
+  accountAddress: Address
   beneficiaryAddress: Address
   amount: string
   orderNumber: number
@@ -107,7 +107,7 @@ export interface ReactivateSubscriptionParams {
 export interface DueRetry {
   id: number
   subscriptionId: Hash
-  creatorAddress: Address
+  accountAddress: Address
   amount: string
   attempts: number
   provider: Provider
@@ -120,7 +120,7 @@ export interface SubscriptionRepositoryDeps {
 
 export interface CreateSubscriptionWithOrderParams {
   subscriptionId: Hash
-  creatorAddress: Address // Who activated subscription (receives webhooks)
+  accountAddress: Address // Who activated subscription (receives webhooks)
   beneficiaryAddress: Address // Who receives payments
   provider: Provider
   order: CreateOrderParams
@@ -201,7 +201,7 @@ export class SubscriptionRepository {
    * This is atomic - prevents race conditions
    */
   async createSubscription(params: CreateSubscriptionParams): Promise<boolean> {
-    const { subscriptionId, creatorAddress, beneficiaryAddress, provider } =
+    const { subscriptionId, accountAddress, beneficiaryAddress, provider } =
       params
     // Use INSERT OR IGNORE to handle race conditions atomically
     // This ensures only one request can create the subscription
@@ -209,7 +209,7 @@ export class SubscriptionRepository {
       .insert(schema.subscriptions)
       .values({
         subscriptionId,
-        creatorAddress,
+        accountAddress,
         beneficiaryAddress,
         status: SubscriptionStatus.PROCESSING,
         provider: provider,
@@ -248,7 +248,7 @@ export class SubscriptionRepository {
         dueAt: schema.orders.dueAt,
         periodInSeconds: schema.orders.periodLengthInSeconds,
         attempts: schema.orders.attempts,
-        creatorAddress: schema.subscriptions.creatorAddress,
+        accountAddress: schema.subscriptions.accountAddress,
         beneficiaryAddress: schema.subscriptions.beneficiaryAddress,
       })
       .from(schema.orders)
@@ -265,7 +265,7 @@ export class SubscriptionRepository {
     return {
       id: result.id,
       subscriptionId: result.subscriptionId as Hash,
-      creatorAddress: result.creatorAddress as Address,
+      accountAddress: result.accountAddress as Address,
       beneficiaryAddress: result.beneficiaryAddress as Address,
       amount: result.amount,
       orderNumber: result.orderNumber,
@@ -342,7 +342,7 @@ export class SubscriptionRepository {
   ): Promise<CreateSubscriptionWithOrderResult> {
     const {
       subscriptionId,
-      creatorAddress,
+      accountAddress,
       beneficiaryAddress,
       provider,
       order,
@@ -359,7 +359,7 @@ export class SubscriptionRepository {
       const [subResult, orderResult] = await this.db.batch([
         this.db.insert(schema.subscriptions).values({
           subscriptionId,
-          creatorAddress,
+          accountAddress,
           beneficiaryAddress,
           status: SubscriptionStatus.PROCESSING,
           provider: provider,
@@ -506,7 +506,7 @@ export class SubscriptionRepository {
     const result = await this.db.all<{
       id: number
       subscription_id: string
-      creator_address: string
+      account_address: string
       provider: string
       amount: string
       attempts: number
@@ -525,7 +525,7 @@ export class SubscriptionRepository {
           LIMIT ${limit}
         )
         RETURNING id, subscription_id,
-          (SELECT creator_address FROM subscriptions WHERE subscription_id = orders.subscription_id) as creator_address,
+          (SELECT account_address FROM subscriptions WHERE subscription_id = orders.subscription_id) as account_address,
           (SELECT provider FROM subscriptions WHERE subscription_id = orders.subscription_id) as provider,
           amount, attempts
       `),
@@ -535,7 +535,7 @@ export class SubscriptionRepository {
     return result.map((entry) => ({
       id: entry.id,
       subscriptionId: entry.subscription_id as Hash,
-      creatorAddress: entry.creator_address as Address,
+      accountAddress: entry.account_address as Address,
       amount: entry.amount,
       attempts: entry.attempts,
       provider: entry.provider as Provider,
@@ -677,7 +677,7 @@ export class SubscriptionRepository {
       .select({
         id: schema.orders.id,
         subscriptionId: schema.orders.subscriptionId,
-        creatorAddress: schema.subscriptions.creatorAddress,
+        accountAddress: schema.subscriptions.accountAddress,
         provider: schema.subscriptions.provider,
         amount: schema.orders.amount,
         attempts: schema.orders.attempts,
@@ -702,7 +702,7 @@ export class SubscriptionRepository {
     return result.map((entry) => ({
       id: entry.id,
       subscriptionId: entry.subscriptionId as Hash,
-      creatorAddress: entry.creatorAddress as Address,
+      accountAddress: entry.accountAddress as Address,
       amount: entry.amount,
       attempts: entry.attempts,
       provider: entry.provider as Provider,

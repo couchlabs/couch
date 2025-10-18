@@ -76,8 +76,8 @@ export const subscriptions = sqliteTable(
   {
     subscriptionId: text("subscription_id").primaryKey(),
     status: text("status").$type<SubscriptionStatus>().notNull(),
-    // Who created this subscription in Couch
-    creatorAddress: text("creator_address")
+    // Account that owns this subscription
+    accountAddress: text("account_address")
       .notNull()
       .references(() => accounts.address),
     // Who receives payments
@@ -87,7 +87,7 @@ export const subscriptions = sqliteTable(
     modifiedAt: text("modified_at").default(sql`CURRENT_TIMESTAMP`),
   },
   (table) => [
-    index("idx_subscriptions_creator").on(table.creatorAddress),
+    index("idx_subscriptions_account").on(table.accountAddress),
     index("idx_subscriptions_beneficiary").on(table.beneficiaryAddress),
     index("idx_subscriptions_status").on(table.status),
     index("idx_subscriptions_created").on(table.createdAt),
@@ -197,10 +197,10 @@ export type NewWebhookRow = typeof webhooks.$inferInsert
 // Repositories transform between Row and Domain types
 export type Subscription = Omit<
   SubscriptionRow,
-  "subscriptionId" | "creatorAddress" | "beneficiaryAddress"
+  "subscriptionId" | "accountAddress" | "beneficiaryAddress"
 > & {
   subscriptionId: Hash
-  creatorAddress: Address
+  accountAddress: Address
   beneficiaryAddress: Address
 }
 

@@ -23,13 +23,10 @@ subscriptionRoutes.use(apiKeyAuth())
  */
 subscriptionRoutes.post("/", subscriptionBody(), async (ctx) => {
   const { accountAddress } = ctx.get("auth")
-  const { subscriptionId, provider, beneficiaryAddress } =
-    ctx.get("subscription")
+  const { subscriptionId, provider, beneficiary } = ctx.get("subscription")
 
-  // Creator is the authenticated account
-  const creatorAddress = accountAddress
-  // Beneficiary defaults to creator if not specified (self-subscription)
-  const beneficiary = beneficiaryAddress || creatorAddress
+  // Beneficiary defaults to accountAddress if not specified (self-subscription)
+  const beneficiaryAddress = beneficiary || accountAddress
 
   const subscriptionService = new SubscriptionService(ctx.env)
   const webhookService = new WebhookService(ctx.env)
@@ -38,8 +35,8 @@ subscriptionRoutes.post("/", subscriptionBody(), async (ctx) => {
   const { orderId, orderNumber, subscriptionMetadata } =
     await subscriptionService.createSubscription({
       subscriptionId,
-      creatorAddress,
-      beneficiaryAddress: beneficiary,
+      accountAddress,
+      beneficiaryAddress,
       provider,
     })
 
@@ -49,7 +46,7 @@ subscriptionRoutes.post("/", subscriptionBody(), async (ctx) => {
       try {
         // 1. Fire created webhook FIRST
         await webhookService.emitSubscriptionCreated({
-          accountAddress: creatorAddress,
+          accountAddress,
           subscriptionId,
           amount: subscriptionMetadata.amount,
           periodInSeconds: subscriptionMetadata.periodInSeconds,
@@ -58,8 +55,8 @@ subscriptionRoutes.post("/", subscriptionBody(), async (ctx) => {
         // 2. Attempt activation charge
         const activation = await subscriptionService.processActivationCharge({
           subscriptionId,
-          creatorAddress,
-          beneficiaryAddress: beneficiary,
+          accountAddress,
+          beneficiaryAddress,
           provider,
           orderId,
           orderNumber,
@@ -82,7 +79,7 @@ subscriptionRoutes.post("/", subscriptionBody(), async (ctx) => {
 
         // 6. Fire activation failed webhook (service handles error sanitization)
         await webhookService.emitActivationFailed({
-          accountAddress: creatorAddress,
+          accountAddress,
           subscriptionId,
           amount: subscriptionMetadata.amount,
           periodInSeconds: subscriptionMetadata.periodInSeconds,

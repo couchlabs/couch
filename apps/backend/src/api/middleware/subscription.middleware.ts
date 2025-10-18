@@ -7,7 +7,7 @@ import { Provider } from "@/providers/provider.interface"
 export interface SubscriptionContext {
   subscriptionId: Hash
   provider: Provider
-  beneficiaryAddress?: Address // Optional - defaults to creator if not provided
+  beneficiary?: Address // Optional - defaults to accountAddress if not provided
 }
 
 export const subscriptionBody = () =>
@@ -50,7 +50,7 @@ export const subscriptionBody = () =>
     ctx.set("subscription", {
       subscriptionId: id,
       provider: provider as Provider,
-      beneficiaryAddress: beneficiary as Address | undefined,
+      beneficiary: beneficiary as Address | undefined,
     })
 
     await next()
