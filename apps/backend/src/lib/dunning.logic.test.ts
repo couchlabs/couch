@@ -191,6 +191,43 @@ describe("decideDunningAction", () => {
     })
   })
 
+  describe("Upstream service errors (infrastructure failures)", () => {
+    it("returns upstream_error action for UPSTREAM_SERVICE_ERROR", () => {
+      const result = decideDunningAction({
+        error: new HTTPError(
+          503,
+          ErrorCode.UPSTREAM_SERVICE_ERROR,
+          "Service unavailable",
+        ),
+        currentAttempts: 0,
+        failureDate: FIXED_DATE,
+      })
+
+      expect(result).toEqual({
+        type: "upstream_error",
+        subscriptionStatus: SubscriptionStatus.ACTIVE,
+        scheduleRetry: false,
+        createNextOrder: false,
+      })
+    })
+
+    it("returns upstream_error regardless of attempt count", () => {
+      const result = decideDunningAction({
+        error: new HTTPError(
+          503,
+          ErrorCode.UPSTREAM_SERVICE_ERROR,
+          "Service unavailable",
+        ),
+        currentAttempts: 5,
+        failureDate: FIXED_DATE,
+      })
+
+      expect(result.type).toBe("upstream_error")
+      expect(result.subscriptionStatus).toBe(SubscriptionStatus.ACTIVE)
+      expect(result.createNextOrder).toBe(false)
+    })
+  })
+
   describe("Other errors (system/provider errors)", () => {
     it("returns other_error action for PAYMENT_FAILED", () => {
       const result = decideDunningAction({
@@ -263,6 +300,22 @@ describe("decideDunningAction", () => {
       })
 
       expect(result.type).toBe("terminal")
+    })
+
+    it("upstream errors take precedence over attempt count", () => {
+      // Upstream errors use queue retry, not dunning retry
+      const result = decideDunningAction({
+        error: new HTTPError(
+          503,
+          ErrorCode.UPSTREAM_SERVICE_ERROR,
+          "Service unavailable",
+        ),
+        currentAttempts: 0,
+        failureDate: FIXED_DATE,
+      })
+
+      expect(result.type).toBe("upstream_error")
+      expect(result.createNextOrder).toBe(false)
     })
 
     it("retryable errors respect attempt limits", () => {
