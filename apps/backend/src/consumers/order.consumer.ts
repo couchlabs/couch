@@ -1,5 +1,6 @@
 import type { orderQueue } from "@alchemy.run"
 import { createLogger } from "@/lib/logger"
+import { calculateUpstreamRetryDelay } from "@/lib/retry.logic"
 import { OrderService } from "@/services/order.service"
 import { WebhookService } from "@/services/webhook.service"
 import type { WorkerEnv } from "@/types/order.consumer.env"
@@ -78,28 +79,53 @@ export default {
           } else {
             messageLog.warn("Payment failed", {
               failureReason: result.failureReason,
+              isUpstreamError: result.isUpstreamError,
             })
 
-            // Emit webhook for failed payment
-            await webhookService.emitPaymentFailed({
-              accountAddress: orderDetails.accountAddress,
-              subscriptionId: orderDetails.subscriptionId,
-              subscriptionStatus: result.subscriptionStatus,
-              orderNumber: result.orderNumber,
-              amount: orderDetails.amount,
-              periodInSeconds: orderDetails.periodInSeconds,
-              failureReason: result.failureReason,
-              failureMessage: result.failureMessage,
-              nextRetryAt: result.nextRetryAt,
-            })
+            // Check if this is an upstream error (external service failure)
+            if (result.isUpstreamError) {
+              // Calculate exponential backoff delay for retry
+              const delaySeconds = calculateUpstreamRetryDelay(message.attempts)
 
-            // ACK the message even on payment failure
-            message.ack()
+              // Retry message with backoff (will use queue retry mechanism)
+              message.retry({ delaySeconds })
 
-            op.success({
-              paymentFailed: true,
-              failureReason: result.failureReason,
-            })
+              messageLog.info(
+                "Upstream service error - retrying with backoff",
+                {
+                  attempts: message.attempts,
+                  nextRetryIn: `${delaySeconds}s`,
+                  failureReason: result.failureReason,
+                },
+              )
+
+              op.success({
+                retriedWithBackoff: true,
+                delaySeconds,
+                attempts: message.attempts,
+              })
+            } else {
+              // Business logic failure (balance, permission, etc) - emit webhook and ack
+              await webhookService.emitPaymentFailed({
+                accountAddress: orderDetails.accountAddress,
+                subscriptionId: orderDetails.subscriptionId,
+                subscriptionStatus: result.subscriptionStatus,
+                orderNumber: result.orderNumber,
+                amount: orderDetails.amount,
+                periodInSeconds: orderDetails.periodInSeconds,
+                failureReason: result.failureReason,
+                failureMessage: result.failureMessage,
+                nextRetryAt: result.nextRetryAt,
+              })
+
+              // ACK the message (payment failure handled via dunning or subscription cancellation)
+              message.ack()
+
+              op.success({
+                paymentFailed: true,
+                failureReason: result.failureReason,
+              })
+            }
           }
         } catch (error) {
           op.failure(error)

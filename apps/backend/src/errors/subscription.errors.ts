@@ -36,6 +36,18 @@ export function isRetryablePaymentError(error: unknown): boolean {
 }
 
 /**
+ * Upstream service errors are infrastructure failures from external providers.
+ * These are retryable via queue mechanism with exponential backoff.
+ * Examples: CDP/Base SDK 5xx errors, timeouts, service unavailable
+ */
+export function isUpstreamServiceError(error: unknown): boolean {
+  return (
+    error instanceof HTTPError &&
+    error.code === ErrorCode.UPSTREAM_SERVICE_ERROR
+  )
+}
+
+/**
  * Terminal subscription errors - subscription cannot continue.
  * Mark as UNPAID immediately without retry.
  */
