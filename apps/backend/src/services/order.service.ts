@@ -396,6 +396,25 @@ export class OrderService {
           }
         }
 
+        case "upstream_error": {
+          log.info(
+            `Upstream service error: ${errorCode} - will retry via queue with exponential backoff`,
+          )
+
+          // DON'T delete scheduler - keep as backup in case queue retries fail
+          // DON'T create next order - queue will retry current order
+
+          return {
+            success: false,
+            orderNumber: orderResult.orderNumber,
+            failureReason: errorCode,
+            failureMessage: errorMessage,
+            nextOrderCreated: false,
+            subscriptionStatus: action.subscriptionStatus,
+            isUpstreamError: true, // Tell consumer to use queue retry
+          }
+        }
+
         case "other_error": {
           log.warn(
             `Non-retryable error: ${errorCode} - keeping subscription active`,

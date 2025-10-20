@@ -6,6 +6,7 @@ import {
 import {
   isRetryablePaymentError,
   isTerminalSubscriptionError,
+  isUpstreamServiceError,
 } from "@/errors/subscription.errors"
 
 /**
@@ -30,6 +31,12 @@ export type DunningAction =
   | {
       type: "max_retries_exhausted"
       subscriptionStatus: SubscriptionStatus.UNPAID
+      scheduleRetry: false
+      createNextOrder: false
+    }
+  | {
+      type: "upstream_error"
+      subscriptionStatus: SubscriptionStatus.ACTIVE
       scheduleRetry: false
       createNextOrder: false
     }
@@ -66,7 +73,18 @@ export function decideDunningAction(
     }
   }
 
-  // CASE 2: RETRYABLE (insufficient balance) - check retry limit
+  // CASE 2: UPSTREAM SERVICE ERRORS - let queue handle retry with exponential backoff
+  // Don't create next order - queue will retry current order until success or max retries
+  if (isUpstreamServiceError(error)) {
+    return {
+      type: "upstream_error",
+      subscriptionStatus: SubscriptionStatus.ACTIVE,
+      scheduleRetry: false,
+      createNextOrder: false,
+    }
+  }
+
+  // CASE 3: RETRYABLE (insufficient balance) - check retry limit
   if (isRetryablePaymentError(error)) {
     if (currentAttempts < config.MAX_ATTEMPTS) {
       const nextRetryAt = calculateNextRetryDate(currentAttempts, failureDate)
@@ -93,7 +111,7 @@ export function decideDunningAction(
     }
   }
 
-  // CASE 3: OTHER ERRORS - keep subscription ACTIVE, create next order
+  // CASE 4: OTHER ERRORS - keep subscription ACTIVE, create next order
   return {
     type: "other_error",
     subscriptionStatus: SubscriptionStatus.ACTIVE,
