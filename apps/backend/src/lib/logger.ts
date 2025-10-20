@@ -65,10 +65,21 @@ class Logger {
 
   error(message: string, error?: unknown) {
     const err = error as Error | undefined
-    this.log(LogLevel.ERROR, message, {
+    const data: Record<string, unknown> = {
       error: err?.message || String(error),
       stack: err?.stack,
-    })
+    }
+
+    // Extract HTTPError details (contains originalError from Base SDK/CDP)
+    // Check if it's an object first to avoid "in" operator errors on primitives
+    if (err && typeof err === "object" && "code" in err && "details" in err) {
+      data.errorCode = err.code
+      if (err.details) {
+        data.details = err.details
+      }
+    }
+
+    this.log(LogLevel.ERROR, message, data)
   }
 
   // Convenience method for operation tracking

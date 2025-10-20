@@ -127,7 +127,11 @@ export class BaseProvider implements SubscriptionProvider {
 
   /**
    * Translates Base SDK errors to domain HTTPError.
-   * Only INSUFFICIENT_BALANCE is retryable - everything else logs & continues.
+   * Classifies errors into:
+   * - UPSTREAM_SERVICE_ERROR: External infrastructure failures (retryable via queue)
+   * - INSUFFICIENT_BALANCE: User payment error (retryable via dunning)
+   * - PERMISSION_REVOKED/EXPIRED: Terminal errors (cancel subscription)
+   * - PAYMENT_FAILED: Unknown errors (keep subscription active, create next order)
    */
   private translateChargeError(error: unknown): HTTPError {
     if (!(error instanceof Error)) {
@@ -140,7 +144,29 @@ export class BaseProvider implements SubscriptionProvider {
 
     const message = error.message.toLowerCase()
 
-    // RETRYABLE: User needs to add funds
+    // UPSTREAM SERVICE ERRORS: External infrastructure failures (CDP, Base SDK, AWS, bundlers)
+    // Detect 5xx errors, timeouts, and service unavailability
+    // These are retryable via queue with exponential backoff
+    if (
+      message.includes("error code: 5") || // 500, 502, 503, 504, etc
+      message.includes("timeout") ||
+      message.includes("timed out") ||
+      message.includes("gateway") ||
+      message.includes("unavailable") ||
+      message.includes("service unavailable") ||
+      message.includes("try again") ||
+      message.includes("temporarily") ||
+      message.includes("overload")
+    ) {
+      return new HTTPError(
+        503,
+        ErrorCode.UPSTREAM_SERVICE_ERROR,
+        "Payment provider temporarily unavailable",
+        { originalError: error.message },
+      )
+    }
+
+    // RETRYABLE: User needs to add funds (dunning system)
     if (message.includes("erc20: transfer amount exceeds balance")) {
       return new HTTPError(
         402,

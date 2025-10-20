@@ -29,6 +29,7 @@ export const ErrorCode = {
   PAYMENT_FAILED: "PAYMENT_FAILED",
 
   // System errors (5xx)
+  UPSTREAM_SERVICE_ERROR: "UPSTREAM_SERVICE_ERROR", // External service infrastructure failure (CDP, Base SDK, etc)
   INTERNAL_ERROR: "INTERNAL_ERROR",
 } as const
 

@@ -6,6 +6,7 @@ import {
   TransactionStatus,
 } from "@/constants/subscription.constants"
 import { ErrorCode, HTTPError } from "@/errors/http.errors"
+import { isUpstreamServiceError } from "@/errors/subscription.errors"
 import { decideDunningAction } from "@/lib/dunning.logic"
 import { createLogger } from "@/lib/logger"
 import type { Provider } from "@/providers/provider.interface"
@@ -48,6 +49,7 @@ export type ProcessOrderResult =
       nextOrderCreated: boolean
       subscriptionStatus: SubscriptionStatus
       nextRetryAt?: Date
+      isUpstreamError: boolean // True for upstream service errors (should retry via queue)
     }
 
 const logger = createLogger("order.service")
@@ -328,6 +330,7 @@ export class OrderService {
             failureMessage: errorMessage,
             nextOrderCreated: false,
             subscriptionStatus: action.subscriptionStatus,
+            isUpstreamError: isUpstreamServiceError(error),
           }
         }
 
@@ -366,6 +369,7 @@ export class OrderService {
             nextOrderCreated: false,
             subscriptionStatus: action.subscriptionStatus,
             nextRetryAt: action.nextRetryAt,
+            isUpstreamError: isUpstreamServiceError(error),
           }
         }
 
@@ -388,6 +392,7 @@ export class OrderService {
             failureMessage: errorMessage,
             nextOrderCreated: false,
             subscriptionStatus: action.subscriptionStatus,
+            isUpstreamError: isUpstreamServiceError(error),
           }
         }
 
@@ -423,6 +428,7 @@ export class OrderService {
             failureMessage: errorMessage,
             nextOrderCreated,
             subscriptionStatus: action.subscriptionStatus,
+            isUpstreamError: isUpstreamServiceError(error),
           }
         }
       }

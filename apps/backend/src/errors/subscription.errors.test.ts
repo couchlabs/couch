@@ -6,6 +6,7 @@ import {
   isExposableError,
   isRetryablePaymentError,
   isTerminalSubscriptionError,
+  isUpstreamServiceError,
 } from "./subscription.errors"
 
 describe("Error Classification", () => {
@@ -56,6 +57,65 @@ describe("Error Classification", () => {
       expect(isRetryablePaymentError(undefined)).toBe(false)
       expect(isRetryablePaymentError("string")).toBe(false)
       expect(isRetryablePaymentError(123)).toBe(false)
+    })
+  })
+
+  describe("isUpstreamServiceError", () => {
+    it("returns true for UPSTREAM_SERVICE_ERROR errors", () => {
+      const error = new HTTPError(
+        503,
+        ErrorCode.UPSTREAM_SERVICE_ERROR,
+        "Service unavailable",
+      )
+      expect(isUpstreamServiceError(error)).toBe(true)
+    })
+
+    it("returns false for INSUFFICIENT_BALANCE errors", () => {
+      const error = new HTTPError(
+        402,
+        ErrorCode.INSUFFICIENT_BALANCE,
+        "Insufficient balance",
+      )
+      expect(isUpstreamServiceError(error)).toBe(false)
+    })
+
+    it("returns false for PERMISSION_REVOKED errors", () => {
+      const error = new HTTPError(
+        402,
+        ErrorCode.PERMISSION_REVOKED,
+        "Permission revoked",
+      )
+      expect(isUpstreamServiceError(error)).toBe(false)
+    })
+
+    it("returns false for PAYMENT_FAILED errors", () => {
+      const error = new HTTPError(
+        500,
+        ErrorCode.PAYMENT_FAILED,
+        "Payment failed",
+      )
+      expect(isUpstreamServiceError(error)).toBe(false)
+    })
+
+    it("returns false for INTERNAL_ERROR errors", () => {
+      const error = new HTTPError(
+        500,
+        ErrorCode.INTERNAL_ERROR,
+        "Internal error",
+      )
+      expect(isUpstreamServiceError(error)).toBe(false)
+    })
+
+    it("returns false for generic errors", () => {
+      const error = new Error("Generic error")
+      expect(isUpstreamServiceError(error)).toBe(false)
+    })
+
+    it("returns false for non-error values", () => {
+      expect(isUpstreamServiceError(null)).toBe(false)
+      expect(isUpstreamServiceError(undefined)).toBe(false)
+      expect(isUpstreamServiceError("string")).toBe(false)
+      expect(isUpstreamServiceError(123)).toBe(false)
     })
   })
 

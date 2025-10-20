@@ -218,7 +218,7 @@ export const orderConsumer = await Worker(ORDER_CONSUMER_NAME, {
       settings: {
         batchSize: 10,
         maxConcurrency: 10,
-        maxRetries: 3,
+        maxRetries: 10,
         retryDelay: 60,
         deadLetterQueue: orderDLQ,
       },
