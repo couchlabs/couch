@@ -9,26 +9,6 @@
         "turbo": "latest",
       },
     },
-    "apps/backend": {
-      "name": "backend",
-      "dependencies": {
-        "@base-org/account": "catalog:coinbase",
-        "@coinbase/cdp-sdk": "catalog:coinbase",
-        "drizzle-orm": "^0.44.6",
-        "hono": "catalog:cloudflare",
-        "viem": "^2.38.2",
-      },
-      "devDependencies": {
-        "@actions/core": "^1.11.1",
-        "@cloudflare/workers-types": "catalog:cloudflare",
-        "@types/bun": "latest",
-        "@types/node": "catalog:cloudflare",
-        "alchemy": "catalog:",
-        "drizzle-kit": "^0.31.5",
-        "miniflare": "catalog:cloudflare",
-        "typescript": "catalog:",
-      },
-    },
     "apps/playground": {
       "name": "playground",
       "dependencies": {
@@ -65,6 +45,26 @@
         "vite": "7.1.10",
         "vite-plugin-node-polyfills": "^0.24.0",
         "vite-tsconfig-paths": "^5.1.4",
+      },
+    },
+    "backend": {
+      "name": "backend",
+      "dependencies": {
+        "@base-org/account": "catalog:coinbase",
+        "@coinbase/cdp-sdk": "catalog:coinbase",
+        "drizzle-orm": "^0.44.6",
+        "hono": "catalog:cloudflare",
+        "viem": "^2.38.2",
+      },
+      "devDependencies": {
+        "@actions/core": "^1.11.1",
+        "@cloudflare/workers-types": "catalog:cloudflare",
+        "@types/bun": "latest",
+        "@types/node": "catalog:cloudflare",
+        "alchemy": "catalog:",
+        "drizzle-kit": "^0.31.5",
+        "miniflare": "catalog:cloudflare",
+        "typescript": "catalog:",
       },
     },
   },
@@ -803,7 +803,7 @@
 
     "axios-retry": ["axios-retry@4.5.0", "", { "dependencies": { "is-retry-allowed": "^2.2.0" }, "peerDependencies": { "axios": "0.x || 1.x" } }, "sha512-aR99oXhpEDGo0UuAlYcn2iGRds30k366Zfa05XWScR9QaQD4JYiP3/1Qt1u7YlefUOK+cn0CcwoL1oefavQUlQ=="],
 
-    "backend": ["backend@workspace:apps/backend"],
+    "backend": ["backend@workspace:backend"],
 
     "balanced-match": ["balanced-match@1.0.2", "", {}, "sha512-3oSeUO0TMV67hN1AmbXsK4yaqU7tjiHlbxRDZOpH0KW9+CeX4bRAaX0Anxt0tx2MrpRpWwQaPwIlISEJhYU5Pw=="],
 
