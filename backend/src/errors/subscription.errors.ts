@@ -13,6 +13,7 @@ const ERROR_MESSAGES: Record<string, string> = {
     "Insufficient balance to complete the payment",
   [ErrorCode.PERMISSION_EXPIRED]: "Subscription permission has expired",
   [ErrorCode.PERMISSION_REVOKED]: "Subscription permission has been revoked",
+  [ErrorCode.USER_OPERATION_FAILED]: "User operation failed",
   [ErrorCode.PAYMENT_FAILED]: "Payment failed",
 }
 
@@ -44,6 +45,17 @@ export function isUpstreamServiceError(error: unknown): boolean {
   return (
     error instanceof HTTPError &&
     error.code === ErrorCode.UPSTREAM_SERVICE_ERROR
+  )
+}
+
+/**
+ * User operation failed errors - bundler rejected during simulation.
+ * Common causes: duplicate charge, insufficient balance, nonce conflicts.
+ * In batch processing, don't create next order to prevent cascade duplication.
+ */
+export function isUserOperationFailedError(error: unknown): boolean {
+  return (
+    error instanceof HTTPError && error.code === ErrorCode.USER_OPERATION_FAILED
   )
 }
 

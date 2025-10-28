@@ -7,6 +7,7 @@ import {
   isRetryablePaymentError,
   isTerminalSubscriptionError,
   isUpstreamServiceError,
+  isUserOperationFailedError,
 } from "@/errors/subscription.errors"
 
 /**
@@ -36,6 +37,12 @@ export type DunningAction =
     }
   | {
       type: "upstream_error"
+      subscriptionStatus: SubscriptionStatus.ACTIVE
+      scheduleRetry: false
+      createNextOrder: false
+    }
+  | {
+      type: "user_operation_failed"
       subscriptionStatus: SubscriptionStatus.ACTIVE
       scheduleRetry: false
       createNextOrder: false
@@ -78,6 +85,18 @@ export function decideDunningAction(
   if (isUpstreamServiceError(error)) {
     return {
       type: "upstream_error",
+      subscriptionStatus: SubscriptionStatus.ACTIVE,
+      scheduleRetry: false,
+      createNextOrder: false,
+    }
+  }
+
+  // CASE 2.5: USER OPERATION FAILED - bundler rejected during simulation
+  // Keep subscription ACTIVE (another parallel order likely succeeded in batch)
+  // Don't create next order - prevents cascade duplication in batch processing
+  if (isUserOperationFailedError(error)) {
+    return {
+      type: "user_operation_failed",
       subscriptionStatus: SubscriptionStatus.ACTIVE,
       scheduleRetry: false,
       createNextOrder: false,

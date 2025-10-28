@@ -415,6 +415,30 @@ export class OrderService {
           }
         }
 
+        case "user_operation_failed": {
+          log.warn(
+            `User operation failed: ${errorCode} - bundler rejected during simulation`,
+          )
+
+          // Clean up failed order's scheduler to prevent alarm retries
+          await scheduler.delete()
+          log.info("Deleted failed order scheduler", { orderId })
+
+          // DON'T create next order - prevents cascade duplication in batch processing
+          // In parallel batch processing, another order likely succeeded
+          // Common causes: duplicate charge, insufficient balance, nonce conflicts
+
+          return {
+            success: false,
+            orderNumber: orderResult.orderNumber,
+            failureReason: errorCode,
+            failureMessage: errorMessage,
+            nextOrderCreated: false,
+            subscriptionStatus: action.subscriptionStatus,
+            isUpstreamError: false,
+          }
+        }
+
         case "other_error": {
           log.warn(
             `Non-retryable error: ${errorCode} - keeping subscription active`,
