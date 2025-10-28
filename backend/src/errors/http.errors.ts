@@ -25,6 +25,9 @@ export const ErrorCode = {
   // User-actionable payment errors
   INSUFFICIENT_BALANCE: "INSUFFICIENT_BALANCE", // User needs to add funds
 
+  // User operation failures (prevents cascade duplication in batch processing)
+  USER_OPERATION_FAILED: "USER_OPERATION_FAILED", // Bundler rejected userOp during simulation
+
   // Generic payment error (for internal issues we don't expose)
   PAYMENT_FAILED: "PAYMENT_FAILED",
 

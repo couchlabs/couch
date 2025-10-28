@@ -470,6 +470,53 @@ describe("OrderService", () => {
     })
   })
 
+  describe("processOrder - Failure Scenarios: User Operation Failed", () => {
+    it("should NOT create next order when user operation fails during simulation", async () => {
+      const testDB = await createTestDBWithOrder()
+      const orderService = createOrderServiceForTest(testDB.db)
+
+      // Simulate USER_OPERATION_FAILED error (translated from "User operation failed" by base.provider)
+      // This happens when bundler rejects the userOp (not submitted to blockchain)
+      // Common causes: duplicate charge, insufficient balance, nonce conflicts
+      const userOpFailedError = new HTTPError(
+        409,
+        ErrorCode.USER_OPERATION_FAILED,
+        "User operation failed",
+        {
+          originalError:
+            "Failed to execute charge transaction with smart wallet: User operation failed: 0x33812a41650ab1fb9fa4204ef049a4160cf8b6a97df98d136e35d2c4831217ef",
+        },
+      )
+
+      mockChargeSubscription.mockRejectedValue(userOpFailedError)
+      mockGetSubscriptionStatus.mockResolvedValue(MOCK_SUBSCRIPTION_STATUS)
+
+      const result = await orderService.processOrder({
+        orderId: testDB.orderIds[0],
+        provider: Provider.BASE,
+      })
+
+      expect(result.success).toBe(false)
+
+      // The fix: Don't create next order for userOp failures
+      // "User operation failed" means the bundler rejected it (not submitted on-chain)
+      // In batch processing, another parallel order likely succeeded
+      // Not creating next order prevents cascade duplication
+      expect(result.nextOrderCreated).toBe(false)
+
+      // Subscription should remain ACTIVE (another order likely succeeded)
+      expect(result.subscriptionStatus).toBe(SubscriptionStatus.ACTIVE)
+
+      // Verify error code is preserved
+      if (!result.success) {
+        expect(result.failureReason).toBe(ErrorCode.USER_OPERATION_FAILED)
+      }
+
+      // Failed order's scheduler should be deleted (no alarm retries)
+      expect(mockSchedulerDelete).toHaveBeenCalledTimes(1)
+    })
+  })
+
   describe("processOrder - Failure Scenarios: Other Errors", () => {
     it("keeps subscription active and creates next order on non-retryable error", async () => {
       const testDB = await createTestDBWithOrder()

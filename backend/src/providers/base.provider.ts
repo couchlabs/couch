@@ -128,6 +128,7 @@ export class BaseProvider implements SubscriptionProvider {
   /**
    * Translates Base SDK errors to domain HTTPError.
    * Classifies errors into:
+   * - USER_OPERATION_FAILED: Bundler rejected userOp during simulation
    * - UPSTREAM_SERVICE_ERROR: External infrastructure failures (retryable via queue)
    * - INSUFFICIENT_BALANCE: User payment error (retryable via dunning)
    * - PERMISSION_REVOKED/EXPIRED: Terminal errors (cancel subscription)
@@ -143,6 +144,19 @@ export class BaseProvider implements SubscriptionProvider {
     }
 
     const message = error.message.toLowerCase()
+
+    // USER OPERATION FAILED: UserOp was not submitted to blockchain
+    // The bundler rejected the operation (typically after simulation check)
+    // Common causes: duplicate charge, insufficient balance, nonce conflicts, gas failures
+    // In batch processing, this prevents cascade duplication - don't create next order
+    if (message.includes("user operation failed")) {
+      return new HTTPError(
+        409,
+        ErrorCode.USER_OPERATION_FAILED,
+        "User operation failed",
+        { originalError: error.message },
+      )
+    }
 
     // UPSTREAM SERVICE ERRORS: External infrastructure failures (CDP, Base SDK, AWS, bundlers)
     // Detect 5xx errors, timeouts, and service unavailability
