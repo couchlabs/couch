@@ -37,7 +37,7 @@
         "hono": "^4.10.1"
       },
       "coinbase": {
-        "@base-org/account": "^2.4.0",
+        "@base-org/account": "^2.4.2",
         "@coinbase/cdp-sdk": "^1.38.4"
       }
     }

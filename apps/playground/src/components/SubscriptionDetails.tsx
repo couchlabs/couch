@@ -183,7 +183,9 @@ export function SubscriptionDetails({
       }
 
       // Create SDK instance and get provider
-      const sdk = createBaseAccountSDK({ appName: "Couch Playground" })
+      const appName =
+        typeof window !== "undefined" ? window.location.origin : "Base Pay SDK"
+      const sdk = createBaseAccountSDK({ appName })
       const provider = sdk.getProvider()
 
       // Call requestRevoke with permission and provider
