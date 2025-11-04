@@ -1,8 +1,10 @@
 import { Hono } from "hono"
 import { type AuthContext, apiKeyAuth } from "@/api/middleware/auth.middleware"
 import {
-  type SubscriptionContext,
+  type SubscriptionBodyContext,
+  type SubscriptionParamContext,
   subscriptionBody,
+  subscriptionParam,
 } from "@/api/middleware/subscription.middleware"
 import { SubscriptionService } from "@/services/subscription.service"
 import { WebhookService } from "@/services/webhook.service"
@@ -10,7 +12,10 @@ import type { WorkerEnv } from "@/types/api.env"
 
 export const subscriptionRoutes = new Hono<{
   Bindings: WorkerEnv
-  Variables: { auth: AuthContext; subscription: SubscriptionContext }
+  Variables: {
+    auth: AuthContext
+    subscription: SubscriptionBodyContext | SubscriptionParamContext
+  }
 }>()
 
 // Require auth for all routes
@@ -101,4 +106,23 @@ subscriptionRoutes.post("/", subscriptionBody(), async (ctx) => {
       },
     },
   )
+})
+
+/**
+ * DELETE /api/subscriptions/:id
+ * Revokes a subscription on-chain and updates database
+ * Returns the canceled subscription object (idempotent)
+ */
+subscriptionRoutes.delete("/:id", subscriptionParam(), async (ctx) => {
+  const { accountAddress } = ctx.get("auth")
+  const { subscriptionId } = ctx.get("subscription")
+
+  const subscriptionService = new SubscriptionService(ctx.env)
+
+  const canceledSubscription = await subscriptionService.revokeSubscription({
+    subscriptionId,
+    accountAddress,
+  })
+
+  return ctx.json(canceledSubscription, 200)
 })

@@ -284,6 +284,24 @@ export class WebhookService {
   }
 
   /**
+   * Emits webhook event when subscription is canceled (revoked)
+   */
+  async emitSubscriptionCanceled(params: {
+    accountAddress: Address
+    subscriptionId: Hash
+    amount: string
+    periodInSeconds: number
+  }): Promise<void> {
+    await this.emitSubscriptionUpdated({
+      accountAddress: params.accountAddress,
+      subscriptionId: params.subscriptionId,
+      subscriptionStatus: SubscriptionStatus.CANCELED,
+      subscriptionAmount: params.amount,
+      subscriptionPeriodInSeconds: params.periodInSeconds,
+    })
+  }
+
+  /**
    * Emits webhook event for successful recurring payment
    * Tailored for order processing flow
    */

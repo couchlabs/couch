@@ -399,4 +399,54 @@ describe("WebhookService", () => {
       expect(event.data.error.message).toBe("An internal error occurred")
     })
   })
+
+  describe("emitSubscriptionCanceled", () => {
+    it("emits subscription.updated webhook with canceled status", async () => {
+      // Register webhook for the account
+      await testDB.db
+        .prepare(
+          "INSERT INTO webhooks (account_address, url, secret) VALUES (?, ?, ?)",
+        )
+        .bind(TEST_ACCOUNT, TEST_WEBHOOK_URL, "test-secret")
+        .run()
+
+      await service.emitSubscriptionCanceled({
+        accountAddress: TEST_ACCOUNT,
+        subscriptionId: TEST_SUBSCRIPTION_ID,
+        amount: "1000000",
+        periodInSeconds: 2592000,
+      })
+
+      // Verify queue was called
+      expect(mockQueueSend).toHaveBeenCalledTimes(1)
+
+      const queueMessage = mockQueueSend.mock.calls[0][0]
+      expect(queueMessage.url).toBe(TEST_WEBHOOK_URL)
+
+      const event = JSON.parse(queueMessage.payload)
+      expect(event.type).toBe("subscription.updated")
+      expect(event.data.subscription.id).toBe(TEST_SUBSCRIPTION_ID)
+      expect(event.data.subscription.status).toBe(SubscriptionStatus.CANCELED)
+      expect(event.data.subscription.amount).toBe("1000000")
+      expect(event.data.subscription.period_in_seconds).toBe(2592000)
+      expect(event.data.order).toBeUndefined()
+      expect(event.data.transaction).toBeUndefined()
+      expect(event.data.error).toBeUndefined()
+    })
+
+    it("does not throw if no webhook configured", async () => {
+      // No webhook registered for this account
+      await expect(
+        service.emitSubscriptionCanceled({
+          accountAddress: TEST_ACCOUNT,
+          subscriptionId: TEST_SUBSCRIPTION_ID,
+          amount: "1000000",
+          periodInSeconds: 2592000,
+        }),
+      ).resolves.toBeUndefined()
+
+      // Queue should not be called
+      expect(mockQueueSend).not.toHaveBeenCalled()
+    })
+  })
 })

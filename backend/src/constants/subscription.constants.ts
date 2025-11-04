@@ -31,6 +31,32 @@ export enum SubscriptionStatus {
   UNPAID = "unpaid",
 }
 
+/**
+ * Subscription statuses that can be revoked (canceled by owner)
+ * ACTIVE: Normal active subscription
+ * PAST_DUE: Payment failed but retrying
+ * UNPAID: Max retries exhausted but subscription still exists
+ *
+ * NOT revocable:
+ * PROCESSING: Not yet activated
+ * INCOMPLETE: Activation failed
+ * CANCELED: Already canceled
+ */
+export type RevocableSubscriptionStatus =
+  | SubscriptionStatus.ACTIVE
+  | SubscriptionStatus.PAST_DUE
+  | SubscriptionStatus.UNPAID
+
+export function isRevocableStatus(
+  status: SubscriptionStatus,
+): status is RevocableSubscriptionStatus {
+  return (
+    status === SubscriptionStatus.ACTIVE ||
+    status === SubscriptionStatus.PAST_DUE ||
+    status === SubscriptionStatus.UNPAID
+  )
+}
+
 export enum OrderType {
   INITIAL = "initial",
   RECURRING = "recurring",

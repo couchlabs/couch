@@ -235,6 +235,105 @@ export class SubscriptionRepository {
   }
 
   /**
+   * Get subscription
+   */
+  async getSubscription(params: {
+    subscriptionId: Hash
+  }): Promise<Subscription | null> {
+    const { subscriptionId } = params
+    const result = await this.db
+      .select()
+      .from(schema.subscriptions)
+      .where(eq(schema.subscriptions.subscriptionId, subscriptionId))
+      .get()
+
+    if (!result) return null
+
+    // Transform DB strings to domain types
+    return {
+      ...result,
+      subscriptionId: result.subscriptionId as Hash,
+      accountAddress: result.accountAddress as Address,
+      beneficiaryAddress: result.beneficiaryAddress as Address,
+    }
+  }
+
+  /**
+   * Cancel subscription - sets status to canceled
+   */
+  async cancelSubscription(params: {
+    subscriptionId: Hash
+  }): Promise<Subscription> {
+    const { subscriptionId } = params
+    const result = await this.db
+      .update(schema.subscriptions)
+      .set({
+        status: SubscriptionStatus.CANCELED,
+        modifiedAt: sql`CURRENT_TIMESTAMP`,
+      })
+      .where(eq(schema.subscriptions.subscriptionId, subscriptionId))
+      .returning()
+      .get()
+
+    if (!result) {
+      throw new Error(`Subscription ${subscriptionId} not found`)
+    }
+
+    // Transform DB strings to domain types
+    return {
+      ...result,
+      subscriptionId: result.subscriptionId as Hash,
+      accountAddress: result.accountAddress as Address,
+      beneficiaryAddress: result.beneficiaryAddress as Address,
+    }
+  }
+
+  /**
+   * Cancel all pending orders for a subscription
+   * Returns the IDs of canceled orders (for DO cleanup)
+   */
+  async cancelPendingOrders(params: {
+    subscriptionId: Hash
+  }): Promise<number[]> {
+    const { subscriptionId } = params
+
+    // Get all pending orders
+    const pendingOrders = await this.db
+      .select({ id: schema.orders.id })
+      .from(schema.orders)
+      .where(
+        and(
+          eq(schema.orders.subscriptionId, subscriptionId),
+          eq(schema.orders.status, OrderStatus.PENDING),
+        ),
+      )
+      .all()
+
+    if (pendingOrders.length === 0) {
+      return []
+    }
+
+    const orderIds = pendingOrders.map((o) => o.id)
+
+    // Cancel them
+    await this.db
+      .update(schema.orders)
+      .set({
+        status: OrderStatus.FAILED,
+        failureReason: "Subscription canceled",
+      })
+      .where(
+        and(
+          eq(schema.orders.subscriptionId, subscriptionId),
+          eq(schema.orders.status, OrderStatus.PENDING),
+        ),
+      )
+      .run()
+
+    return orderIds
+  }
+
+  /**
    * Get order details with subscription info for processing
    */
   async getOrderDetails(orderId: number): Promise<OrderDetails | null> {

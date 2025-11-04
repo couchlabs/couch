@@ -167,6 +167,43 @@ app.post("/activate", async (c) => {
   }
 })
 
+// RPC-style backend API call for revoking subscription using service binding
+app.delete("/revoke/:id", async (c) => {
+  if (!c.env.BACKEND_API) {
+    return c.json({ error: "Backend API binding not configured" }, 500)
+  }
+
+  try {
+    const subscriptionId = c.req.param("id")
+
+    // Use service binding for RPC-style call
+    const headers = new Headers()
+    headers.set("Authorization", `Bearer ${c.env.COUCH_TEST_ACCOUNT_APIKEY}`)
+    headers.set("Content-Type", "application/json")
+
+    const response = await c.env.BACKEND_API.fetch(
+      `https://backend/api/subscriptions/${subscriptionId}`,
+      {
+        method: "DELETE",
+        headers: headers,
+      },
+    )
+    const responseBody = await response.text()
+
+    return new Response(responseBody, {
+      status: response.status,
+      headers: { "Content-Type": "application/json" },
+    })
+  } catch (error) {
+    console.error("Service binding error:", error)
+    const errorMessage = error instanceof Error ? error.message : String(error)
+    return c.json(
+      { error: "Service binding failed", message: errorMessage },
+      500,
+    )
+  }
+})
+
 export default app
 
 /**

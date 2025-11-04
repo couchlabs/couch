@@ -1,5 +1,9 @@
 import type { Address, Hash } from "viem"
-import { OrderStatus, OrderType } from "@/constants/subscription.constants"
+import {
+  isRevocableStatus,
+  OrderStatus,
+  OrderType,
+} from "@/constants/subscription.constants"
 import { ErrorCode, HTTPError } from "@/errors/http.errors"
 import { createLogger } from "@/lib/logger"
 import type { Provider } from "@/providers/provider.interface"
@@ -13,14 +17,15 @@ import {
   type SubscriptionRepositoryDeps,
 } from "@/repositories/subscription.repository"
 import type { WorkerEnv } from "@/types/api.env"
+import { WebhookService } from "./webhook.service"
 
 // Define the minimal dependencies needed by SubscriptionService
-// This service needs all repository deps + ORDER_SCHEDULER for scheduling
-// Pick ORDER_SCHEDULER from WorkerEnv to get the exact Alchemy-generated type
+// This service needs all repository deps + ORDER_SCHEDULER for scheduling + WEBHOOK_QUEUE for webhooks
+// Pick ORDER_SCHEDULER and WEBHOOK_QUEUE from WorkerEnv to get the exact Alchemy-generated types
 export interface SubscriptionServiceDeps
   extends SubscriptionRepositoryDeps,
     OnchainRepositoryDeps,
-    Pick<WorkerEnv, "ORDER_SCHEDULER"> {}
+    Pick<WorkerEnv, "ORDER_SCHEDULER" | "WEBHOOK_QUEUE"> {}
 
 export interface ValidateSubscriptionIdParams {
   subscriptionId: Hash
@@ -168,6 +173,118 @@ export class SubscriptionService {
     reason: string
   }): Promise<void> {
     await this.subscriptionRepository.markSubscriptionIncomplete(params)
+  }
+
+  /**
+   * Revokes a subscription on-chain and updates database.
+   * This is an immediate cancellation (not end of period).
+   * Handles all validation, onchain checks, and webhook emission.
+   */
+  async revokeSubscription(params: {
+    subscriptionId: Hash
+    accountAddress: Address
+  }) {
+    const { subscriptionId, accountAddress } = params
+
+    const log = logger.with({ subscriptionId, accountAddress })
+
+    const subscription = await this.subscriptionRepository.getSubscription({
+      subscriptionId,
+    })
+
+    if (!subscription) {
+      throw new HTTPError(
+        404,
+        ErrorCode.INVALID_REQUEST,
+        "Subscription not found",
+        { subscriptionId },
+      )
+    }
+
+    if (subscription.accountAddress !== accountAddress) {
+      throw new HTTPError(403, ErrorCode.FORBIDDEN, "Unauthorized", {
+        subscriptionId,
+      })
+    }
+
+    if (subscription.status === "canceled") {
+      log.info("Subscription already canceled, returning existing record")
+      return subscription
+    }
+
+    if (!isRevocableStatus(subscription.status)) {
+      throw new HTTPError(
+        400,
+        ErrorCode.INVALID_REQUEST,
+        `Subscription with status '${subscription.status}' cannot be revoked`,
+        { subscriptionId },
+      )
+    }
+
+    const status = await this.onchainRepository.getSubscriptionStatus({
+      subscriptionId,
+      provider: subscription.provider,
+    })
+
+    if (!status.subscription.permissionExists) {
+      throw new HTTPError(
+        404,
+        ErrorCode.PERMISSION_NOT_FOUND,
+        "Subscription permission not found onchain",
+        { subscriptionId },
+      )
+    }
+
+    const onchainSub = status.subscription
+    const webhookService = new WebhookService(this.deps)
+
+    if (onchainSub.isSubscribed) {
+      log.info("Revoking subscription on-chain")
+      await this.onchainRepository.revokeSubscription({
+        subscriptionId,
+        provider: subscription.provider,
+      })
+    } else {
+      log.info("Subscription already revoked onchain, skipping revoke")
+    }
+
+    // Cancel any pending orders and get their IDs for DO cleanup
+    log.info("Canceling pending orders")
+    const canceledOrderIds =
+      await this.subscriptionRepository.cancelPendingOrders({
+        subscriptionId,
+      })
+
+    // Delete DO alarms for canceled orders
+    if (canceledOrderIds.length > 0) {
+      log.info("Deleting DO alarms for canceled orders", {
+        orderIds: canceledOrderIds,
+      })
+      await Promise.all(
+        canceledOrderIds.map(async (orderId) => {
+          const scheduler = this.deps.ORDER_SCHEDULER.get(
+            this.deps.ORDER_SCHEDULER.idFromName(String(orderId)),
+          )
+          await scheduler.delete()
+        }),
+      )
+    }
+
+    log.info("Updating subscription status in database")
+    const canceledSubscription =
+      await this.subscriptionRepository.cancelSubscription({
+        subscriptionId,
+      })
+
+    await webhookService.emitSubscriptionCanceled({
+      accountAddress,
+      subscriptionId,
+      amount: onchainSub.recurringCharge,
+      periodInSeconds: onchainSub.periodInSeconds,
+    })
+
+    log.info("Subscription revoked successfully")
+    return canceledSubscription
   }
 
   async validateId(params: ValidateSubscriptionIdParams): Promise<void> {

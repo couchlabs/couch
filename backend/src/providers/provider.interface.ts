@@ -11,6 +11,7 @@ export interface SubscriptionProvider {
 
   chargeSubscription(params: ChargeParams): Promise<ChargeResult>
   getSubscriptionStatus(params: StatusParams): Promise<StatusResult>
+  revokeSubscription(params: RevokeParams): Promise<RevokeResult>
   validateSubscriptionId(id: string): boolean
 }
 
@@ -28,6 +29,15 @@ export interface ChargeResult {
 
 export interface StatusParams {
   subscriptionId: string
+}
+
+export interface RevokeParams {
+  subscriptionId: string
+}
+
+export interface RevokeResult {
+  transactionHash: Hash
+  success: boolean
 }
 
 // TODO: Revisit this type when adding second provider

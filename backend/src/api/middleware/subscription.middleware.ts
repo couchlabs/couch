@@ -1,18 +1,24 @@
 import { createMiddleware } from "hono/factory"
 import type { Address, Hash } from "viem"
-import { isAddress } from "viem"
+import { isAddress, isHash } from "viem"
 import { ErrorCode, HTTPError } from "@/errors/http.errors"
 import { Provider } from "@/providers/provider.interface"
 
-export interface SubscriptionContext {
+// Context for subscriptionParam middleware (only subscriptionId from URL)
+export interface SubscriptionParamContext {
+  subscriptionId: Hash
+}
+
+// Context for subscriptionBody middleware (subscriptionId, provider, optional beneficiary from body)
+export interface SubscriptionBodyContext {
   subscriptionId: Hash
   provider: Provider
-  beneficiary?: Address // Optional - defaults to accountAddress if not provided
+  beneficiary?: Address
 }
 
 export const subscriptionBody = () =>
   createMiddleware<{
-    Variables: { subscription: SubscriptionContext }
+    Variables: { subscription: SubscriptionBodyContext }
   }>(async (ctx, next) => {
     const body = await ctx.req.json<{
       id?: Hash
@@ -52,6 +58,33 @@ export const subscriptionBody = () =>
       provider: provider as Provider,
       beneficiary: beneficiary as Address | undefined,
     })
+
+    await next()
+  })
+
+export const subscriptionParam = () =>
+  createMiddleware<{
+    Variables: { subscription: SubscriptionParamContext }
+  }>(async (ctx, next) => {
+    const id = ctx.req.param("id")
+
+    if (!id) {
+      throw new HTTPError(
+        400,
+        ErrorCode.MISSING_FIELD,
+        "Subscription ID is required",
+      )
+    }
+
+    if (!isHash(id)) {
+      throw new HTTPError(
+        400,
+        ErrorCode.INVALID_FORMAT,
+        "Invalid subscription ID format",
+      )
+    }
+
+    ctx.set("subscription", { subscriptionId: id })
 
     await next()
   })

@@ -31,6 +31,11 @@ export interface ValidateSubscriptionIdParams {
   provider: Provider
 }
 
+export interface RevokeSubscriptionParams {
+  subscriptionId: Hash
+  provider: Provider
+}
+
 export type SubscriptionStatusResult =
   | {
       subscription: {
@@ -158,6 +163,32 @@ export class OnchainRepository {
       }
     } catch (error) {
       log.error("Failed to get subscription status", error)
+      throw error
+    }
+  }
+
+  async revokeSubscription(
+    params: RevokeSubscriptionParams,
+  ): Promise<ChargeResult> {
+    const { subscriptionId, provider } = params
+    const log = logger.with({ subscriptionId, provider })
+
+    try {
+      log.info("Executing onchain revoke via provider")
+
+      const onchainProvider = this.providerRegistry.get(provider)
+      const { transactionHash } = await onchainProvider.revokeSubscription({
+        subscriptionId,
+      })
+
+      log.info("Onchain revoke successful", {
+        transactionHash,
+        provider,
+      })
+
+      return { transactionHash, gasUsed: undefined }
+    } catch (error) {
+      log.error("Onchain revoke failed", error)
       throw error
     }
   }
