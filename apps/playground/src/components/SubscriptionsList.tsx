@@ -93,11 +93,11 @@ export function SubscriptionsList({
       case "processing":
         return <Loader2 className="h-4 w-4 text-yellow-600 animate-spin" />
       case "incomplete":
-        return <X className="h-4 w-4 text-red-600" />
+        return <X className="h-4 w-4 text-destructive" />
       case "past_due":
         return <X className="h-4 w-4 text-orange-600" />
       case "unpaid":
-        return <X className="h-4 w-4 text-red-600" />
+        return <X className="h-4 w-4 text-destructive" />
       case "canceled":
         return <X className="h-4 w-4 text-gray-600" />
       default:

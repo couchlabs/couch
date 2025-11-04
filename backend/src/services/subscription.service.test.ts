@@ -20,6 +20,10 @@ import { SubscriptionService } from "./subscription.service"
 const mockValidateSubscriptionId = mock()
 const mockGetSubscriptionStatus = mock()
 const mockChargeSubscription = mock()
+const mockRevokeSubscription = mock()
+
+// Mock webhook queue
+const mockWebhookQueueSend = mock()
 
 describe("SubscriptionService", () => {
   let dispose: (() => Promise<void>) | undefined
@@ -70,9 +74,51 @@ describe("SubscriptionService", () => {
         validateSubscriptionId: mockValidateSubscriptionId,
         getSubscriptionStatus: mockGetSubscriptionStatus,
         chargeSubscription: mockChargeSubscription,
+        revokeSubscription: mockRevokeSubscription,
         // biome-ignore lint/suspicious/noExplicitAny: Test mocks
       } as any,
     })
+  }
+
+  /**
+   * Create service for revoke tests with full deps (needs WebhookService + DO scheduler)
+   * Uses createForTesting to mock onchain, then manually sets deps for WebhookService
+   */
+  function createServiceForRevokeTests(db: D1Database): SubscriptionService {
+    const service = SubscriptionService.createForTesting({
+      subscriptionRepository: new SubscriptionRepository({
+        DB: db,
+        LOGGING: "verbose",
+      }),
+      onchainRepository: {
+        validateSubscriptionId: mockValidateSubscriptionId,
+        getSubscriptionStatus: mockGetSubscriptionStatus,
+        chargeSubscription: mockChargeSubscription,
+        revokeSubscription: mockRevokeSubscription,
+        // biome-ignore lint/suspicious/noExplicitAny: Test mocks
+      } as any,
+    })
+
+    // Manually set deps for WebhookService and DO scheduler (test-only)
+    // biome-ignore lint/suspicious/noExplicitAny: Test setup
+    ;(service as any).deps = {
+      DB: db,
+      LOGGING: "verbose",
+      WEBHOOK_QUEUE: {
+        send: mockWebhookQueueSend,
+        // biome-ignore lint/suspicious/noExplicitAny: Test mocks
+      } as any,
+      ORDER_SCHEDULER: {
+        get: mock(() => ({
+          set: mock(),
+          delete: mock(),
+        })),
+        idFromName: mock((id: string) => id),
+        // biome-ignore lint/suspicious/noExplicitAny: Test mocks
+      } as any,
+    }
+
+    return service
   }
 
   beforeEach(async () => {
@@ -89,6 +135,10 @@ describe("SubscriptionService", () => {
     mockValidateSubscriptionId.mockResolvedValue(true)
     mockGetSubscriptionStatus.mockResolvedValue(MOCK_SUBSCRIPTION_STATUS)
     mockChargeSubscription.mockResolvedValue(MOCK_CHARGE_RESULT)
+    mockRevokeSubscription.mockResolvedValue({
+      transactionHash: "0xrevokehash" as Hash,
+    })
+    mockWebhookQueueSend.mockResolvedValue(undefined)
   })
 
   afterEach(async () => {
@@ -642,6 +692,343 @@ describe("SubscriptionService", () => {
 
       expect(orderStatus?.status).toBe(OrderStatus.FAILED)
       expect(orderStatus?.failure_reason).toBe("INSUFFICIENT_BALANCE")
+    })
+  })
+
+  describe("revokeSubscription", () => {
+    it("revokes active subscription successfully", async () => {
+      const testDB = await createTestDB({
+        accounts: [TEST_ACCOUNT],
+        subscriptions: [
+          {
+            subscriptionId: TEST_SUBSCRIPTION_ID,
+            accountAddress: TEST_ACCOUNT,
+            beneficiaryAddress: TEST_OWNER,
+            provider: Provider.BASE,
+            status: SubscriptionStatus.ACTIVE,
+            order: {
+              type: OrderType.RECURRING,
+              dueAt: "2025-02-01T00:00:00Z",
+              amount: "1000000",
+              periodInSeconds: 2592000,
+              status: OrderStatus.PENDING,
+            },
+          },
+        ],
+      })
+      dispose = testDB.dispose
+
+      // Register webhook for the account (needed for emitSubscriptionCanceled)
+      await testDB.db
+        .prepare(
+          "INSERT INTO webhooks (account_address, url, secret) VALUES (?, ?, ?)",
+        )
+        .bind(TEST_ACCOUNT, "https://example.com/webhook", "test-secret")
+        .run()
+
+      const service = createServiceForRevokeTests(testDB.db)
+
+      const result = await service.revokeSubscription({
+        subscriptionId: TEST_SUBSCRIPTION_ID,
+        accountAddress: TEST_ACCOUNT,
+      })
+
+      expect(result.status).toBe(SubscriptionStatus.CANCELED)
+
+      // Verify onchain revoke was called
+      expect(mockRevokeSubscription).toHaveBeenCalledWith({
+        subscriptionId: TEST_SUBSCRIPTION_ID,
+        provider: Provider.BASE,
+      })
+
+      // Verify subscription status was updated
+      const subStatus = await testDB.db
+        .prepare("SELECT status FROM subscriptions WHERE subscription_id = ?")
+        .bind(TEST_SUBSCRIPTION_ID)
+        .first<{ status: string }>()
+
+      expect(subStatus?.status).toBe(SubscriptionStatus.CANCELED)
+
+      // Verify pending order was canceled
+      const orderStatus = await testDB.db
+        .prepare("SELECT status, failure_reason FROM orders WHERE id = ?")
+        .bind(testDB.orderIds[0])
+        .first<{ status: string; failure_reason: string }>()
+
+      expect(orderStatus?.status).toBe(OrderStatus.FAILED)
+      expect(orderStatus?.failure_reason).toBe("Subscription canceled")
+    })
+
+    it("returns existing subscription if already canceled (idempotent)", async () => {
+      const testDB = await createTestDB({
+        accounts: [TEST_ACCOUNT],
+        subscriptions: [
+          {
+            subscriptionId: TEST_SUBSCRIPTION_ID,
+            accountAddress: TEST_ACCOUNT,
+            beneficiaryAddress: TEST_OWNER,
+            provider: Provider.BASE,
+            status: SubscriptionStatus.CANCELED,
+          },
+        ],
+      })
+      dispose = testDB.dispose
+
+      const service = createSubscriptionServiceForTest(testDB.db)
+
+      const result = await service.revokeSubscription({
+        subscriptionId: TEST_SUBSCRIPTION_ID,
+        accountAddress: TEST_ACCOUNT,
+      })
+
+      expect(result.status).toBe(SubscriptionStatus.CANCELED)
+
+      // Verify onchain revoke was NOT called (already canceled)
+      expect(mockRevokeSubscription).not.toHaveBeenCalled()
+    })
+
+    it("throws 404 if subscription not found", async () => {
+      await expect(
+        service.revokeSubscription({
+          subscriptionId: TEST_SUBSCRIPTION_ID,
+          accountAddress: TEST_ACCOUNT,
+        }),
+      ).rejects.toThrow(HTTPError)
+
+      try {
+        await service.revokeSubscription({
+          subscriptionId: TEST_SUBSCRIPTION_ID,
+          accountAddress: TEST_ACCOUNT,
+        })
+      } catch (error) {
+        expect(error).toBeInstanceOf(HTTPError)
+        expect((error as HTTPError).status).toBe(404)
+        expect((error as HTTPError).code).toBe(ErrorCode.INVALID_REQUEST)
+        expect((error as HTTPError).message).toBe("Subscription not found")
+      }
+    })
+
+    it("throws 403 if accountAddress does not match", async () => {
+      const testDB = await createTestDB({
+        accounts: [TEST_ACCOUNT],
+        subscriptions: [
+          {
+            subscriptionId: TEST_SUBSCRIPTION_ID,
+            accountAddress: TEST_ACCOUNT,
+            beneficiaryAddress: TEST_OWNER,
+            provider: Provider.BASE,
+            status: SubscriptionStatus.ACTIVE,
+          },
+        ],
+      })
+      dispose = testDB.dispose
+
+      const service = createSubscriptionServiceForTest(testDB.db)
+
+      const DIFFERENT_ACCOUNT = "0xdifferent" as Address
+
+      await expect(
+        service.revokeSubscription({
+          subscriptionId: TEST_SUBSCRIPTION_ID,
+          accountAddress: DIFFERENT_ACCOUNT,
+        }),
+      ).rejects.toThrow(HTTPError)
+
+      try {
+        await service.revokeSubscription({
+          subscriptionId: TEST_SUBSCRIPTION_ID,
+          accountAddress: DIFFERENT_ACCOUNT,
+        })
+      } catch (error) {
+        expect(error).toBeInstanceOf(HTTPError)
+        expect((error as HTTPError).status).toBe(403)
+        expect((error as HTTPError).code).toBe(ErrorCode.FORBIDDEN)
+      }
+    })
+
+    it("throws 400 if subscription status is not revocable (processing)", async () => {
+      const testDB = await createTestDB({
+        accounts: [TEST_ACCOUNT],
+        subscriptions: [
+          {
+            subscriptionId: TEST_SUBSCRIPTION_ID,
+            accountAddress: TEST_ACCOUNT,
+            beneficiaryAddress: TEST_OWNER,
+            provider: Provider.BASE,
+            status: SubscriptionStatus.PROCESSING,
+          },
+        ],
+      })
+      dispose = testDB.dispose
+
+      const service = createSubscriptionServiceForTest(testDB.db)
+
+      await expect(
+        service.revokeSubscription({
+          subscriptionId: TEST_SUBSCRIPTION_ID,
+          accountAddress: TEST_ACCOUNT,
+        }),
+      ).rejects.toThrow(HTTPError)
+
+      try {
+        await service.revokeSubscription({
+          subscriptionId: TEST_SUBSCRIPTION_ID,
+          accountAddress: TEST_ACCOUNT,
+        })
+      } catch (error) {
+        expect(error).toBeInstanceOf(HTTPError)
+        expect((error as HTTPError).status).toBe(400)
+        expect((error as HTTPError).code).toBe(ErrorCode.INVALID_REQUEST)
+        expect((error as HTTPError).message).toContain("cannot be revoked")
+      }
+    })
+
+    it("throws 400 if subscription status is not revocable (incomplete)", async () => {
+      const testDB = await createTestDB({
+        accounts: [TEST_ACCOUNT],
+        subscriptions: [
+          {
+            subscriptionId: TEST_SUBSCRIPTION_ID,
+            accountAddress: TEST_ACCOUNT,
+            beneficiaryAddress: TEST_OWNER,
+            provider: Provider.BASE,
+            status: SubscriptionStatus.INCOMPLETE,
+          },
+        ],
+      })
+      dispose = testDB.dispose
+
+      const service = createSubscriptionServiceForTest(testDB.db)
+
+      await expect(
+        service.revokeSubscription({
+          subscriptionId: TEST_SUBSCRIPTION_ID,
+          accountAddress: TEST_ACCOUNT,
+        }),
+      ).rejects.toThrow(HTTPError)
+
+      try {
+        await service.revokeSubscription({
+          subscriptionId: TEST_SUBSCRIPTION_ID,
+          accountAddress: TEST_ACCOUNT,
+        })
+      } catch (error) {
+        expect(error).toBeInstanceOf(HTTPError)
+        expect((error as HTTPError).status).toBe(400)
+        expect((error as HTTPError).code).toBe(ErrorCode.INVALID_REQUEST)
+      }
+    })
+
+    it("throws 404 if permission not found onchain", async () => {
+      const testDB = await createTestDB({
+        accounts: [TEST_ACCOUNT],
+        subscriptions: [
+          {
+            subscriptionId: TEST_SUBSCRIPTION_ID,
+            accountAddress: TEST_ACCOUNT,
+            beneficiaryAddress: TEST_OWNER,
+            provider: Provider.BASE,
+            status: SubscriptionStatus.ACTIVE,
+          },
+        ],
+      })
+      dispose = testDB.dispose
+
+      const service = createSubscriptionServiceForTest(testDB.db)
+
+      mockGetSubscriptionStatus.mockResolvedValue({
+        subscription: {
+          permissionExists: false,
+          isSubscribed: false,
+          recurringCharge: "0",
+        },
+        context: {
+          spenderAddress: "0xspender" as Address,
+        },
+      })
+
+      await expect(
+        service.revokeSubscription({
+          subscriptionId: TEST_SUBSCRIPTION_ID,
+          accountAddress: TEST_ACCOUNT,
+        }),
+      ).rejects.toThrow(HTTPError)
+
+      try {
+        await service.revokeSubscription({
+          subscriptionId: TEST_SUBSCRIPTION_ID,
+          accountAddress: TEST_ACCOUNT,
+        })
+      } catch (error) {
+        expect(error).toBeInstanceOf(HTTPError)
+        expect((error as HTTPError).status).toBe(404)
+        expect((error as HTTPError).code).toBe(ErrorCode.PERMISSION_NOT_FOUND)
+      }
+    })
+
+    it("skips onchain revoke if already revoked onchain (isSubscribed = false)", async () => {
+      const testDB = await createTestDB({
+        accounts: [TEST_ACCOUNT],
+        subscriptions: [
+          {
+            subscriptionId: TEST_SUBSCRIPTION_ID,
+            accountAddress: TEST_ACCOUNT,
+            beneficiaryAddress: TEST_OWNER,
+            provider: Provider.BASE,
+            status: SubscriptionStatus.ACTIVE,
+          },
+        ],
+      })
+      dispose = testDB.dispose
+
+      // Register webhook for the account (needed for emitSubscriptionCanceled)
+      await testDB.db
+        .prepare(
+          "INSERT INTO webhooks (account_address, url, secret) VALUES (?, ?, ?)",
+        )
+        .bind(TEST_ACCOUNT, "https://example.com/webhook", "test-secret")
+        .run()
+
+      const service = createServiceForRevokeTests(testDB.db)
+
+      // Permission exists but subscription is already revoked onchain
+      mockGetSubscriptionStatus.mockResolvedValue({
+        subscription: {
+          permissionExists: true,
+          isSubscribed: false,
+          subscriptionOwner:
+            MOCK_SUBSCRIPTION_STATUS.subscription.subscriptionOwner,
+          remainingChargeInPeriod:
+            MOCK_SUBSCRIPTION_STATUS.subscription.remainingChargeInPeriod,
+          currentPeriodStart:
+            MOCK_SUBSCRIPTION_STATUS.subscription.currentPeriodStart,
+          nextPeriodStart:
+            MOCK_SUBSCRIPTION_STATUS.subscription.nextPeriodStart,
+          recurringCharge:
+            MOCK_SUBSCRIPTION_STATUS.subscription.recurringCharge,
+          periodInSeconds:
+            MOCK_SUBSCRIPTION_STATUS.subscription.periodInSeconds,
+        },
+        context: MOCK_SUBSCRIPTION_STATUS.context,
+      })
+
+      const result = await service.revokeSubscription({
+        subscriptionId: TEST_SUBSCRIPTION_ID,
+        accountAddress: TEST_ACCOUNT,
+      })
+
+      expect(result.status).toBe(SubscriptionStatus.CANCELED)
+
+      // Verify onchain revoke was NOT called (already revoked)
+      expect(mockRevokeSubscription).not.toHaveBeenCalled()
+
+      // Verify subscription was still canceled in DB
+      const subStatus = await testDB.db
+        .prepare("SELECT status FROM subscriptions WHERE subscription_id = ?")
+        .bind(TEST_SUBSCRIPTION_ID)
+        .first<{ status: string }>()
+
+      expect(subStatus?.status).toBe(SubscriptionStatus.CANCELED)
     })
   })
 })

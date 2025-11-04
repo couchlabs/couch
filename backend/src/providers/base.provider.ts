@@ -7,6 +7,8 @@ import {
   type ChargeParams,
   type ChargeResult,
   Provider,
+  type RevokeParams,
+  type RevokeResult,
   type StatusParams,
   type StatusResult,
   type SubscriptionProvider,
@@ -25,6 +27,7 @@ export interface BaseProviderDeps {
 export class BaseProvider implements SubscriptionProvider {
   readonly providerId = Provider.BASE
   private readonly network: Network
+  private readonly paymasterUrl: string
   private readonly cdpConfig: {
     apiKeyId: string
     apiKeySecret: string
@@ -44,20 +47,19 @@ export class BaseProvider implements SubscriptionProvider {
       clientApiKey: deps.CDP_CLIENT_API_KEY,
       spenderAddress: deps.CDP_SPENDER_ADDRESS,
     }
+
+    const network = this.network === "testnet" ? "base-sepolia" : "base"
+    this.paymasterUrl = `https://api.developer.coinbase.com/rpc/v1/${network}/${this.cdpConfig.clientApiKey}`
   }
 
   async chargeSubscription(params: ChargeParams): Promise<ChargeResult> {
     try {
-      // Paymaster URL must match the network (base-sepolia for testnet, base for mainnet)
-      const network = this.network === "testnet" ? "base-sepolia" : "base"
-      const paymasterUrl = `https://api.developer.coinbase.com/rpc/v1/${network}/${this.cdpConfig.clientApiKey}`
-
       const result = await base.subscription.charge({
         cdpApiKeyId: this.cdpConfig.apiKeyId,
         cdpApiKeySecret: this.cdpConfig.apiKeySecret,
         cdpWalletSecret: this.cdpConfig.walletSecret,
         walletName: this.cdpConfig.walletName,
-        paymasterUrl,
+        paymasterUrl: this.paymasterUrl,
         id: params.subscriptionId as Hash,
         amount: params.amount,
         recipient: params.recipient,
@@ -118,6 +120,23 @@ export class BaseProvider implements SubscriptionProvider {
       recurringCharge: subscription.recurringCharge,
       periodInDays: subscription.periodInDays,
       spenderAddress: this.cdpConfig.spenderAddress,
+    }
+  }
+
+  async revokeSubscription(params: RevokeParams): Promise<RevokeResult> {
+    const result = await base.subscription.revoke({
+      cdpApiKeyId: this.cdpConfig.apiKeyId,
+      cdpApiKeySecret: this.cdpConfig.apiKeySecret,
+      cdpWalletSecret: this.cdpConfig.walletSecret,
+      walletName: this.cdpConfig.walletName,
+      paymasterUrl: this.paymasterUrl,
+      id: params.subscriptionId,
+      testnet: this.network === "testnet",
+    })
+
+    return {
+      transactionHash: result.id as Hash,
+      success: result.success,
     }
   }
 

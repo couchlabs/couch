@@ -3,6 +3,8 @@ import { addDays, FIXED_DATE } from "@tests/test-utils"
 import {
   calculateNextRetryDate,
   getDunningConfig,
+  isRevocableStatus,
+  SubscriptionStatus,
 } from "@/constants/subscription.constants"
 
 describe("calculateNextRetryDate", () => {
@@ -100,5 +102,31 @@ describe("calculateNextRetryDate", () => {
         calculateNextRetryDate(DUNNING_CONFIG.MAX_ATTEMPTS, FIXED_DATE, "fast"),
       ).toThrow("Max retry attempts exceeded")
     })
+  })
+})
+
+describe("isRevocableStatus", () => {
+  it("returns true for active status", () => {
+    expect(isRevocableStatus(SubscriptionStatus.ACTIVE)).toBe(true)
+  })
+
+  it("returns true for past_due status", () => {
+    expect(isRevocableStatus(SubscriptionStatus.PAST_DUE)).toBe(true)
+  })
+
+  it("returns true for unpaid status", () => {
+    expect(isRevocableStatus(SubscriptionStatus.UNPAID)).toBe(true)
+  })
+
+  it("returns false for processing status", () => {
+    expect(isRevocableStatus(SubscriptionStatus.PROCESSING)).toBe(false)
+  })
+
+  it("returns false for incomplete status", () => {
+    expect(isRevocableStatus(SubscriptionStatus.INCOMPLETE)).toBe(false)
+  })
+
+  it("returns false for canceled status", () => {
+    expect(isRevocableStatus(SubscriptionStatus.CANCELED)).toBe(false)
   })
 })

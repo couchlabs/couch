@@ -82,7 +82,7 @@ export const subscriptions = sqliteTable(
       .references(() => accounts.address),
     // Who receives payments
     beneficiaryAddress: text("beneficiary_address").notNull(),
-    provider: text("provider").notNull(),
+    provider: text("provider").$type<Provider>().notNull(),
     createdAt: text("created_at").default(sql`CURRENT_TIMESTAMP`),
     modifiedAt: text("modified_at").default(sql`CURRENT_TIMESTAMP`),
   },

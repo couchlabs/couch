@@ -63,6 +63,7 @@ export function SubscriptionDetails({
   } | null>(null)
   const [onchainLoading, setOnchainLoading] = useState(false)
   const [revokeLoading, setRevokeLoading] = useState(false)
+  const [revokeApiLoading, setRevokeApiLoading] = useState(false)
   const [copiedEventId, setCopiedEventId] = useState<number | null>(null)
 
   // Fetch subscription details on mount or when ID changes
@@ -214,6 +215,42 @@ export function SubscriptionDetails({
     }
   }, [subscriptionId, fetchOnchainStatus, onchainStatus])
 
+  const handleRevokeViaApi = useCallback(async () => {
+    if (!subscriptionId) return
+
+    setRevokeApiLoading(true)
+    try {
+      const response = await fetch(`/revoke/${subscriptionId}`, {
+        method: "DELETE",
+      })
+
+      if (!response.ok) {
+        const errorData = (await response.json()) as { error?: string }
+        throw new Error(errorData.error || "Failed to revoke subscription")
+      }
+
+      // Refresh subscription data to show updated status
+      const [subData, eventsData] = await Promise.all([
+        getSubscription(subscriptionId),
+        getSubscriptionEvents(subscriptionId),
+      ])
+      setSubscription(subData)
+      setEvents(eventsData)
+
+      // Also refresh onchain status if it's expanded
+      if (onchainExpanded) {
+        fetchOnchainStatus()
+      }
+    } catch (error) {
+      console.error("Failed to revoke via API:", error)
+      alert(
+        `Failed to revoke subscription: ${error instanceof Error ? error.message : "Unknown error"}`,
+      )
+    } finally {
+      setRevokeApiLoading(false)
+    }
+  }, [subscriptionId, onchainExpanded, fetchOnchainStatus])
+
   const handleCopyPayload = useCallback(
     async (eventId: number, payload: string) => {
       try {
@@ -234,11 +271,11 @@ export function SubscriptionDetails({
       case "processing":
         return <Loader2 className="h-4 w-4 text-yellow-600 animate-spin" />
       case "incomplete":
-        return <X className="h-4 w-4 text-red-600" />
+        return <X className="h-4 w-4 text-destructive" />
       case "past_due":
         return <X className="h-4 w-4 text-orange-600" />
       case "unpaid":
-        return <X className="h-4 w-4 text-red-600" />
+        return <X className="h-4 w-4 text-destructive" />
       case "canceled":
         return <X className="h-4 w-4 text-gray-600" />
       default:
@@ -275,6 +312,11 @@ export function SubscriptionDetails({
       // Processing state (subscription created but not yet charged)
       if (data.data.subscription.status === "processing") {
         return "Subscription creation"
+      }
+
+      // Canceled state (subscription revoked)
+      if (data.data.subscription.status === "canceled") {
+        return "Subscription canceled"
       }
 
       return `Status: ${data.data.subscription.status}`
@@ -420,17 +462,36 @@ export function SubscriptionDetails({
                   </a>
                 </p>
               )}
+              {/* Couch API Action Bar */}
+              {subscription?.status &&
+                ["active", "past_due", "unpaid"].includes(
+                  subscription.status,
+                ) && (
+                  <div className="pt-3 mt-3 border-t border-primary-foreground/20">
+                    <Button
+                      onClick={handleRevokeViaApi}
+                      disabled={revokeApiLoading}
+                      variant="outline"
+                      size="sm"
+                      className="h-8 bg-primary-foreground text-primary hover:bg-primary-foreground/90"
+                    >
+                      {revokeApiLoading
+                        ? "Revoking..."
+                        : "Revoke via Couch API"}
+                    </Button>
+                  </div>
+                )}
             </div>
 
             {/* Onchain Status */}
             <button
               type="button"
               onClick={() => setOnchainExpanded(!onchainExpanded)}
-              className={`w-full text-left p-3 border-t hover:bg-accent transition-colors flex items-center justify-between cursor-pointer ${
+              className={`w-full text-left p-4 border-t hover:bg-accent transition-colors flex items-center justify-between cursor-pointer ${
                 onchainExpanded ? "bg-accent" : ""
               }`}
             >
-              <span className="text-sm font-semibold">Onchain data</span>
+              <p className="text-sm font-semibold">Onchain data</p>
               <div className="flex items-center gap-2">
                 {onchainExpanded ? (
                   <ChevronDown className="h-4 w-4" />
@@ -535,11 +596,13 @@ export function SubscriptionDetails({
                           <Button
                             onClick={handleRevoke}
                             disabled={revokeLoading}
-                            variant="destructive"
+                            variant="outline"
                             size="sm"
                             className="h-8"
                           >
-                            {revokeLoading ? "Revoking..." : "Revoke"}
+                            {revokeLoading
+                              ? "Revoking..."
+                              : "Revoke as Subscriber"}
                           </Button>
                         )}
                       </div>
@@ -594,13 +657,17 @@ export function SubscriptionDetails({
                               data.data.order?.status === "failed" ||
                               data.data.error
                             ) {
-                              return <X className="h-4 w-4 text-red-600" />
+                              return <X className="h-4 w-4 text-destructive" />
                             } else if (
                               data.data.subscription.status === "processing"
                             ) {
                               return (
                                 <Circle className="h-4 w-4 text-yellow-600" />
                               )
+                            } else if (
+                              data.data.subscription.status === "canceled"
+                            ) {
+                              return <X className="h-4 w-4 text-gray-600" />
                             }
                           } catch {
                             return null
