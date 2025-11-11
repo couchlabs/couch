@@ -40,7 +40,7 @@ bun dev --filter=backend
 First, create your account and get an API key:
 
 ```bash
-curl -X PUT http://localhost:3000/api/account \
+curl -X POST http://localhost:3000/api/account \
   -H "Content-Type: application/json" \
   -d '{"address": "YOUR_WALLET_ADDRESS"}'
 ```
