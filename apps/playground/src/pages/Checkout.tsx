@@ -73,9 +73,9 @@ export const Checkout = () => {
     const isValidAddress =
       beneficiary && /^0x[a-fA-F0-9]{40}$/.test(beneficiary)
     const isValidAmount =
-      amount && !isNaN(parseFloat(amount)) && parseFloat(amount) > 0
+      amount && !Number.isNaN(parseFloat(amount)) && parseFloat(amount) > 0
     const isValidPeriod =
-      period && !isNaN(parseFloat(period)) && parseFloat(period) > 0
+      period && !Number.isNaN(parseFloat(period)) && parseFloat(period) > 0
 
     if (!isValidAddress || !isValidAmount || !isValidPeriod) {
       navigate("/checkout-instructions")

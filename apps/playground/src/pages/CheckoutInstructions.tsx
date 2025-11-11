@@ -1,5 +1,5 @@
 import { Check, Copy, ExternalLink } from "lucide-react"
-import { useState } from "react"
+import { useId, useState } from "react"
 import { Button } from "../components/ui/button"
 import {
   Card,
@@ -27,6 +27,11 @@ export const CheckoutInstructions = () => {
   )
   const [successUrl, setSuccessUrl] = useState("")
   const [copied, setCopied] = useState(false)
+
+  // Generate unique IDs for form fields
+  const beneficiaryId = useId()
+  const amountId = useId()
+  const successUrlId = useId()
 
   // Convert period to days for the URL
   const convertPeriodToDays = (): string => {
@@ -88,9 +93,9 @@ export const CheckoutInstructions = () => {
               <CardContent className="space-y-4">
                 {/* Beneficiary */}
                 <div className="space-y-2">
-                  <Label htmlFor="beneficiary">Beneficiary Address</Label>
+                  <Label htmlFor={beneficiaryId}>Beneficiary Address</Label>
                   <Input
-                    id="beneficiary"
+                    id={beneficiaryId}
                     type="text"
                     placeholder="0x..."
                     value={beneficiary}
@@ -104,9 +109,9 @@ export const CheckoutInstructions = () => {
 
                 {/* Amount */}
                 <div className="space-y-2">
-                  <Label htmlFor="amount">Amount (USDC)</Label>
+                  <Label htmlFor={amountId}>Amount (USDC)</Label>
                   <Input
-                    id="amount"
+                    id={amountId}
                     type="text"
                     placeholder="0.0001"
                     value={amount}
@@ -145,12 +150,12 @@ export const CheckoutInstructions = () => {
 
                 {/* Success URL */}
                 <div className="space-y-2">
-                  <Label htmlFor="successUrl">
+                  <Label htmlFor={successUrlId}>
                     Success URL{" "}
                     <span className="text-muted-foreground">(optional)</span>
                   </Label>
                   <Input
-                    id="successUrl"
+                    id={successUrlId}
                     type="url"
                     placeholder="https://example.com/success"
                     value={successUrl}
