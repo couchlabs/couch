@@ -1,8 +1,8 @@
 /**
- * Setup script for creating GitHub "sandbox" environment and secrets using Alchemy providers.
+ * Setup script for creating GitHub "staging" environment and secrets using Alchemy providers.
  *
  * This script provisions:
- * - GitHub environment: "sandbox" (for sandbox testnet deployments)
+ * - GitHub environment: "staging" (for staging testnet deployments)
  * - All required secrets for Cloudflare and CDP testnet deployments
  * - Protection rules requiring approval before deployment
  *
@@ -11,13 +11,13 @@
  * - All secret values prepared (see required env vars below)
  *
  * Usage:
- *   bun run scripts/github.sandbox.environment.ts
+ *   bun run scripts/github.staging.environment.ts
  *
  * Environment Details:
- * - Used by stage: sandbox only
+ * - Used by stage: staging only
  * - Network: Base Sepolia (testnet)
  * - Protection rules: Required reviewers (manual approval required)
- * - Wallet: Dedicated sandbox testnet wallet (separate from dev)
+ * - Wallet: Dedicated staging testnet wallet (separate from dev)
  * - Behavior: Identical to prod except network (prod on testnet)
  */
 
@@ -36,14 +36,14 @@ import {
 // CONFIGURATION
 // =============================================================================
 
-const ENV_NAME = GitHubEnvironment.SANDBOX
+const ENV_NAME = GitHubEnvironment.STAGING
 
 const SECRETS = validateSecrets([
   // Alchemy
   {
     name: "ALCHEMY_PASSWORD",
-    envVar: "SANDBOX_ALCHEMY_PASSWORD",
-    description: "Alchemy deployment password (sandbox)",
+    envVar: "STAGING_ALCHEMY_PASSWORD",
+    description: "Alchemy deployment password (staging)",
   },
   {
     name: "ALCHEMY_STATE_TOKEN",
@@ -58,13 +58,13 @@ const SECRETS = validateSecrets([
   // Coinbase
   {
     name: "CDP_API_KEY_ID",
-    envVar: "SANDBOX_CDP_API_KEY_ID",
-    description: "CDP API Key ID for testnet (sandbox)",
+    envVar: "STAGING_CDP_API_KEY_ID",
+    description: "CDP API Key ID for testnet (staging)",
   },
   {
     name: "CDP_API_KEY_SECRET",
-    envVar: "SANDBOX_CDP_API_KEY_SECRET",
-    description: "CDP API Key Secret for testnet (sandbox)",
+    envVar: "STAGING_CDP_API_KEY_SECRET",
+    description: "CDP API Key Secret for testnet (staging)",
   },
   {
     name: "CDP_WALLET_SECRET",
@@ -78,8 +78,8 @@ const SECRETS = validateSecrets([
   // Couch (Playground)
   {
     name: "MERCHANT_ADDRESS",
-    envVar: "SANDBOX_MERCHANT_ADDRESS",
-    description: "Merchant wallet address for creating accounts (sandbox)",
+    envVar: "STAGING_MERCHANT_ADDRESS",
+    description: "Merchant wallet address for creating accounts (staging)",
   },
 ])
 
@@ -89,11 +89,11 @@ const SECRETS = validateSecrets([
 
 // Initialize Alchemy scope for GitHub environment setup
 const app = await alchemy(`couch-backend-github-environment`, {
-  password: process.env.SANDBOX_ALCHEMY_PASSWORD,
+  password: process.env.STAGING_ALCHEMY_PASSWORD,
   stage: ENV_NAME,
 })
 
-const sandboxEnv = await RepositoryEnvironment(`${ENV_NAME}-environment`, {
+const stagingEnv = await RepositoryEnvironment(`${ENV_NAME}-environment`, {
   owner,
   repository,
   name: ENV_NAME,
@@ -110,7 +110,7 @@ const sandboxEnv = await RepositoryEnvironment(`${ENV_NAME}-environment`, {
   // },
 })
 
-await createGitHubSecrets(sandboxEnv, SECRETS)
+await createGitHubSecrets(stagingEnv, SECRETS)
 
 // Finalize Alchemy scope
 await app.finalize()
@@ -119,14 +119,14 @@ await app.finalize()
 // SUMMARY
 // =============================================================================
 
-printSummary(sandboxEnv, {
-  stage: "sandbox",
+printSummary(stagingEnv, {
+  stage: "staging",
   network: "Base Sepolia (testnet)",
   protection: "Required approval from @nickbalestra",
   secretCount: SECRETS.length,
   secrets: SECRETS,
   nextSteps: [
-    "Test sandbox deployment workflow",
+    "Test staging deployment workflow",
     "Verify minimal logging and standard dunning intervals",
     "Check protection rules: https://github.com/couchlabs/couch/settings/environments",
   ],

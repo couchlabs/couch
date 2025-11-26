@@ -10,7 +10,6 @@ describe("resolveStageConfig", () => {
         NETWORK: "testnet",
         LOGGING: "verbose",
         DUNNING_MODE: "fast",
-        WALLET_STAGE: "dev",
         GH_ENVIRONMENT: "dev",
       })
     })
@@ -22,24 +21,9 @@ describe("resolveStageConfig", () => {
 
       expect(result).toEqual({
         NETWORK: "testnet",
-        LOGGING: "verbose",
-        DUNNING_MODE: "standard",
-        WALLET_STAGE: "dev",
-        GH_ENVIRONMENT: "dev",
-      })
-    })
-  })
-
-  describe("Sandbox stage", () => {
-    it("returns correct config for sandbox stage", () => {
-      const result = resolveStageConfig(Stage.SANDBOX)
-
-      expect(result).toEqual({
-        NETWORK: "testnet",
         LOGGING: "minimal",
         DUNNING_MODE: "standard",
-        WALLET_STAGE: "sandbox",
-        GH_ENVIRONMENT: "sandbox",
+        GH_ENVIRONMENT: "staging",
       })
     })
   })
@@ -52,7 +36,6 @@ describe("resolveStageConfig", () => {
         NETWORK: "mainnet",
         LOGGING: "minimal",
         DUNNING_MODE: "standard",
-        WALLET_STAGE: "prod",
         GH_ENVIRONMENT: "prod",
       })
     })
@@ -66,7 +49,6 @@ describe("resolveStageConfig", () => {
         NETWORK: "testnet",
         LOGGING: "verbose",
         DUNNING_MODE: "fast",
-        WALLET_STAGE: "dev",
         GH_ENVIRONMENT: "dev",
       })
     })
@@ -78,7 +60,6 @@ describe("resolveStageConfig", () => {
         NETWORK: "testnet",
         LOGGING: "verbose",
         DUNNING_MODE: "fast",
-        WALLET_STAGE: "dev",
         GH_ENVIRONMENT: "dev",
       })
     })
@@ -90,7 +71,6 @@ describe("resolveStageConfig", () => {
         NETWORK: "testnet",
         LOGGING: "verbose",
         DUNNING_MODE: "fast",
-        WALLET_STAGE: "dev",
         GH_ENVIRONMENT: "dev",
       })
     })
@@ -99,82 +79,75 @@ describe("resolveStageConfig", () => {
   describe("Unknown stages", () => {
     it("throws error for unknown stage", () => {
       expect(() => resolveStageConfig("unknown")).toThrow(
-        "Unknown stage: unknown. Expected one of: dev, staging, sandbox, prod or pr-*",
+        "Unknown stage: unknown. Expected one of: dev, staging, prod or pr-*",
       )
     })
 
     it("throws error for typo in stage name", () => {
       expect(() => resolveStageConfig("production")).toThrow(
-        "Unknown stage: production. Expected one of: dev, staging, sandbox, prod or pr-*",
+        "Unknown stage: production. Expected one of: dev, staging, prod or pr-*",
       )
     })
 
     it("throws error for empty string", () => {
       expect(() => resolveStageConfig("")).toThrow(
-        "Unknown stage: . Expected one of: dev, staging, sandbox, prod or pr-*",
+        "Unknown stage: . Expected one of: dev, staging, prod or pr-*",
       )
     })
   })
 
   describe("Configuration matrix", () => {
-    it("dev and preview stages share wallet", () => {
+    it("dev and preview stages share GitHub environment", () => {
       const devConfig = resolveStageConfig(Stage.DEV)
       const previewConfig = resolveStageConfig("pr-123")
 
-      expect(devConfig.WALLET_STAGE).toBe("dev")
-      expect(previewConfig.WALLET_STAGE).toBe("dev")
+      expect(devConfig.GH_ENVIRONMENT).toBe("dev")
+      expect(previewConfig.GH_ENVIRONMENT).toBe("dev")
     })
 
     it("only prod uses mainnet", () => {
-      const stages = [Stage.DEV, Stage.STAGING, Stage.SANDBOX, Stage.PROD]
+      const stages = [Stage.DEV, Stage.STAGING, Stage.PROD]
       const networks = stages.map((stage) => resolveStageConfig(stage).NETWORK)
 
-      expect(networks).toEqual(["testnet", "testnet", "testnet", "mainnet"])
+      expect(networks).toEqual(["testnet", "testnet", "mainnet"])
     })
 
-    it("only sandbox and prod use minimal logging", () => {
-      const stages = [Stage.DEV, Stage.STAGING, Stage.SANDBOX, Stage.PROD]
+    it("only staging and prod use minimal logging", () => {
+      const stages = [Stage.DEV, Stage.STAGING, Stage.PROD]
       const loggingLevels = stages.map(
         (stage) => resolveStageConfig(stage).LOGGING,
       )
 
-      expect(loggingLevels).toEqual([
-        "verbose",
-        "verbose",
-        "minimal",
-        "minimal",
-      ])
+      expect(loggingLevels).toEqual(["verbose", "minimal", "minimal"])
     })
 
     it("only dev and preview use fast dunning", () => {
       const devConfig = resolveStageConfig(Stage.DEV)
       const previewConfig = resolveStageConfig("pr-123")
       const stagingConfig = resolveStageConfig(Stage.STAGING)
-      const sandboxConfig = resolveStageConfig(Stage.SANDBOX)
       const prodConfig = resolveStageConfig(Stage.PROD)
 
       expect(devConfig.DUNNING_MODE).toBe("fast")
       expect(previewConfig.DUNNING_MODE).toBe("fast")
       expect(stagingConfig.DUNNING_MODE).toBe("standard")
-      expect(sandboxConfig.DUNNING_MODE).toBe("standard")
       expect(prodConfig.DUNNING_MODE).toBe("standard")
     })
 
-    it("each GitHub environment has unique wallet stage", () => {
+    it("each GitHub environment maps correctly", () => {
       const devConfig = resolveStageConfig(Stage.DEV)
-      const sandboxConfig = resolveStageConfig(Stage.SANDBOX)
+      const stagingConfig = resolveStageConfig(Stage.STAGING)
       const prodConfig = resolveStageConfig(Stage.PROD)
 
-      const walletStages = [
-        devConfig.WALLET_STAGE,
-        sandboxConfig.WALLET_STAGE,
-        prodConfig.WALLET_STAGE,
+      const ghEnvironments = [
+        devConfig.GH_ENVIRONMENT,
+        stagingConfig.GH_ENVIRONMENT,
+        prodConfig.GH_ENVIRONMENT,
       ]
 
-      // All wallet stages should be unique
-      const uniqueWalletStages = new Set(walletStages)
-      expect(uniqueWalletStages.size).toBe(3)
-      expect(walletStages).toEqual(["dev", "sandbox", "prod"])
+      // All GH environments should be unique
+      const uniqueGHEnvironments = new Set(ghEnvironments)
+      expect(uniqueGHEnvironments.size).toBe(3)
+      expect(ghEnvironments).toEqual(["dev", "staging", "prod"])
     })
   })
 })

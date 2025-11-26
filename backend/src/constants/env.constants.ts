@@ -1,7 +1,6 @@
 export enum Stage {
   DEV = "dev",
   STAGING = "staging",
-  SANDBOX = "sandbox",
   PROD = "prod",
 }
 
@@ -12,14 +11,12 @@ export enum Stage {
 export type Network = "testnet" | "mainnet"
 export type LoggingLevel = "verbose" | "minimal"
 export type DunningMode = "fast" | "standard"
-export type WalletStage = "dev" | "sandbox" | "prod"
-export type GHEnvironment = WalletStage
+export type GHEnvironment = "dev" | "staging" | "prod"
 
 export interface StageConfig {
   NETWORK: Network
   LOGGING: LoggingLevel
   DUNNING_MODE: DunningMode
-  WALLET_STAGE: WalletStage
   GH_ENVIRONMENT: GHEnvironment
 }
 
@@ -44,27 +41,22 @@ export function resolveStageConfig(stage: string): StageConfig {
   // Network: Only prod uses mainnet
   const NETWORK: Network = stage === Stage.PROD ? "mainnet" : "testnet"
 
-  // Logging: Minimal for sandbox/prod, verbose for others
+  // Logging: Minimal for staging/prod (production-like), verbose for dev/previews
   const LOGGING: LoggingLevel =
-    stage === Stage.SANDBOX || stage === Stage.PROD ? "minimal" : "verbose"
+    stage === Stage.STAGING || stage === Stage.PROD ? "minimal" : "verbose"
 
   // Dunning: Fast intervals ONLY for dev/preview (quick testing)
   const DUNNING_MODE: DunningMode =
     stage === Stage.DEV || isPreview ? "fast" : "standard"
 
-  // Wallet: Maps to GitHub environment (3 dedicated wallets)
-  const WALLET_STAGE: WalletStage =
-    stage === Stage.PROD
-      ? "prod" // Mainnet wallet
-      : stage === Stage.SANDBOX
-        ? "sandbox" // Dedicated sandbox testnet wallet
-        : "dev" // Shared dev testnet wallet (dev/staging/pr-*)
+  // GitHub Environment: Maps deployment stage to GitHub environment
+  const GH_ENVIRONMENT: GHEnvironment =
+    stage === Stage.PROD ? "prod" : stage === Stage.STAGING ? "staging" : "dev" // dev/pr-* share dev environment
 
   return {
     NETWORK,
     LOGGING,
     DUNNING_MODE,
-    WALLET_STAGE,
-    GH_ENVIRONMENT: WALLET_STAGE,
+    GH_ENVIRONMENT,
   }
 }

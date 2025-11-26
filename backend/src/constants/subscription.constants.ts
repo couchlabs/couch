@@ -94,7 +94,7 @@ export function getDunningConfig(mode: DunningMode = "standard") {
     } as const
   }
 
-  // Standard production behavior (staging/sandbox/prod)
+  // Standard production behavior (staging/prod)
   return {
     RETRY_INTERVALS: [
       { days: 2, label: "First retry" }, // Day 2
