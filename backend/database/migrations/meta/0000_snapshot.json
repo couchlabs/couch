@@ -1,21 +1,36 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "7237717b-ac83-4005-8882-f5f62f5f552a",
+  "id": "7adbb397-4198-42b0-8f61-63651a1b9aef",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
     "accounts": {
       "name": "accounts",
       "columns": {
+        "id": {
+          "name": "id",
+          "type": "integer",
+          "primaryKey": true,
+          "notNull": true,
+          "autoincrement": true
+        },
         "address": {
           "name": "address",
           "type": "text",
-          "primaryKey": true,
+          "primaryKey": false,
           "notNull": true,
           "autoincrement": false
         }
       },
-      "indexes": {},
+      "indexes": {
+        "accounts_address_unique": {
+          "name": "accounts_address_unique",
+          "columns": [
+            "address"
+          ],
+          "isUnique": true
+        }
+      },
       "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
@@ -31,9 +46,9 @@
           "notNull": true,
           "autoincrement": false
         },
-        "account_address": {
-          "name": "account_address",
-          "type": "text",
+        "account_id": {
+          "name": "account_id",
+          "type": "integer",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
@@ -42,17 +57,23 @@
       "indexes": {
         "idx_api_keys_account": {
           "name": "idx_api_keys_account",
-          "columns": ["account_address"],
+          "columns": [
+            "account_id"
+          ],
           "isUnique": false
         }
       },
       "foreignKeys": {
-        "api_keys_account_address_accounts_address_fk": {
-          "name": "api_keys_account_address_accounts_address_fk",
+        "api_keys_account_id_accounts_id_fk": {
+          "name": "api_keys_account_id_accounts_id_fk",
           "tableFrom": "api_keys",
           "tableTo": "accounts",
-          "columnsFrom": ["account_address"],
-          "columnsTo": ["address"],
+          "columnsFrom": [
+            "account_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -168,38 +189,55 @@
       "indexes": {
         "idx_orders_created": {
           "name": "idx_orders_created",
-          "columns": ["created_at"],
+          "columns": [
+            "created_at"
+          ],
           "isUnique": false
         },
         "idx_orders_due_status": {
           "name": "idx_orders_due_status",
-          "columns": ["due_at", "status"],
+          "columns": [
+            "due_at",
+            "status"
+          ],
           "isUnique": false
         },
         "idx_orders_subscription": {
           "name": "idx_orders_subscription",
-          "columns": ["subscription_id"],
+          "columns": [
+            "subscription_id"
+          ],
           "isUnique": false
         },
         "idx_orders_parent": {
           "name": "idx_orders_parent",
-          "columns": ["parent_order_id"],
+          "columns": [
+            "parent_order_id"
+          ],
           "isUnique": false
         },
         "idx_orders_status": {
           "name": "idx_orders_status",
-          "columns": ["status"],
+          "columns": [
+            "status"
+          ],
           "isUnique": false
         },
         "idx_orders_retry_due": {
           "name": "idx_orders_retry_due",
-          "columns": ["next_retry_at", "status"],
+          "columns": [
+            "next_retry_at",
+            "status"
+          ],
           "isUnique": false,
           "where": "\"orders\".\"next_retry_at\" IS NOT NULL"
         },
         "idx_orders_subscription_number": {
           "name": "idx_orders_subscription_number",
-          "columns": ["subscription_id", "order_number"],
+          "columns": [
+            "subscription_id",
+            "order_number"
+          ],
           "isUnique": false
         }
       },
@@ -208,8 +246,12 @@
           "name": "orders_subscription_id_subscriptions_subscription_id_fk",
           "tableFrom": "orders",
           "tableTo": "subscriptions",
-          "columnsFrom": ["subscription_id"],
-          "columnsTo": ["subscription_id"],
+          "columnsFrom": [
+            "subscription_id"
+          ],
+          "columnsTo": [
+            "subscription_id"
+          ],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -244,9 +286,9 @@
           "notNull": true,
           "autoincrement": false
         },
-        "account_address": {
-          "name": "account_address",
-          "type": "text",
+        "account_id": {
+          "name": "account_id",
+          "type": "integer",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
@@ -285,32 +327,44 @@
       "indexes": {
         "idx_subscriptions_account": {
           "name": "idx_subscriptions_account",
-          "columns": ["account_address"],
+          "columns": [
+            "account_id"
+          ],
           "isUnique": false
         },
         "idx_subscriptions_beneficiary": {
           "name": "idx_subscriptions_beneficiary",
-          "columns": ["beneficiary_address"],
+          "columns": [
+            "beneficiary_address"
+          ],
           "isUnique": false
         },
         "idx_subscriptions_status": {
           "name": "idx_subscriptions_status",
-          "columns": ["status"],
+          "columns": [
+            "status"
+          ],
           "isUnique": false
         },
         "idx_subscriptions_created": {
           "name": "idx_subscriptions_created",
-          "columns": ["created_at"],
+          "columns": [
+            "created_at"
+          ],
           "isUnique": false
         }
       },
       "foreignKeys": {
-        "subscriptions_account_address_accounts_address_fk": {
-          "name": "subscriptions_account_address_accounts_address_fk",
+        "subscriptions_account_id_accounts_id_fk": {
+          "name": "subscriptions_account_id_accounts_id_fk",
           "tableFrom": "subscriptions",
           "tableTo": "accounts",
-          "columnsFrom": ["account_address"],
-          "columnsTo": ["address"],
+          "columnsFrom": [
+            "account_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -385,27 +439,37 @@
       "indexes": {
         "idx_transactions_created": {
           "name": "idx_transactions_created",
-          "columns": ["created_at"],
+          "columns": [
+            "created_at"
+          ],
           "isUnique": false
         },
         "idx_transactions_subscription": {
           "name": "idx_transactions_subscription",
-          "columns": ["subscription_id"],
+          "columns": [
+            "subscription_id"
+          ],
           "isUnique": false
         },
         "idx_transactions_order": {
           "name": "idx_transactions_order",
-          "columns": ["order_id"],
+          "columns": [
+            "order_id"
+          ],
           "isUnique": false
         },
         "idx_transactions_hash": {
           "name": "idx_transactions_hash",
-          "columns": ["transaction_hash"],
+          "columns": [
+            "transaction_hash"
+          ],
           "isUnique": false
         },
         "idx_transactions_status": {
           "name": "idx_transactions_status",
-          "columns": ["status"],
+          "columns": [
+            "status"
+          ],
           "isUnique": false
         }
       },
@@ -414,8 +478,12 @@
           "name": "transactions_order_id_orders_id_fk",
           "tableFrom": "transactions",
           "tableTo": "orders",
-          "columnsFrom": ["order_id"],
-          "columnsTo": ["id"],
+          "columnsFrom": [
+            "order_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "no action",
           "onUpdate": "no action"
         },
@@ -423,8 +491,12 @@
           "name": "transactions_subscription_id_subscriptions_subscription_id_fk",
           "tableFrom": "transactions",
           "tableTo": "subscriptions",
-          "columnsFrom": ["subscription_id"],
-          "columnsTo": ["subscription_id"],
+          "columnsFrom": [
+            "subscription_id"
+          ],
+          "columnsTo": [
+            "subscription_id"
+          ],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -441,9 +513,9 @@
     "webhooks": {
       "name": "webhooks",
       "columns": {
-        "account_address": {
-          "name": "account_address",
-          "type": "text",
+        "account_id": {
+          "name": "account_id",
+          "type": "integer",
           "primaryKey": true,
           "notNull": true,
           "autoincrement": false
@@ -465,12 +537,16 @@
       },
       "indexes": {},
       "foreignKeys": {
-        "webhooks_account_address_accounts_address_fk": {
-          "name": "webhooks_account_address_accounts_address_fk",
+        "webhooks_account_id_accounts_id_fk": {
+          "name": "webhooks_account_id_accounts_id_fk",
           "tableFrom": "webhooks",
           "tableTo": "accounts",
-          "columnsFrom": ["account_address"],
-          "columnsTo": ["address"],
+          "columnsFrom": [
+            "account_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
