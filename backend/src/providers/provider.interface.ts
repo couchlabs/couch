@@ -19,6 +19,7 @@ export interface ChargeParams {
   subscriptionId: string
   amount: string
   recipient: Address
+  walletName: string
 }
 
 export interface ChargeResult {
@@ -29,10 +30,12 @@ export interface ChargeResult {
 
 export interface StatusParams {
   subscriptionId: string
+  walletName: string
 }
 
 export interface RevokeParams {
   subscriptionId: string
+  walletName: string
 }
 
 export interface RevokeResult {

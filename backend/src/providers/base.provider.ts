@@ -18,7 +18,6 @@ export interface BaseProviderDeps {
   CDP_API_KEY_ID: string
   CDP_API_KEY_SECRET: string
   CDP_WALLET_SECRET: string
-  CDP_WALLET_NAME: string
   CDP_CLIENT_API_KEY: string
   CDP_SPENDER_ADDRESS: Address
   NETWORK: Network
@@ -32,7 +31,6 @@ export class BaseProvider implements SubscriptionProvider {
     apiKeyId: string
     apiKeySecret: string
     walletSecret: string
-    walletName: string
     clientApiKey: string
     spenderAddress: Address
   }
@@ -43,7 +41,6 @@ export class BaseProvider implements SubscriptionProvider {
       apiKeyId: deps.CDP_API_KEY_ID,
       apiKeySecret: deps.CDP_API_KEY_SECRET,
       walletSecret: deps.CDP_WALLET_SECRET,
-      walletName: deps.CDP_WALLET_NAME,
       clientApiKey: deps.CDP_CLIENT_API_KEY,
       spenderAddress: deps.CDP_SPENDER_ADDRESS,
     }
@@ -58,7 +55,7 @@ export class BaseProvider implements SubscriptionProvider {
         cdpApiKeyId: this.cdpConfig.apiKeyId,
         cdpApiKeySecret: this.cdpConfig.apiKeySecret,
         cdpWalletSecret: this.cdpConfig.walletSecret,
-        walletName: this.cdpConfig.walletName,
+        walletName: params.walletName,
         paymasterUrl: this.paymasterUrl,
         id: params.subscriptionId as Hash,
         amount: params.amount,
@@ -128,7 +125,7 @@ export class BaseProvider implements SubscriptionProvider {
       cdpApiKeyId: this.cdpConfig.apiKeyId,
       cdpApiKeySecret: this.cdpConfig.apiKeySecret,
       cdpWalletSecret: this.cdpConfig.walletSecret,
-      walletName: this.cdpConfig.walletName,
+      walletName: params.walletName,
       paymasterUrl: this.paymasterUrl,
       id: params.subscriptionId,
       testnet: this.network === "testnet",
