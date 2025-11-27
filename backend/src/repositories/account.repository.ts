@@ -128,4 +128,15 @@ export class AccountRepository {
 
     return this.toAccountDomain(result)
   }
+
+  /**
+   * Deletes an account by ID
+   * Also deletes related API keys and webhooks via cascade
+   */
+  async deleteAccount(accountId: number): Promise<void> {
+    await this.db
+      .delete(schema.accounts)
+      .where(eq(schema.accounts.id, accountId))
+      .run()
+  }
 }
