@@ -3,7 +3,7 @@ import alchemy from "alchemy"
 import { DurableObjectNamespace, Vite } from "alchemy/cloudflare"
 import { GitHubComment } from "alchemy/github"
 import { CloudflareStateStore, FileSystemStateStore } from "alchemy/state"
-import { api, spenderSmartAccount } from "backend/alchemy"
+import { api } from "backend/alchemy"
 import { resolveStageConfig } from "@/constants/env.constants"
 import type { Store } from "@/store/do.store"
 
@@ -57,8 +57,8 @@ const WEBSITE_NAME = "website"
 export const website = await Vite(WEBSITE_NAME, {
   name: `${NAME_PREFIX}-${WEBSITE_NAME}`,
   entrypoint: path.join(import.meta.dirname, "src", "api", "main.ts"),
-  dev: { env: { VITE_COUCH_SPENDER_ADDRESS: spenderSmartAccount.address } },
-  build: { env: { VITE_COUCH_SPENDER_ADDRESS: spenderSmartAccount.address } },
+  dev: { env: { VITE_COUCH_SPENDER_ADDRESS: "TOFIX" } },
+  build: { env: { VITE_COUCH_SPENDER_ADDRESS: "TOFIX" } },
   // Envs exposed to worker only
   bindings: {
     COUCH_TEST_ACCOUNT_WEBHOOK_SECRET:

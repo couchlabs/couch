@@ -20,7 +20,7 @@ export interface CreateAccountParams {
 }
 
 export interface SetApiKeyParams {
-  accountAddress: Address
+  accountId: number
   keyHash: string
 }
 
@@ -47,19 +47,23 @@ export class AccountRepository {
    */
   private toAccountDomain(row: schema.AccountRow): Account {
     return {
+      id: row.id,
       address: getAddress(row.address),
     }
   }
 
   /**
-   * Creates a new account if it doesn't exist
+   * Creates a new account and returns it with the auto-generated ID
+   * @throws Error if account already exists (unique constraint violation)
    */
-  async createAccount(params: CreateAccountParams): Promise<void> {
-    await this.db
+  async createAccount(params: CreateAccountParams): Promise<Account> {
+    const result = await this.db
       .insert(schema.accounts)
       .values({ address: params.accountAddress })
-      .onConflictDoNothing()
-      .run()
+      .returning()
+      .get()
+
+    return this.toAccountDomain(result)
   }
 
   /**
@@ -72,14 +76,14 @@ export class AccountRepository {
       // Delete existing API key for this account (if any)
       this.db
         .delete(schema.apiKeys)
-        .where(eq(schema.apiKeys.accountAddress, params.accountAddress)),
+        .where(eq(schema.apiKeys.accountId, params.accountId)),
 
       // Insert new API key
       this.db
         .insert(schema.apiKeys)
         .values({
           keyHash: params.keyHash,
-          accountAddress: params.accountAddress,
+          accountId: params.accountId,
         }),
     ])
   }
@@ -89,8 +93,15 @@ export class AccountRepository {
    */
   async getAccountByApiKey(params: GetApiKeyParams): Promise<Account | null> {
     const result = await this.db
-      .select({ account_address: schema.apiKeys.accountAddress })
+      .select({
+        id: schema.accounts.id,
+        address: schema.accounts.address,
+      })
       .from(schema.apiKeys)
+      .innerJoin(
+        schema.accounts,
+        eq(schema.apiKeys.accountId, schema.accounts.id),
+      )
       .where(eq(schema.apiKeys.keyHash, params.keyHash))
       .get()
 
@@ -98,7 +109,7 @@ export class AccountRepository {
       return null
     }
 
-    return this.toAccountDomain({ address: result.account_address })
+    return this.toAccountDomain(result)
   }
 
   /**
