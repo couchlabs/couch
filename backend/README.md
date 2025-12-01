@@ -140,7 +140,7 @@ export class SubscriptionRepository {
   async createSubscription(params): Promise<void> {
     await this.db.insert(subscriptions).values({
       id: params.subscriptionId,
-      accountAddress: params.accountAddress,
+      accountId: params.accountId,
       status: SubscriptionStatus.ACTIVE,
     })
   }
