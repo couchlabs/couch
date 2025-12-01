@@ -274,8 +274,8 @@ describe("AccountService", () => {
       )
 
       // Verify new key works
-      const authenticatedAddress = await service.authenticateApiKey(rotatedKey)
-      expect(authenticatedAddress).toBe(TEST_ACCOUNT)
+      const authenticatedAccount = await service.authenticateApiKey(rotatedKey)
+      expect(authenticatedAccount.address).toBe(TEST_ACCOUNT)
     })
 
     it("generates different keys on multiple rotations", async () => {
@@ -294,14 +294,16 @@ describe("AccountService", () => {
   })
 
   describe("authenticateApiKey", () => {
-    it("authenticates valid API key", async () => {
+    it("authenticates valid API key and returns account", async () => {
       const { apiKey } = await service.createAccount({
         address: TEST_ACCOUNT,
       })
 
-      const authenticatedAddress = await service.authenticateApiKey(apiKey)
+      const account = await service.authenticateApiKey(apiKey)
 
-      expect(authenticatedAddress).toBe(TEST_ACCOUNT)
+      expect(account.address).toBe(TEST_ACCOUNT)
+      expect(account.id).toBeDefined()
+      expect(typeof account.id).toBe("number")
     })
 
     it("throws 401 when API key is invalid", async () => {
@@ -322,8 +324,9 @@ describe("AccountService", () => {
 
       const { apiKey: newKey } = await service.rotateApiKey(TEST_ACCOUNT)
 
-      const authenticatedAddress = await service.authenticateApiKey(newKey)
-      expect(authenticatedAddress).toBe(TEST_ACCOUNT)
+      const account = await service.authenticateApiKey(newKey)
+      expect(account.address).toBe(TEST_ACCOUNT)
+      expect(account.id).toBeDefined()
     })
   })
 })

@@ -1,6 +1,6 @@
 import type { MiddlewareHandler } from "hono"
-import type { Address } from "viem"
 import { ErrorCode, HTTPError } from "@/errors/http.errors"
+import type { Account } from "@/repositories/account.repository"
 import { AccountService } from "@/services/account.service"
 import type { WorkerEnv } from "@/types/api.env"
 
@@ -8,12 +8,12 @@ import type { WorkerEnv } from "@/types/api.env"
  * Context with authenticated user information
  */
 export interface AuthContext {
-  accountAddress: Address
+  account: Account
 }
 
 /**
  * API Key authentication middleware
- * Validates Authorization: Bearer header and adds account address to context
+ * Validates Authorization: Bearer header and adds full account (id + address) to context
  */
 export const apiKeyAuth = (): MiddlewareHandler<{
   Bindings: WorkerEnv
@@ -28,8 +28,8 @@ export const apiKeyAuth = (): MiddlewareHandler<{
     }
 
     const accountService = new AccountService(c.env)
-    const accountAddress = await accountService.authenticateApiKey(apiKey)
-    c.set("auth", { accountAddress })
+    const account = await accountService.authenticateApiKey(apiKey)
+    c.set("auth", { account })
     await next()
   }
 }

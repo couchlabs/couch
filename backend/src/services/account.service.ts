@@ -5,6 +5,7 @@ import { ErrorCode, HTTPError } from "@/errors/http.errors"
 import { logger } from "@/lib/logger"
 import { getSubscriptionOwnerWalletName } from "@/lib/subscription-owner-wallet"
 import {
+  type Account,
   AccountRepository,
   type AccountRepositoryDeps,
 } from "@/repositories/account.repository"
@@ -232,10 +233,10 @@ export class AccountService {
 
   /**
    * Authenticates a request by validating the API key
-   * Returns the associated account address if valid
+   * Returns the associated account (with id and address) if valid
    * Throws HTTPError if invalid
    */
-  async authenticateApiKey(apiKey: string): Promise<Address> {
+  async authenticateApiKey(apiKey: string): Promise<Account> {
     const keyHash = await this.hashApiKey(apiKey)
 
     const account = await this.accountRepository.getAccountByApiKey({
@@ -246,6 +247,6 @@ export class AccountService {
       throw new HTTPError(401, ErrorCode.INVALID_API_KEY, "Invalid API key")
     }
 
-    return account.address
+    return account
   }
 }
