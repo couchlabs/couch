@@ -57,8 +57,18 @@ const WEBSITE_NAME = "website"
 export const website = await Vite(WEBSITE_NAME, {
   name: `${NAME_PREFIX}-${WEBSITE_NAME}`,
   entrypoint: path.join(import.meta.dirname, "src", "api", "main.ts"),
-  dev: { env: { VITE_COUCH_SPENDER_ADDRESS: "TOFIX" } },
-  build: { env: { VITE_COUCH_SPENDER_ADDRESS: "TOFIX" } },
+  dev: {
+    env: {
+      VITE_COUCH_SPENDER_ADDRESS:
+        alchemy.env.COUCH_TEST_ACCOUNT_SUBSCRIPTION_OWNER_ADDRESS,
+    },
+  },
+  build: {
+    env: {
+      VITE_COUCH_SPENDER_ADDRESS:
+        alchemy.env.COUCH_TEST_ACCOUNT_SUBSCRIPTION_OWNER_ADDRESS,
+    },
+  },
   // Envs exposed to worker only
   bindings: {
     COUCH_TEST_ACCOUNT_WEBHOOK_SECRET:

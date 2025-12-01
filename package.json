@@ -26,19 +26,19 @@
       "apps/*"
     ],
     "catalog": {
-      "alchemy": "^0.75.1",
+      "alchemy": "^0.79.0",
       "typescript": "^5.9.3"
     },
     "catalogs": {
       "cloudflare": {
-        "miniflare": "^4.20251008.0",
-        "@cloudflare/workers-types": "^4.20251011.0",
-        "@types/node": "^24.9.0",
-        "hono": "^4.10.1"
+        "miniflare": "^4.20251125.0",
+        "@cloudflare/workers-types": "^4.20251128.0",
+        "@types/node": "^24.10.1",
+        "hono": "^4.10.7"
       },
       "coinbase": {
-        "@base-org/account": "^2.4.2",
-        "@coinbase/cdp-sdk": "^1.38.4"
+        "@base-org/account": "^2.5.0",
+        "@coinbase/cdp-sdk": "^1.38.6"
       }
     }
   },
