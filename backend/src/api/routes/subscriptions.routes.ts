@@ -27,11 +27,11 @@ subscriptionRoutes.use(apiKeyAuth())
  * Returns the activated subscription details containing first onchain trnsaction
  */
 subscriptionRoutes.post("/", subscriptionBody(), async (ctx) => {
-  const { accountAddress } = ctx.get("auth")
+  const { account } = ctx.get("auth")
   const { subscriptionId, provider, beneficiary } = ctx.get("subscription")
 
-  // Beneficiary defaults to accountAddress if not specified (self-subscription)
-  const beneficiaryAddress = beneficiary || accountAddress
+  // Beneficiary defaults to account address if not specified
+  const beneficiaryAddress = beneficiary || account.address
 
   const subscriptionService = new SubscriptionService(ctx.env)
   const webhookService = new WebhookService(ctx.env)
@@ -40,7 +40,7 @@ subscriptionRoutes.post("/", subscriptionBody(), async (ctx) => {
   const { orderId, orderNumber, subscriptionMetadata } =
     await subscriptionService.createSubscription({
       subscriptionId,
-      accountAddress,
+      accountId: account.id,
       beneficiaryAddress,
       provider,
     })
@@ -51,7 +51,7 @@ subscriptionRoutes.post("/", subscriptionBody(), async (ctx) => {
       try {
         // 1. Fire created webhook FIRST
         await webhookService.emitSubscriptionCreated({
-          accountAddress,
+          accountId: account.id,
           subscriptionId,
           amount: subscriptionMetadata.amount,
           periodInSeconds: subscriptionMetadata.periodInSeconds,
@@ -60,7 +60,7 @@ subscriptionRoutes.post("/", subscriptionBody(), async (ctx) => {
         // 2. Attempt activation charge
         const activation = await subscriptionService.processActivationCharge({
           subscriptionId,
-          accountAddress,
+          accountId: account.id,
           beneficiaryAddress,
           provider,
           orderId,
@@ -69,7 +69,6 @@ subscriptionRoutes.post("/", subscriptionBody(), async (ctx) => {
 
         // 3. Complete activation in DB
         await subscriptionService.completeActivation(activation)
-
         // 4. Fire activation success webhook
         await webhookService.emitSubscriptionActivated(activation)
       } catch (error) {
@@ -84,7 +83,7 @@ subscriptionRoutes.post("/", subscriptionBody(), async (ctx) => {
 
         // 6. Fire activation failed webhook (service handles error sanitization)
         await webhookService.emitActivationFailed({
-          accountAddress,
+          accountId: account.id,
           subscriptionId,
           amount: subscriptionMetadata.amount,
           periodInSeconds: subscriptionMetadata.periodInSeconds,
@@ -114,14 +113,14 @@ subscriptionRoutes.post("/", subscriptionBody(), async (ctx) => {
  * Returns the canceled subscription object (idempotent)
  */
 subscriptionRoutes.delete("/:id", subscriptionParam(), async (ctx) => {
-  const { accountAddress } = ctx.get("auth")
+  const { account } = ctx.get("auth")
   const { subscriptionId } = ctx.get("subscription")
 
   const subscriptionService = new SubscriptionService(ctx.env)
 
   const canceledSubscription = await subscriptionService.revokeSubscription({
     subscriptionId,
-    accountAddress,
+    accountId: account.id,
   })
 
   return ctx.json(canceledSubscription, 200)

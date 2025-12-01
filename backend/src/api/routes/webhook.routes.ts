@@ -18,7 +18,7 @@ webhookRoutes.use(apiKeyAuth())
  * Returns the webhook secret for HMAC verification
  */
 webhookRoutes.put("/", async (c) => {
-  const { accountAddress } = c.get("auth")
+  const { account } = c.get("auth")
 
   const body = await c.req.json<{ url?: string }>()
   const url = body.url
@@ -29,7 +29,7 @@ webhookRoutes.put("/", async (c) => {
 
   const webhookService = new WebhookService(c.env)
   const webhook = await webhookService.setWebhook({
-    accountAddress,
+    accountId: account.id,
     url,
   })
 

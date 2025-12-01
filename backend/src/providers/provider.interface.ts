@@ -57,7 +57,6 @@ export type StatusResult =
       permissionExists: false
       isSubscribed: false
       recurringCharge: string // Always '0' when permission not found
-      spenderAddress: Address
     }
   | {
       permissionExists: true
@@ -68,5 +67,4 @@ export type StatusResult =
       nextPeriodStart?: Date // Optional - undefined means no future recurring charges
       recurringCharge: string
       periodInDays: number
-      spenderAddress: Address
     }

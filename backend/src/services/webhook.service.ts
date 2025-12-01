@@ -1,6 +1,6 @@
 import type { WebhookQueueMessage } from "@alchemy.run"
 import type { D1Database, Queue } from "@cloudflare/workers-types"
-import type { Address, Hash } from "viem"
+import type { Hash } from "viem"
 import type { LoggingLevel } from "@/constants/env.constants"
 import {
   OrderType,
@@ -90,7 +90,7 @@ export interface WebhookEvent {
 }
 
 export interface SetWebhookParams {
-  accountAddress: Address // Account that receives webhooks
+  accountId: number // Account that receives webhooks
   url: string
 }
 
@@ -104,7 +104,7 @@ export interface WebhookResult {
  * subscriptionAmount and subscriptionPeriodInSeconds are REQUIRED - they represent immutable subscription terms
  */
 export interface EmitWebhookEventParams {
-  accountAddress: Address // Account that receives webhooks
+  accountId: number // Account that receives webhooks
   subscriptionId: Hash
   subscriptionStatus: SubscriptionStatus
   subscriptionAmount: string // Recurring charge amount - REQUIRED
@@ -221,8 +221,8 @@ export class WebhookService {
    * Generates a new secret each time
    */
   async setWebhook(params: SetWebhookParams): Promise<WebhookResult> {
-    const { accountAddress, url } = params
-    const log = logger.with({ accountAddress, webhookUrl: url })
+    const { accountId, url } = params
+    const log = logger.with({ accountId, webhookUrl: url })
 
     log.info("Setting webhook URL")
 
@@ -234,7 +234,7 @@ export class WebhookService {
 
     // Create or update webhook
     await this.webhookRepository.createOrUpdateWebhook({
-      accountAddress,
+      accountId,
       url,
       secret,
     })
@@ -249,7 +249,7 @@ export class WebhookService {
    */
   async emitSubscriptionActivated(result: ActivationResult): Promise<void> {
     await this.emitSubscriptionUpdated({
-      accountAddress: result.accountAddress,
+      accountId: result.accountId,
       subscriptionId: result.subscriptionId,
       subscriptionStatus: SubscriptionStatus.ACTIVE,
       subscriptionAmount: result.transaction.amount,
@@ -269,13 +269,13 @@ export class WebhookService {
    * Fires with subscription metadata (amount, period)
    */
   async emitSubscriptionCreated(params: {
-    accountAddress: Address
+    accountId: number
     subscriptionId: Hash
     amount: string
     periodInSeconds: number
   }): Promise<void> {
     await this.emitSubscriptionUpdated({
-      accountAddress: params.accountAddress,
+      accountId: params.accountId,
       subscriptionId: params.subscriptionId,
       subscriptionStatus: SubscriptionStatus.PROCESSING,
       subscriptionAmount: params.amount,
@@ -287,13 +287,13 @@ export class WebhookService {
    * Emits webhook event when subscription is canceled (revoked)
    */
   async emitSubscriptionCanceled(params: {
-    accountAddress: Address
+    accountId: number
     subscriptionId: Hash
     amount: string
     periodInSeconds: number
   }): Promise<void> {
     await this.emitSubscriptionUpdated({
-      accountAddress: params.accountAddress,
+      accountId: params.accountId,
       subscriptionId: params.subscriptionId,
       subscriptionStatus: SubscriptionStatus.CANCELED,
       subscriptionAmount: params.amount,
@@ -306,7 +306,7 @@ export class WebhookService {
    * Tailored for order processing flow
    */
   async emitPaymentProcessed(params: {
-    accountAddress: Address
+    accountId: number
     subscriptionId: Hash
     orderNumber: number
     amount: string
@@ -315,7 +315,7 @@ export class WebhookService {
     orderPeriodInSeconds: number
   }): Promise<void> {
     await this.emitSubscriptionUpdated({
-      accountAddress: params.accountAddress,
+      accountId: params.accountId,
       subscriptionId: params.subscriptionId,
       subscriptionStatus: SubscriptionStatus.ACTIVE,
       subscriptionAmount: params.amount, // Use order amount as subscription metadata
@@ -335,7 +335,7 @@ export class WebhookService {
    * Tailored for payment failure flow
    */
   async emitPaymentFailed(params: {
-    accountAddress: Address
+    accountId: number
     subscriptionId: Hash
     subscriptionStatus: SubscriptionStatus // Pass correct status based on error type
     orderNumber: number
@@ -353,7 +353,7 @@ export class WebhookService {
       params.failureMessage || getErrorMessage(errorCode as ErrorCode)
 
     await this.emitSubscriptionUpdated({
-      accountAddress: params.accountAddress,
+      accountId: params.accountId,
       subscriptionId: params.subscriptionId,
       subscriptionStatus: params.subscriptionStatus, // Use passed status
       subscriptionAmount: params.amount, // Use order amount as subscription metadata
@@ -373,7 +373,7 @@ export class WebhookService {
    * Sanitizes error details based on error type (payment vs system)
    */
   async emitActivationFailed(params: {
-    accountAddress: Address
+    accountId: number
     subscriptionId: Hash
     amount: string
     periodInSeconds: number
@@ -392,7 +392,7 @@ export class WebhookService {
     }
 
     await this.emitSubscriptionUpdated({
-      accountAddress: params.accountAddress,
+      accountId: params.accountId,
       subscriptionId: params.subscriptionId,
       subscriptionStatus: SubscriptionStatus.INCOMPLETE,
       subscriptionAmount: params.amount,
@@ -408,16 +408,16 @@ export class WebhookService {
    * Handles all formatting internally
    */
   async emitSubscriptionUpdated(params: EmitWebhookEventParams): Promise<void> {
-    const { accountAddress, subscriptionId } = params
+    const { accountId, subscriptionId } = params
     const log = logger.with({
-      accountAddress,
+      accountId,
       subscriptionId,
     })
 
     try {
       // Get webhook configuration for this account
       const webhook = await this.webhookRepository.getWebhook({
-        accountAddress,
+        accountId,
       })
 
       if (!webhook) {
@@ -514,7 +514,7 @@ export class WebhookService {
       log.info("Webhook event queued for delivery (pre-signed)", {
         eventType: event.type,
         url: webhook.url,
-        accountAddress,
+        accountId,
         signaturePreview: `${signature.slice(0, 8)}...`,
       })
     } catch (error) {

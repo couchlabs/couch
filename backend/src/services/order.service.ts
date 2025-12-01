@@ -196,7 +196,7 @@ export class OrderService {
 
     const {
       subscriptionId,
-      accountAddress,
+      accountId,
       beneficiaryAddress,
       amount,
       status,
@@ -208,7 +208,7 @@ export class OrderService {
       // Add details to logging context
       log.info("Order details fetched", {
         subscriptionId,
-        accountAddress,
+        accountId,
         beneficiaryAddress,
         amount,
         orderNumber,
@@ -221,6 +221,7 @@ export class OrderService {
         amount,
         recipient: beneficiaryAddress, // Send USDC to beneficiary
         provider,
+        accountId,
       })
 
       // Step 3: Record successful transaction
@@ -256,6 +257,7 @@ export class OrderService {
         await this.onchainRepository.getSubscriptionStatus({
           subscriptionId,
           provider,
+          accountId,
         })
 
       // Step 5: Create next order
@@ -453,6 +455,7 @@ export class OrderService {
             await this.onchainRepository.getSubscriptionStatus({
               subscriptionId,
               provider,
+              accountId,
             })
 
           // Create next order if subscription still active

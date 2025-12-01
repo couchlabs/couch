@@ -17,6 +17,7 @@ const mockQueueSend = mock()
 describe("WebhookService", () => {
   let testDB: Awaited<ReturnType<typeof createTestDB>>
   let service: WebhookService
+  let testAccountId: number
 
   const TEST_ACCOUNT = "0xabcd" as Address
   const TEST_SUBSCRIPTION_ID = "0x1234" as Hash
@@ -27,6 +28,16 @@ describe("WebhookService", () => {
     testDB = await createTestDB({
       accounts: [TEST_ACCOUNT],
     })
+
+    // Get account ID from test database
+    const account = await testDB.db
+      .prepare("SELECT id FROM accounts WHERE address = ?")
+      .bind(TEST_ACCOUNT)
+      .first<{ id: number }>()
+    if (!account) {
+      throw new Error("Test account not found in database")
+    }
+    testAccountId = account.id
 
     // Create service with test dependencies
     service = WebhookService.createForTesting({
@@ -54,7 +65,7 @@ describe("WebhookService", () => {
   describe("setWebhook", () => {
     it("sets webhook URL successfully and generates secret", async () => {
       const result = await service.setWebhook({
-        accountAddress: TEST_ACCOUNT,
+        accountId: testAccountId,
         url: TEST_WEBHOOK_URL,
       })
 
@@ -63,8 +74,8 @@ describe("WebhookService", () => {
 
       // Verify webhook was created in database
       const webhook = await testDB.db
-        .prepare("SELECT * FROM webhooks WHERE account_address = ?")
-        .bind(TEST_ACCOUNT)
+        .prepare("SELECT * FROM webhooks WHERE account_id = ?")
+        .bind(testAccountId)
         .first<{ url: string; secret: string }>()
 
       expect(webhook?.url).toBe(TEST_WEBHOOK_URL)
@@ -74,13 +85,13 @@ describe("WebhookService", () => {
     it("updates existing webhook URL and generates new secret", async () => {
       // Set initial webhook
       const result1 = await service.setWebhook({
-        accountAddress: TEST_ACCOUNT,
+        accountId: testAccountId,
         url: "https://example.com/old",
       })
 
       // Update to new URL
       const result2 = await service.setWebhook({
-        accountAddress: TEST_ACCOUNT,
+        accountId: testAccountId,
         url: TEST_WEBHOOK_URL,
       })
 
@@ -89,10 +100,8 @@ describe("WebhookService", () => {
 
       // Verify only one webhook exists
       const count = await testDB.db
-        .prepare(
-          "SELECT COUNT(*) as count FROM webhooks WHERE account_address = ?",
-        )
-        .bind(TEST_ACCOUNT)
+        .prepare("SELECT COUNT(*) as count FROM webhooks WHERE account_id = ?")
+        .bind(testAccountId)
         .first<{ count: number }>()
 
       expect(count?.count).toBe(1)
@@ -101,14 +110,14 @@ describe("WebhookService", () => {
     it("throws error for invalid webhook URL format", async () => {
       await expect(
         service.setWebhook({
-          accountAddress: TEST_ACCOUNT,
+          accountId: testAccountId,
           url: "not-a-valid-url",
         }),
       ).rejects.toThrow(HTTPError)
 
       try {
         await service.setWebhook({
-          accountAddress: TEST_ACCOUNT,
+          accountId: testAccountId,
           url: "not-a-valid-url",
         })
       } catch (error) {
@@ -123,14 +132,14 @@ describe("WebhookService", () => {
       // Set up webhook
       await testDB.db
         .prepare(
-          "INSERT INTO webhooks (account_address, url, secret) VALUES (?, ?, ?)",
+          "INSERT INTO webhooks (account_id, url, secret) VALUES (?, ?, ?)",
         )
-        .bind(TEST_ACCOUNT, TEST_WEBHOOK_URL, "whsec_testsecret")
+        .bind(testAccountId, TEST_WEBHOOK_URL, "whsec_testsecret")
         .run()
 
       const activationResult: ActivationResult = {
         subscriptionId: TEST_SUBSCRIPTION_ID,
-        accountAddress: TEST_ACCOUNT,
+        accountId: testAccountId,
         provider: Provider.BASE,
         transaction: {
           hash: "0xtxhash" as Hash,
@@ -174,7 +183,7 @@ describe("WebhookService", () => {
     it("does not throw if no webhook configured", async () => {
       const activationResult: ActivationResult = {
         subscriptionId: TEST_SUBSCRIPTION_ID,
-        accountAddress: TEST_ACCOUNT,
+        accountId: testAccountId,
         provider: Provider.BASE,
         transaction: { hash: "0xtxhash" as Hash, amount: "500000" },
         order: {
@@ -205,13 +214,13 @@ describe("WebhookService", () => {
       // Set up webhook
       await testDB.db
         .prepare(
-          "INSERT INTO webhooks (account_address, url, secret) VALUES (?, ?, ?)",
+          "INSERT INTO webhooks (account_id, url, secret) VALUES (?, ?, ?)",
         )
-        .bind(TEST_ACCOUNT, TEST_WEBHOOK_URL, "whsec_testsecret")
+        .bind(testAccountId, TEST_WEBHOOK_URL, "whsec_testsecret")
         .run()
 
       await service.emitSubscriptionCreated({
-        accountAddress: TEST_ACCOUNT,
+        accountId: testAccountId,
         subscriptionId: TEST_SUBSCRIPTION_ID,
         amount: "1000000",
         periodInSeconds: 2592000,
@@ -235,13 +244,13 @@ describe("WebhookService", () => {
       // Set up webhook
       await testDB.db
         .prepare(
-          "INSERT INTO webhooks (account_address, url, secret) VALUES (?, ?, ?)",
+          "INSERT INTO webhooks (account_id, url, secret) VALUES (?, ?, ?)",
         )
-        .bind(TEST_ACCOUNT, TEST_WEBHOOK_URL, "whsec_testsecret")
+        .bind(testAccountId, TEST_WEBHOOK_URL, "whsec_testsecret")
         .run()
 
       await service.emitPaymentProcessed({
-        accountAddress: TEST_ACCOUNT,
+        accountId: testAccountId,
         subscriptionId: TEST_SUBSCRIPTION_ID,
         orderNumber: 2,
         amount: "1000000",
@@ -270,13 +279,13 @@ describe("WebhookService", () => {
       // Set up webhook
       await testDB.db
         .prepare(
-          "INSERT INTO webhooks (account_address, url, secret) VALUES (?, ?, ?)",
+          "INSERT INTO webhooks (account_id, url, secret) VALUES (?, ?, ?)",
         )
-        .bind(TEST_ACCOUNT, TEST_WEBHOOK_URL, "whsec_testsecret")
+        .bind(testAccountId, TEST_WEBHOOK_URL, "whsec_testsecret")
         .run()
 
       await service.emitPaymentFailed({
-        accountAddress: TEST_ACCOUNT,
+        accountId: testAccountId,
         subscriptionId: TEST_SUBSCRIPTION_ID,
         subscriptionStatus: SubscriptionStatus.PAST_DUE,
         orderNumber: 2,
@@ -303,15 +312,15 @@ describe("WebhookService", () => {
       // Set up webhook
       await testDB.db
         .prepare(
-          "INSERT INTO webhooks (account_address, url, secret) VALUES (?, ?, ?)",
+          "INSERT INTO webhooks (account_id, url, secret) VALUES (?, ?, ?)",
         )
-        .bind(TEST_ACCOUNT, TEST_WEBHOOK_URL, "whsec_testsecret")
+        .bind(testAccountId, TEST_WEBHOOK_URL, "whsec_testsecret")
         .run()
 
       const nextRetryDate = new Date("2025-02-02T00:00:00Z")
 
       await service.emitPaymentFailed({
-        accountAddress: TEST_ACCOUNT,
+        accountId: testAccountId,
         subscriptionId: TEST_SUBSCRIPTION_ID,
         subscriptionStatus: SubscriptionStatus.PAST_DUE,
         orderNumber: 2,
@@ -337,9 +346,9 @@ describe("WebhookService", () => {
       // Set up webhook
       await testDB.db
         .prepare(
-          "INSERT INTO webhooks (account_address, url, secret) VALUES (?, ?, ?)",
+          "INSERT INTO webhooks (account_id, url, secret) VALUES (?, ?, ?)",
         )
-        .bind(TEST_ACCOUNT, TEST_WEBHOOK_URL, "whsec_testsecret")
+        .bind(testAccountId, TEST_WEBHOOK_URL, "whsec_testsecret")
         .run()
 
       // Payment error (402) should be exposed
@@ -350,7 +359,7 @@ describe("WebhookService", () => {
       )
 
       await service.emitActivationFailed({
-        accountAddress: TEST_ACCOUNT,
+        accountId: testAccountId,
         subscriptionId: TEST_SUBSCRIPTION_ID,
         amount: "500000",
         periodInSeconds: 2592000,
@@ -370,9 +379,9 @@ describe("WebhookService", () => {
       // Set up webhook
       await testDB.db
         .prepare(
-          "INSERT INTO webhooks (account_address, url, secret) VALUES (?, ?, ?)",
+          "INSERT INTO webhooks (account_id, url, secret) VALUES (?, ?, ?)",
         )
-        .bind(TEST_ACCOUNT, TEST_WEBHOOK_URL, "whsec_testsecret")
+        .bind(testAccountId, TEST_WEBHOOK_URL, "whsec_testsecret")
         .run()
 
       // Internal error (500) should be hidden
@@ -383,7 +392,7 @@ describe("WebhookService", () => {
       )
 
       await service.emitActivationFailed({
-        accountAddress: TEST_ACCOUNT,
+        accountId: testAccountId,
         subscriptionId: TEST_SUBSCRIPTION_ID,
         amount: "500000",
         periodInSeconds: 2592000,
@@ -405,13 +414,13 @@ describe("WebhookService", () => {
       // Register webhook for the account
       await testDB.db
         .prepare(
-          "INSERT INTO webhooks (account_address, url, secret) VALUES (?, ?, ?)",
+          "INSERT INTO webhooks (account_id, url, secret) VALUES (?, ?, ?)",
         )
-        .bind(TEST_ACCOUNT, TEST_WEBHOOK_URL, "test-secret")
+        .bind(testAccountId, TEST_WEBHOOK_URL, "test-secret")
         .run()
 
       await service.emitSubscriptionCanceled({
-        accountAddress: TEST_ACCOUNT,
+        accountId: testAccountId,
         subscriptionId: TEST_SUBSCRIPTION_ID,
         amount: "1000000",
         periodInSeconds: 2592000,
@@ -438,7 +447,7 @@ describe("WebhookService", () => {
       // No webhook registered for this account
       await expect(
         service.emitSubscriptionCanceled({
-          accountAddress: TEST_ACCOUNT,
+          accountId: testAccountId,
           subscriptionId: TEST_SUBSCRIPTION_ID,
           amount: "1000000",
           periodInSeconds: 2592000,

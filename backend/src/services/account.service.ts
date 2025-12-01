@@ -194,27 +194,16 @@ export class AccountService {
   /**
    * Rotates the API key for an authenticated account
    */
-  async rotateApiKey(accountAddress: Address): Promise<AccountResult> {
-    const log = logger.with({ accountAddress })
+  async rotateApiKey(accountId: number): Promise<AccountResult> {
+    const log = logger.with({ accountId })
 
     log.info("Rotating account API key")
-
-    // Get account to obtain ID
-    const account =
-      await this.accountRepository.getAccountByAddress(accountAddress)
-    if (!account) {
-      throw new HTTPError(
-        400,
-        ErrorCode.INVALID_REQUEST,
-        "Account not found for this address",
-      )
-    }
 
     const { apiKey, keyHash } = await this.generateApiKey()
 
     // Set API key (atomic delete + insert)
     await this.accountRepository.setApiKey({
-      accountId: account.id,
+      accountId,
       keyHash,
     })
 
@@ -223,7 +212,7 @@ export class AccountService {
       cdpApiKeyId: this.env.CDP_API_KEY_ID,
       cdpApiKeySecret: this.env.CDP_API_KEY_SECRET,
       cdpWalletSecret: this.env.CDP_WALLET_SECRET,
-      walletName: getSubscriptionOwnerWalletName(account.id),
+      walletName: getSubscriptionOwnerWalletName(accountId),
     })
 
     log.info("Account API key rotated successfully")

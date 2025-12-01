@@ -10,7 +10,6 @@ export interface OnchainRepositoryDeps {
   CDP_API_KEY_SECRET: string
   CDP_WALLET_SECRET: string
   CDP_CLIENT_API_KEY: string
-  CDP_SPENDER_ADDRESS: Address
   NETWORK: Network
 }
 
@@ -46,9 +45,6 @@ export type SubscriptionStatusResult =
         isSubscribed: false
         recurringCharge: string
       }
-      context: {
-        spenderAddress: Address
-      }
     }
   | {
       subscription: {
@@ -60,9 +56,6 @@ export type SubscriptionStatusResult =
         nextPeriodStart?: Date
         recurringCharge: string
         periodInSeconds: number // Converted from provider's periodInDays
-      }
-      context: {
-        spenderAddress: Address
       }
     }
 
@@ -151,7 +144,6 @@ export class OnchainRepository {
             isSubscribed: false,
             recurringCharge: result.recurringCharge,
           },
-          context: { spenderAddress: result.spenderAddress },
         }
       }
 
@@ -170,7 +162,6 @@ export class OnchainRepository {
           recurringCharge: result.recurringCharge,
           periodInSeconds,
         },
-        context: { spenderAddress: result.spenderAddress },
       }
     } catch (error) {
       log.error("Failed to get subscription status", error)

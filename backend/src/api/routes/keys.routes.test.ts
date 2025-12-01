@@ -21,6 +21,7 @@ describe("PUT /api/keys", () => {
   let app: Hono<{ Bindings: WorkerEnv }>
   let accountService: AccountService
   let initialApiKey: string
+  let testAccountId: number
 
   const TEST_ACCOUNT = getAddress("0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb1")
 
@@ -63,6 +64,16 @@ describe("PUT /api/keys", () => {
       address: TEST_ACCOUNT,
     })
     initialApiKey = result.apiKey
+
+    // Get account ID from database
+    const account = await testDB.db
+      .prepare("SELECT id FROM accounts WHERE address = ?")
+      .bind(TEST_ACCOUNT)
+      .first<{ id: number }>()
+    if (!account) {
+      throw new Error("Test account not found in database")
+    }
+    testAccountId = account.id
   })
 
   afterEach(async () => {
@@ -258,10 +269,8 @@ describe("PUT /api/keys", () => {
 
     // Verify only one key exists in database
     const keyCount = await testDB.db
-      .prepare(
-        "SELECT COUNT(*) as count FROM api_keys WHERE account_address = ?",
-      )
-      .bind(TEST_ACCOUNT)
+      .prepare("SELECT COUNT(*) as count FROM api_keys WHERE account_id = ?")
+      .bind(testAccountId)
       .first<{ count: number }>()
 
     expect(keyCount?.count).toBe(1)

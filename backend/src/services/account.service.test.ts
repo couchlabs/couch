@@ -246,8 +246,17 @@ describe("AccountService", () => {
         address: TEST_ACCOUNT,
       })
 
+      // Get account ID from database
+      const account = await testDB.db
+        .prepare("SELECT id FROM accounts WHERE address = ?")
+        .bind(TEST_ACCOUNT)
+        .first<{ id: number }>()
+      if (!account) {
+        throw new Error("Test account not found in database")
+      }
+
       const { apiKey: rotatedKey, subscriptionOwnerWalletAddress } =
-        await service.rotateApiKey(TEST_ACCOUNT)
+        await service.rotateApiKey(account.id)
 
       // Keys should be different
       expect(rotatedKey).not.toBe(initialKey)
@@ -255,15 +264,9 @@ describe("AccountService", () => {
       expect(subscriptionOwnerWalletAddress).toBeDefined()
 
       // Verify only one key exists
-      const account = await testDB.db
-        .prepare("SELECT id FROM accounts WHERE address = ?")
-        .bind(TEST_ACCOUNT)
-        .first<{ id: number }>()
-
-      expect(account).not.toBeNull()
       const keyCount = await testDB.db
         .prepare("SELECT COUNT(*) as count FROM api_keys WHERE account_id = ?")
-        .bind(account?.id)
+        .bind(account.id)
         .first<{ count: number }>()
 
       expect(keyCount?.count).toBe(1)
@@ -283,9 +286,18 @@ describe("AccountService", () => {
         address: TEST_ACCOUNT,
       })
 
+      // Get account ID from database
+      const account = await testDB.db
+        .prepare("SELECT id FROM accounts WHERE address = ?")
+        .bind(TEST_ACCOUNT)
+        .first<{ id: number }>()
+      if (!account) {
+        throw new Error("Test account not found in database")
+      }
+
       const keys = new Set<string>()
       for (let i = 0; i < 5; i++) {
-        const { apiKey } = await service.rotateApiKey(TEST_ACCOUNT)
+        const { apiKey } = await service.rotateApiKey(account.id)
         keys.add(apiKey)
       }
 
@@ -322,7 +334,16 @@ describe("AccountService", () => {
         address: TEST_ACCOUNT,
       })
 
-      const { apiKey: newKey } = await service.rotateApiKey(TEST_ACCOUNT)
+      // Get account ID from database
+      const accountRecord = await testDB.db
+        .prepare("SELECT id FROM accounts WHERE address = ?")
+        .bind(TEST_ACCOUNT)
+        .first<{ id: number }>()
+      if (!accountRecord) {
+        throw new Error("Test account not found in database")
+      }
+
+      const { apiKey: newKey } = await service.rotateApiKey(accountRecord.id)
 
       const account = await service.authenticateApiKey(newKey)
       expect(account.address).toBe(TEST_ACCOUNT)
