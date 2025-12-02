@@ -48,7 +48,6 @@ describe("POST /api/account", () => {
     env = {
       DB: testDB.db,
       LOGGING: "verbose",
-      NETWORK: "testnet",
       ALLOWLIST: mockAllowlist,
       // biome-ignore lint/suspicious/noExplicitAny: Test mock
     } as any as Partial<WorkerEnv>

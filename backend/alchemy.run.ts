@@ -51,9 +51,7 @@ export const app = await alchemy("couch-backend", {
       : new CloudflareStateStore(scope),
 })
 const NAME_PREFIX = `${app.name}-${app.stage}`
-const { NETWORK, LOGGING, DUNNING_MODE, GH_ENVIRONMENT } = resolveStageConfig(
-  app.stage,
-)
+const { LOGGING, DUNNING_MODE, GH_ENVIRONMENT } = resolveStageConfig(app.stage)
 
 // =============================================================================
 // OFFCHAIN RESOURCES (Cloudflare)
@@ -151,7 +149,6 @@ export const api = await Worker(API_NAME, {
     CDP_WALLET_SECRET: alchemy.secret.env.CDP_WALLET_SECRET,
     CDP_CLIENT_API_KEY: alchemy.env.CDP_CLIENT_API_KEY,
     // STAGE CONFIGS:
-    NETWORK,
     LOGGING,
     DUNNING_MODE,
     // RESOURCES:
