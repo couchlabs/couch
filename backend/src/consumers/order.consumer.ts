@@ -67,6 +67,7 @@ export default {
               transactionHash: result.transactionHash,
               orderDueAt: new Date(orderDetails.dueAt),
               orderPeriodInSeconds: orderDetails.periodInSeconds,
+              testnet: orderDetails.testnet,
             })
 
             // ACK the message on success
@@ -113,6 +114,7 @@ export default {
                 orderNumber: result.orderNumber,
                 amount: orderDetails.amount,
                 periodInSeconds: orderDetails.periodInSeconds,
+                testnet: orderDetails.testnet,
                 failureReason: result.failureReason,
                 failureMessage: result.failureMessage,
                 nextRetryAt: result.nextRetryAt,

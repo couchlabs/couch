@@ -573,6 +573,7 @@ describe("SubscriptionService", () => {
         subscriptionId: TEST_SUBSCRIPTION_ID,
         accountId: testAccountId,
         provider: Provider.BASE,
+        testnet: true,
         transaction: {
           hash: "0xtxhash" as Hash,
           amount: "500000",
@@ -632,6 +633,7 @@ describe("SubscriptionService", () => {
         subscriptionId: "0xinvalid" as Hash, // Non-existent subscription
         accountId: testAccountId,
         provider: Provider.BASE,
+        testnet: true,
         transaction: {
           hash: "0xtxhash" as Hash,
           amount: "500000",

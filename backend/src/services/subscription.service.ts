@@ -63,6 +63,7 @@ export interface ActivationResult {
   subscriptionId: Hash
   accountId: number // Who activated subscription (receives webhooks)
   provider: Provider
+  testnet: boolean // Network where subscription was created
   transaction: {
     hash: Hash
     amount: string
@@ -287,6 +288,7 @@ export class SubscriptionService {
       subscriptionId,
       amount: onchainSub.recurringCharge,
       periodInSeconds: onchainSub.periodInSeconds,
+      testnet: subscription.testnet,
     })
 
     log.info("Subscription revoked successfully")
@@ -499,6 +501,7 @@ export class SubscriptionService {
       subscriptionId,
       accountId,
       provider,
+      testnet,
       transaction: {
         hash: transaction.transactionHash,
         amount: subscription.remainingChargeInPeriod,

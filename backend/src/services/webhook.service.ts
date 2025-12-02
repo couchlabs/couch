@@ -38,6 +38,7 @@ export interface WebhookSubscriptionData {
   status: SubscriptionStatus
   amount: string // Recurring charge amount (e.g., "0.0001") - always present
   period_in_seconds: number // Billing period (e.g., 60) - always present
+  testnet?: boolean // Network indicator - only present when true (mainnet = absent)
 }
 
 /**
@@ -109,6 +110,7 @@ export interface EmitWebhookEventParams {
   subscriptionStatus: SubscriptionStatus
   subscriptionAmount: string // Recurring charge amount - REQUIRED
   subscriptionPeriodInSeconds: number // Billing period - REQUIRED
+  testnet: boolean // Network indicator - REQUIRED
   orderNumber?: number
   orderType?: OrderType
   amount?: string // Order amount (can differ from subscription amount)
@@ -254,6 +256,7 @@ export class WebhookService {
       subscriptionStatus: SubscriptionStatus.ACTIVE,
       subscriptionAmount: result.transaction.amount,
       subscriptionPeriodInSeconds: result.order.periodInSeconds,
+      testnet: result.testnet,
       orderNumber: result.order.number, // Use actual order number from database
       orderType: OrderType.INITIAL,
       amount: result.transaction.amount,
@@ -273,6 +276,7 @@ export class WebhookService {
     subscriptionId: Hash
     amount: string
     periodInSeconds: number
+    testnet: boolean
   }): Promise<void> {
     await this.emitSubscriptionUpdated({
       accountId: params.accountId,
@@ -280,6 +284,7 @@ export class WebhookService {
       subscriptionStatus: SubscriptionStatus.PROCESSING,
       subscriptionAmount: params.amount,
       subscriptionPeriodInSeconds: params.periodInSeconds,
+      testnet: params.testnet,
     })
   }
 
@@ -291,6 +296,7 @@ export class WebhookService {
     subscriptionId: Hash
     amount: string
     periodInSeconds: number
+    testnet: boolean
   }): Promise<void> {
     await this.emitSubscriptionUpdated({
       accountId: params.accountId,
@@ -298,6 +304,7 @@ export class WebhookService {
       subscriptionStatus: SubscriptionStatus.CANCELED,
       subscriptionAmount: params.amount,
       subscriptionPeriodInSeconds: params.periodInSeconds,
+      testnet: params.testnet,
     })
   }
 
@@ -313,6 +320,7 @@ export class WebhookService {
     transactionHash: Hash
     orderDueAt: Date
     orderPeriodInSeconds: number
+    testnet: boolean
   }): Promise<void> {
     await this.emitSubscriptionUpdated({
       accountId: params.accountId,
@@ -320,6 +328,7 @@ export class WebhookService {
       subscriptionStatus: SubscriptionStatus.ACTIVE,
       subscriptionAmount: params.amount, // Use order amount as subscription metadata
       subscriptionPeriodInSeconds: params.orderPeriodInSeconds, // Use order period as subscription metadata
+      testnet: params.testnet,
       orderNumber: params.orderNumber,
       orderType: OrderType.RECURRING,
       amount: params.amount,
@@ -341,6 +350,7 @@ export class WebhookService {
     orderNumber: number
     amount: string
     periodInSeconds: number
+    testnet: boolean
     failureReason?: string // Error code (e.g., INSUFFICIENT_BALANCE)
     failureMessage?: string // Original SDK error message
     nextRetryAt?: Date // When next payment retry is scheduled
@@ -358,6 +368,7 @@ export class WebhookService {
       subscriptionStatus: params.subscriptionStatus, // Use passed status
       subscriptionAmount: params.amount, // Use order amount as subscription metadata
       subscriptionPeriodInSeconds: params.periodInSeconds, // Use order period as subscription metadata
+      testnet: params.testnet,
       orderNumber: params.orderNumber,
       orderType: OrderType.RECURRING,
       amount: params.amount,
@@ -377,6 +388,7 @@ export class WebhookService {
     subscriptionId: Hash
     amount: string
     periodInSeconds: number
+    testnet: boolean
     error: unknown
   }): Promise<void> {
     // Sanitize error for webhook exposure
@@ -397,6 +409,7 @@ export class WebhookService {
       subscriptionStatus: SubscriptionStatus.INCOMPLETE,
       subscriptionAmount: params.amount,
       subscriptionPeriodInSeconds: params.periodInSeconds,
+      testnet: params.testnet,
       success: false,
       errorCode,
       errorMessage,
@@ -433,6 +446,7 @@ export class WebhookService {
           status: params.subscriptionStatus,
           amount: params.subscriptionAmount,
           period_in_seconds: params.subscriptionPeriodInSeconds,
+          ...(params.testnet && { testnet: true }), // Only include if testnet
         },
       }
 

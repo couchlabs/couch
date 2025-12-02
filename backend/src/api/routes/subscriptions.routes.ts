@@ -57,6 +57,7 @@ subscriptionRoutes.post("/", subscriptionBody(), async (ctx) => {
           subscriptionId,
           amount: subscriptionMetadata.amount,
           periodInSeconds: subscriptionMetadata.periodInSeconds,
+          testnet,
         })
 
         // 2. Attempt activation charge
@@ -90,6 +91,7 @@ subscriptionRoutes.post("/", subscriptionBody(), async (ctx) => {
           subscriptionId,
           amount: subscriptionMetadata.amount,
           periodInSeconds: subscriptionMetadata.periodInSeconds,
+          testnet,
           error,
         })
       }
