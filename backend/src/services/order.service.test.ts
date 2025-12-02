@@ -80,7 +80,7 @@ describe("OrderService", () => {
           accountAddress: TEST_ACCOUNT,
           beneficiaryAddress: TEST_OWNER,
           provider: Provider.BASE,
-          status: overrides?.subscriptionStatus,
+          status: overrides?.subscriptionStatus ?? SubscriptionStatus.ACTIVE,
           order: {
             type: OrderType.INITIAL,
             dueAt: "2025-01-01T00:00:00Z",
@@ -274,6 +274,146 @@ describe("OrderService", () => {
           provider: Provider.BASE,
         }),
       ).rejects.toThrow("Order 999 not found")
+    })
+  })
+
+  describe("processOrder - Pre-charge Validation", () => {
+    it("blocks charge when subscription is CANCELED", async () => {
+      const testDB = await createTestDBWithOrder({
+        subscriptionStatus: SubscriptionStatus.CANCELED,
+      })
+      const orderService = createOrderServiceForTest(testDB.db)
+
+      const result = await orderService.processOrder({
+        orderId: testDB.orderIds[0],
+        provider: Provider.BASE,
+      })
+
+      expect(result).toMatchObject({
+        success: false,
+        failureReason: ErrorCode.SUBSCRIPTION_NOT_ACTIVE,
+        failureMessage: "Subscription is canceled",
+        nextOrderCreated: false,
+        subscriptionStatus: SubscriptionStatus.CANCELED,
+        isUpstreamError: false,
+      })
+
+      // Verify charge was never attempted
+      expect(mockChargeSubscription).not.toHaveBeenCalled()
+
+      // Verify order was marked as failed
+      const updatedOrder = await orderService.getOrderDetails(
+        testDB.orderIds[0],
+      )
+      expect(updatedOrder.status).toBe(OrderStatus.FAILED)
+
+      // Verify scheduler was cleaned up
+      expect(mockSchedulerDelete).toHaveBeenCalled()
+    })
+
+    it("blocks charge when subscription is UNPAID", async () => {
+      const testDB = await createTestDBWithOrder({
+        subscriptionStatus: SubscriptionStatus.UNPAID,
+      })
+      const orderService = createOrderServiceForTest(testDB.db)
+
+      const result = await orderService.processOrder({
+        orderId: testDB.orderIds[0],
+        provider: Provider.BASE,
+      })
+
+      expect(result).toMatchObject({
+        success: false,
+        failureReason: ErrorCode.SUBSCRIPTION_NOT_ACTIVE,
+        failureMessage: "Subscription is unpaid",
+        nextOrderCreated: false,
+        subscriptionStatus: SubscriptionStatus.UNPAID,
+        isUpstreamError: false,
+      })
+
+      expect(mockChargeSubscription).not.toHaveBeenCalled()
+    })
+
+    it("blocks charge when subscription is INCOMPLETE", async () => {
+      const testDB = await createTestDBWithOrder({
+        subscriptionStatus: SubscriptionStatus.INCOMPLETE,
+      })
+      const orderService = createOrderServiceForTest(testDB.db)
+
+      const result = await orderService.processOrder({
+        orderId: testDB.orderIds[0],
+        provider: Provider.BASE,
+      })
+
+      expect(result).toMatchObject({
+        success: false,
+        failureReason: ErrorCode.SUBSCRIPTION_NOT_ACTIVE,
+        failureMessage: "Subscription is incomplete",
+        nextOrderCreated: false,
+        subscriptionStatus: SubscriptionStatus.INCOMPLETE,
+        isUpstreamError: false,
+      })
+
+      expect(mockChargeSubscription).not.toHaveBeenCalled()
+    })
+
+    it("blocks charge when subscription is PROCESSING", async () => {
+      const testDB = await createTestDBWithOrder({
+        subscriptionStatus: SubscriptionStatus.PROCESSING,
+      })
+      const orderService = createOrderServiceForTest(testDB.db)
+
+      const result = await orderService.processOrder({
+        orderId: testDB.orderIds[0],
+        provider: Provider.BASE,
+      })
+
+      expect(result).toMatchObject({
+        success: false,
+        failureReason: ErrorCode.SUBSCRIPTION_NOT_ACTIVE,
+        failureMessage: "Subscription is processing",
+        nextOrderCreated: false,
+        subscriptionStatus: SubscriptionStatus.PROCESSING,
+        isUpstreamError: false,
+      })
+
+      expect(mockChargeSubscription).not.toHaveBeenCalled()
+    })
+
+    it("allows charge when subscription is ACTIVE", async () => {
+      const testDB = await createTestDBWithOrder({
+        subscriptionStatus: SubscriptionStatus.ACTIVE,
+      })
+      const orderService = createOrderServiceForTest(testDB.db)
+
+      mockChargeSubscription.mockResolvedValue(MOCK_CHARGE_RESULT)
+      mockGetSubscriptionStatus.mockResolvedValue(MOCK_SUBSCRIPTION_STATUS)
+
+      const result = await orderService.processOrder({
+        orderId: testDB.orderIds[0],
+        provider: Provider.BASE,
+      })
+
+      expect(result.success).toBe(true)
+      expect(mockChargeSubscription).toHaveBeenCalled()
+    })
+
+    it("allows charge when subscription is PAST_DUE (dunning retry)", async () => {
+      const testDB = await createTestDBWithOrder({
+        subscriptionStatus: SubscriptionStatus.PAST_DUE,
+      })
+      const orderService = createOrderServiceForTest(testDB.db)
+
+      mockChargeSubscription.mockResolvedValue(MOCK_CHARGE_RESULT)
+      mockGetSubscriptionStatus.mockResolvedValue(MOCK_SUBSCRIPTION_STATUS)
+
+      const result = await orderService.processOrder({
+        orderId: testDB.orderIds[0],
+        provider: Provider.BASE,
+      })
+
+      expect(result.success).toBe(true)
+      expect(mockChargeSubscription).toHaveBeenCalled()
     })
   })
 
