@@ -144,18 +144,17 @@ jobs:
       - name: "Register webhook on the backend"
         id: couch
         run: |
-          # Use the pre-seeded test API key
+          BACKEND_URL="${{ steps.backend.outputs.api_url }}"
           API_KEY="${{ secrets.COUCH_TEST_ACCOUNT_APIKEY }}"
 
           # Construct playground URL from backend URL
           # Backend: couch-backend-pr-5-api.workers.dev
           # Playground: couch-playground-pr-5-website.workers.dev
-          BACKEND_URL="${{ steps.backend.outputs.api_url }}"
           PLAYGROUND_URL="${BACKEND_URL/couch-backend/couch-playground}"
           PLAYGROUND_URL="${PLAYGROUND_URL/-api/-website}"
 
-          # Create/update webhook with the playground URL
-          WEBHOOK_RESPONSE=$(curl -X PUT ${{ steps.backend.outputs.api_url }}/api/webhook \
+          echo "Registering webhook at $PLAYGROUND_URL/api/webhook..."
+          WEBHOOK_RESPONSE=$(curl -X PUT $BACKEND_URL/api/webhook \
             -H "Content-Type: application/json" \
             -H "Authorization: Bearer $API_KEY" \
             -d "{\"url\":\"$PLAYGROUND_URL/api/webhook\"}" \
@@ -166,26 +165,30 @@ jobs:
 
           if [ "$WEBHOOK_HTTP_CODE" != "200" ] && [ "$WEBHOOK_HTTP_CODE" != "201" ]; then
             echo "Error: Webhook registration failed with HTTP $WEBHOOK_HTTP_CODE"
-            echo "$WEBHOOK_BODY"
+            echo "Response structure: $(echo "$WEBHOOK_BODY" | jq 'keys')"
             exit 1
           fi
 
           WEBHOOK_SECRET=$(echo "$WEBHOOK_BODY" | jq -r '.secret')
 
+          # Mask webhook secret IMMEDIATELY before any error handling that might echo it
+          if [ -n "$WEBHOOK_SECRET" ] && [ "$WEBHOOK_SECRET" != "null" ]; then
+            echo "::add-mask::$WEBHOOK_SECRET"
+          fi
+
           if [ -z "$WEBHOOK_SECRET" ] || [ "$WEBHOOK_SECRET" = "null" ]; then
             echo "Error: Failed to extract webhook secret from response"
-            echo "$WEBHOOK_BODY"
+            echo "Response structure: $(echo "$WEBHOOK_BODY" | jq 'keys')"
             exit 1
           fi
 
-          # Mask the webhook secret to prevent it from appearing in logs
-          echo "::add-mask::$WEBHOOK_SECRET"
+          echo "✅ Webhook registered successfully"
 
-          echo "api_key=$API_KEY" >> $GITHUB_OUTPUT
+          # Output webhook secret for playground deployment
           echo "webhook_secret=$WEBHOOK_SECRET" >> $GITHUB_OUTPUT
 
           # Output URLs for summary
-          echo "::notice::Backend deployed to ${{ steps.backend.outputs.api_url }}"
+          echo "::notice::Backend deployed to $BACKEND_URL"
           echo "::notice::Playground will be deployed to $PLAYGROUND_URL"
 
       - name: "Deploy playground"
@@ -201,8 +204,9 @@ jobs:
           CDP_WALLET_SECRET: ${{ secrets.CDP_WALLET_SECRET }}
           CDP_CLIENT_API_KEY: ${{ secrets.CDP_CLIENT_API_KEY }}
           COUCH_TEST_ACCOUNT_ADDRESS: ${{ secrets.COUCH_TEST_ACCOUNT_ADDRESS }}
+          COUCH_TEST_ACCOUNT_SUBSCRIPTION_OWNER_ADDRESS: ${{ secrets.COUCH_TEST_ACCOUNT_SUBSCRIPTION_OWNER }}
           COUCH_TEST_ACCOUNT_WEBHOOK_SECRET: ${{ steps.couch.outputs.webhook_secret }}
-          COUCH_TEST_ACCOUNT_APIKEY: ${{ steps.couch.outputs.api_key }}
+          COUCH_TEST_ACCOUNT_APIKEY: ${{ secrets.COUCH_TEST_ACCOUNT_APIKEY }}
           PULL_REQUEST: ${{ github.event.number }}
           GITHUB_SHA: ${{ github.sha }}
           GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}

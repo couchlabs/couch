@@ -35,39 +35,44 @@ import {
 // =============================================================================
 
 const ENV_NAME = GitHubEnvironment.DEV
+// Note: ALCHEMY_STATE_TOKEN added as repository secret as its shared across environments
+// Note: CLOUDFLARE_ACCOUNT_ID added as repository secret as its shared across environments
+
 const SECRETS = validateSecrets([
   // Alchemy
-  { name: "ALCHEMY_PASSWORD", description: "Alchemy deployment password" },
   {
-    name: "ALCHEMY_STATE_TOKEN",
-    description: "Alchemy state store token (shared across all deployments)",
+    name: "ALCHEMY_PASSWORD",
+    description: "Alchemy deployment password (dev)",
   },
+
   // Cloudflare
   {
     name: "CLOUDFLARE_API_TOKEN",
-    description: "Cloudflare API token with Workers deploy permission",
+    description: "Cloudflare API token with Workers deploy permission for dev",
   },
-  { name: "CLOUDFLARE_ACCOUNT_ID", description: "Cloudflare account ID" },
   // Coinbase
   { name: "CDP_API_KEY_ID", description: "CDP API Key ID for dev" },
   { name: "CDP_API_KEY_SECRET", description: "CDP API Key Secret for dev" },
   {
     name: "CDP_WALLET_SECRET",
-    description: "CDP Wallet Secret (shared across all environments)",
+    description: "CDP Wallet Secret for dev)",
   },
   {
     name: "CDP_CLIENT_API_KEY",
-    description:
-      "CDP Client API Key for paymaster (shared across all environments)",
+    description: "CDP Client API Key for paymaster for dev",
   },
   // Couch (Test Account)
   {
     name: "COUCH_TEST_ACCOUNT_ADDRESS",
-    description: "Test merchant wallet address (seeded in preview/staging)",
+    description: "Test merchant wallet address seeded in preview",
   },
   {
     name: "COUCH_TEST_ACCOUNT_APIKEY",
-    description: "Test merchant API key (seeded in preview/staging)",
+    description: "Test merchant API key seeded in preview",
+  },
+  {
+    name: "COUCH_TEST_ACCOUNT_SUBSCRIPTION_OWNER_ADDRESS",
+    description: "Test merchant CDP wallet address (merchant-1, deterministic)",
   },
 ])
 

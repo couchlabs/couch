@@ -37,6 +37,8 @@ import {
 // =============================================================================
 
 const ENV_NAME = GitHubEnvironment.STAGING
+// Note: ALCHEMY_STATE_TOKEN added as repository secret as its shared across environments
+// Note: CLOUDFLARE_ACCOUNT_ID added as repository secret as its shared across environments
 
 const SECRETS = validateSecrets([
   // Alchemy
@@ -45,41 +47,49 @@ const SECRETS = validateSecrets([
     envVar: "STAGING_ALCHEMY_PASSWORD",
     description: "Alchemy deployment password (staging)",
   },
-  {
-    name: "ALCHEMY_STATE_TOKEN",
-    description: "Alchemy state store token (shared across all environments)",
-  },
   // Cloudflare
   {
     name: "CLOUDFLARE_API_TOKEN",
-    description: "Cloudflare API token with Workers deploy permission",
+    envVar: "STAGING_CLOUDFLARE_API_TOKEN",
+    description:
+      "Cloudflare API token with Workers deploy permission for staging",
   },
-  { name: "CLOUDFLARE_ACCOUNT_ID", description: "Cloudflare account ID" },
   // Coinbase
   {
     name: "CDP_API_KEY_ID",
     envVar: "STAGING_CDP_API_KEY_ID",
-    description: "CDP API Key ID for testnet (staging)",
+    description: "CDP API Key ID for for staging",
   },
   {
     name: "CDP_API_KEY_SECRET",
     envVar: "STAGING_CDP_API_KEY_SECRET",
-    description: "CDP API Key Secret for testnet (staging)",
+    description: "CDP API Key Secret for for staging",
   },
   {
     name: "CDP_WALLET_SECRET",
-    description: "CDP Wallet Secret (shared across all environments)",
+    envVar: "STAGING_CDP_WALLET_SECRET",
+    description: "CDP Wallet Secret for staging",
   },
   {
     name: "CDP_CLIENT_API_KEY",
-    description:
-      "CDP Client API Key for paymaster (shared across all environments)",
+    envVar: "STAGING_CDP_CLIENT_API_KEY",
+    description: "CDP Client API Key for paymaster staging",
   },
-  // Couch (Playground)
+  // Couch (Test Account)
   {
-    name: "MERCHANT_ADDRESS",
-    envVar: "STAGING_MERCHANT_ADDRESS",
-    description: "Merchant wallet address for creating accounts (staging)",
+    name: "COUCH_TEST_ACCOUNT_ADDRESS",
+    envVar: "STAGING_COUCH_TEST_ACCOUNT_ADDRESS",
+    description: "Test merchant wallet address (seeded in staging)",
+  },
+  {
+    name: "COUCH_TEST_ACCOUNT_APIKEY",
+    envVar: "STAGING_COUCH_TEST_ACCOUNT_APIKEY",
+    description: "Test merchant API key (seeded in staging)",
+  },
+  {
+    name: "COUCH_TEST_ACCOUNT_SUBSCRIPTION_OWNER_ADDRESS",
+    envVar: "STAGING_COUCH_TEST_ACCOUNT_SUBSCRIPTION_OWNER_ADDRESS",
+    description: "Test merchant CDP wallet address (merchant-1, deterministic)",
   },
 ])
 
