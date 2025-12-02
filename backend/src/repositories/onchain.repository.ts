@@ -1,5 +1,4 @@
 import type { Address, Hash } from "viem"
-import type { Network } from "@/constants/env.constants"
 import { createLogger } from "@/lib/logger"
 import { getSubscriptionOwnerWalletName } from "@/lib/subscription-owner-wallet"
 import type { Provider } from "@/providers/provider.interface"
@@ -10,7 +9,6 @@ export interface OnchainRepositoryDeps {
   CDP_API_KEY_SECRET: string
   CDP_WALLET_SECRET: string
   CDP_CLIENT_API_KEY: string
-  NETWORK: Network
 }
 
 export interface ChargeSubscriptionParams {

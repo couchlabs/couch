@@ -20,6 +20,7 @@ export interface ChargeParams {
   amount: string
   recipient: Address
   walletName: string
+  testnet: boolean
 }
 
 export interface ChargeResult {
@@ -31,11 +32,13 @@ export interface ChargeResult {
 export interface StatusParams {
   subscriptionId: string
   walletName: string
+  testnet: boolean
 }
 
 export interface RevokeParams {
   subscriptionId: string
   walletName: string
+  testnet: boolean
 }
 
 export interface RevokeResult {

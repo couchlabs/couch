@@ -1,7 +1,6 @@
 import { base } from "@base-org/account/node"
 import type { Address, Hash } from "viem"
 import { isHash } from "viem"
-import type { Network } from "@/constants/env.constants"
 import { ErrorCode, HTTPError } from "@/errors/http.errors"
 import {
   type ChargeParams,
@@ -19,13 +18,10 @@ export interface BaseProviderDeps {
   CDP_API_KEY_SECRET: string
   CDP_WALLET_SECRET: string
   CDP_CLIENT_API_KEY: string
-  NETWORK: Network
 }
 
 export class BaseProvider implements SubscriptionProvider {
   readonly providerId = Provider.BASE
-  private readonly network: Network
-  private readonly paymasterUrl: string
   private readonly cdpConfig: {
     apiKeyId: string
     apiKeySecret: string
@@ -34,16 +30,22 @@ export class BaseProvider implements SubscriptionProvider {
   }
 
   constructor(deps: BaseProviderDeps) {
-    this.network = deps.NETWORK
     this.cdpConfig = {
       apiKeyId: deps.CDP_API_KEY_ID,
       apiKeySecret: deps.CDP_API_KEY_SECRET,
       walletSecret: deps.CDP_WALLET_SECRET,
       clientApiKey: deps.CDP_CLIENT_API_KEY,
     }
+  }
 
-    const network = this.network === "testnet" ? "base-sepolia" : "base"
-    this.paymasterUrl = `https://api.developer.coinbase.com/rpc/v1/${network}/${this.cdpConfig.clientApiKey}`
+  /**
+   * Constructs paymaster URL based on testnet parameter
+   * - testnet: true -> base-sepolia
+   * - testnet: false -> base (mainnet)
+   */
+  private getPaymasterUrl(testnet: boolean): string {
+    const network = testnet ? "base-sepolia" : "base"
+    return `https://api.developer.coinbase.com/rpc/v1/${network}/${this.cdpConfig.clientApiKey}`
   }
 
   async chargeSubscription(params: ChargeParams): Promise<ChargeResult> {
@@ -53,11 +55,11 @@ export class BaseProvider implements SubscriptionProvider {
         cdpApiKeySecret: this.cdpConfig.apiKeySecret,
         cdpWalletSecret: this.cdpConfig.walletSecret,
         walletName: params.walletName,
-        paymasterUrl: this.paymasterUrl,
+        paymasterUrl: this.getPaymasterUrl(params.testnet),
         id: params.subscriptionId as Hash,
         amount: params.amount,
         recipient: params.recipient,
-        testnet: this.network === "testnet",
+        testnet: params.testnet,
       })
 
       return {
@@ -85,7 +87,7 @@ export class BaseProvider implements SubscriptionProvider {
   async getSubscriptionStatus(params: StatusParams): Promise<StatusResult> {
     const subscription = await base.subscription.getStatus({
       id: params.subscriptionId as Hash,
-      testnet: this.network === "testnet",
+      testnet: params.testnet,
     })
 
     // Check if permission exists in indexer by validating required fields
@@ -121,9 +123,9 @@ export class BaseProvider implements SubscriptionProvider {
       cdpApiKeySecret: this.cdpConfig.apiKeySecret,
       cdpWalletSecret: this.cdpConfig.walletSecret,
       walletName: params.walletName,
-      paymasterUrl: this.paymasterUrl,
+      paymasterUrl: this.getPaymasterUrl(params.testnet),
       id: params.subscriptionId,
-      testnet: this.network === "testnet",
+      testnet: params.testnet,
     })
 
     return {
