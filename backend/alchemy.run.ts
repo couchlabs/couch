@@ -61,7 +61,7 @@ const { NETWORK, LOGGING, DUNNING_MODE, GH_ENVIRONMENT } = resolveStageConfig(
 
 // Cloudflare Worker Flags
 const compatibilityFlags = ["nodejs_compat", "disallow_importable_env"]
-const url = GH_ENVIRONMENT === "dev"
+const url = GH_ENVIRONMENT !== "prod" // Generate URLs for dev, staging, and previews (not prod)
 
 // -----------------------------------------------------------------------------
 // DATABASES

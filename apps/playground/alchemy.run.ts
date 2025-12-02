@@ -80,7 +80,7 @@ export const website = await Vite(WEBSITE_NAME, {
     }),
   },
   compatibilityFlags,
-  url: GH_ENVIRONMENT === "dev",
+  url: GH_ENVIRONMENT !== "prod", // Generate URLs for dev, staging, and previews (not prod)
 })
 
 if (app.local) {
