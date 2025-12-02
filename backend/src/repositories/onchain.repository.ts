@@ -19,12 +19,14 @@ export interface ChargeSubscriptionParams {
   recipient: Address // Merchant account address to receive the USDC
   provider: Provider
   accountId: number
+  testnet: boolean
 }
 
 export interface GetSubscriptionStatusParams {
   subscriptionId: Hash
   provider: Provider
   accountId: number
+  testnet: boolean
 }
 
 export interface ValidateSubscriptionIdParams {
@@ -36,6 +38,7 @@ export interface RevokeSubscriptionParams {
   subscriptionId: Hash
   provider: Provider
   accountId: number
+  testnet: boolean
 }
 
 export type SubscriptionStatusResult =
@@ -77,7 +80,8 @@ export class OnchainRepository {
   async chargeSubscription(
     params: ChargeSubscriptionParams,
   ): Promise<ChargeResult> {
-    const { subscriptionId, amount, recipient, provider, accountId } = params
+    const { subscriptionId, amount, recipient, provider, accountId, testnet } =
+      params
     const walletName = getSubscriptionOwnerWalletName(accountId)
 
     const log = logger.with({
@@ -87,6 +91,7 @@ export class OnchainRepository {
       provider,
       accountId,
       walletName,
+      testnet,
     })
 
     try {
@@ -99,6 +104,7 @@ export class OnchainRepository {
           amount,
           recipient,
           walletName,
+          testnet,
         })
 
       log.info("Onchain charge successful", {
@@ -116,10 +122,16 @@ export class OnchainRepository {
   async getSubscriptionStatus(
     params: GetSubscriptionStatusParams,
   ): Promise<SubscriptionStatusResult> {
-    const { subscriptionId, provider, accountId } = params
+    const { subscriptionId, provider, accountId, testnet } = params
     const walletName = getSubscriptionOwnerWalletName(accountId)
 
-    const log = logger.with({ subscriptionId, provider, accountId, walletName })
+    const log = logger.with({
+      subscriptionId,
+      provider,
+      accountId,
+      walletName,
+      testnet,
+    })
 
     try {
       log.info("Fetching onchain subscription status via provider")
@@ -128,6 +140,7 @@ export class OnchainRepository {
       const result = await onchainProvider.getSubscriptionStatus({
         subscriptionId,
         walletName,
+        testnet,
       })
 
       log.info("Onchain subscription status retrieved", {
@@ -172,10 +185,16 @@ export class OnchainRepository {
   async revokeSubscription(
     params: RevokeSubscriptionParams,
   ): Promise<ChargeResult> {
-    const { subscriptionId, provider, accountId } = params
+    const { subscriptionId, provider, accountId, testnet } = params
     const walletName = getSubscriptionOwnerWalletName(accountId)
 
-    const log = logger.with({ subscriptionId, provider, accountId, walletName })
+    const log = logger.with({
+      subscriptionId,
+      provider,
+      accountId,
+      walletName,
+      testnet,
+    })
 
     try {
       log.info("Executing onchain revoke via provider")
@@ -184,6 +203,7 @@ export class OnchainRepository {
       const { transactionHash } = await onchainProvider.revokeSubscription({
         subscriptionId,
         walletName,
+        testnet,
       })
 
       log.info("Onchain revoke successful", {

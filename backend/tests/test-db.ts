@@ -24,6 +24,7 @@ export interface TestSubscription {
   accountAddress: Address
   beneficiaryAddress: Address
   provider: Provider
+  testnet?: boolean
   status?: SubscriptionStatus
   order?: {
     type: OrderType
@@ -100,6 +101,7 @@ export async function createTestDB(options: CreateTestDbOptions = {}): Promise<{
           accountId: account.id,
           beneficiaryAddress: sub.beneficiaryAddress,
           provider: sub.provider,
+          testnet: sub.testnet ?? false,
           status: sub.status ?? SubscriptionStatus.PROCESSING,
         })
         .run()
