@@ -63,9 +63,13 @@ export class Store extends DurableObject {
     const existing = await this.getSubscription(data.id)
     const now = new Date().toISOString()
 
+    // Don't overwrite canceled status
+    // This prevents race conditions where a failed charge webhook arrives after cancellation
+    const shouldPreserveStatus = existing?.status === "canceled"
+
     const subscription: Subscription = {
       id: data.id,
-      status: data.status,
+      status: shouldPreserveStatus ? existing.status : data.status,
       transaction_hash: existing?.transaction_hash || data.transaction_hash,
       amount: existing?.amount || data.amount,
       period_in_seconds: existing?.period_in_seconds || data.period_in_seconds,
