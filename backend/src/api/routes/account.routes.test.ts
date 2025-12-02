@@ -87,7 +87,7 @@ describe("POST /api/account", () => {
       subscription_owner: string
     }>()
     expect(json.api_key).toBeDefined()
-    expect(json.api_key).toMatch(/^ck_testnet_[a-f0-9]{32}$/)
+    expect(json.api_key).toMatch(/^ck_[a-f0-9]{32}$/)
     expect(json.subscription_owner).toBeDefined()
     expect(json.subscription_owner).toMatch(/^0x[a-fA-F0-9]{40}$/)
 

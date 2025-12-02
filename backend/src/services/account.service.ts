@@ -1,6 +1,5 @@
 import { getOrCreateSubscriptionOwnerWallet } from "@base-org/account/node"
 import { type Address, getAddress, isAddress } from "viem"
-import type { Network } from "@/constants/env.constants"
 import { ErrorCode, HTTPError } from "@/errors/http.errors"
 import { logger } from "@/lib/logger"
 import { getSubscriptionOwnerWalletName } from "@/lib/subscription-owner-wallet"
@@ -23,7 +22,6 @@ export interface AccountServiceDeps extends AccountRepositoryDeps {
   CDP_API_KEY_ID: string
   CDP_API_KEY_SECRET: string
   CDP_WALLET_SECRET: string
-  NETWORK: Network
   ALLOWLIST: {
     get: (key: string) => Promise<string | null>
   }
@@ -31,24 +29,22 @@ export interface AccountServiceDeps extends AccountRepositoryDeps {
 
 export class AccountService {
   private accountRepository: AccountRepository
-  private network: Network
   private env: AccountServiceDeps
 
   constructor(env: AccountServiceDeps) {
     this.accountRepository = new AccountRepository(env)
-    this.network = env.NETWORK
     this.env = env
   }
 
   /**
-   * Generates a new API key with network-based prefix (ck_testnet_ or ck_mainnet_)
+   * Generates a new API key with prefix ck_
    * Returns both the full key and the hash of the secret part
    */
   private async generateApiKey(): Promise<{
     apiKey: string
     keyHash: string
   }> {
-    const prefix = `ck_${this.network}_`
+    const prefix = "ck_"
     const secretPart = crypto.randomUUID().replace(/-/g, "")
     const apiKey = `${prefix}${secretPart}`
 
@@ -69,9 +65,8 @@ export class AccountService {
    * Strips the prefix and hashes only the secret part
    */
   private async hashApiKey(apiKey: string): Promise<string> {
-    // Strip the prefix before hashing
-    const prefixMatch = apiKey.match(/^ck_[^_]+_(.+)$/)
-    const secretPart = prefixMatch ? prefixMatch[1] : apiKey
+    // Strip the "ck_" prefix before hashing
+    const secretPart = apiKey.startsWith("ck_") ? apiKey.slice(3) : apiKey
 
     const encoder = new TextEncoder()
     const data = encoder.encode(secretPart)
