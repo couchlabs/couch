@@ -206,6 +206,7 @@ describe("SubscriptionService", () => {
         accountId: testAccountId,
         beneficiaryAddress: TEST_OWNER,
         provider: Provider.BASE,
+        testnet: false,
       })
 
       expect(result).toMatchObject({
@@ -232,6 +233,7 @@ describe("SubscriptionService", () => {
         accountId: testAccountId,
         beneficiaryAddress: TEST_ACCOUNT, // Self-subscription
         provider: Provider.BASE,
+        testnet: false,
       })
 
       expect(result).toMatchObject({
@@ -277,6 +279,7 @@ describe("SubscriptionService", () => {
           accountId: testAccountId,
           beneficiaryAddress: TEST_OWNER,
           provider: Provider.BASE,
+          testnet: false,
         }),
       ).rejects.toThrow(HTTPError)
 
@@ -286,6 +289,7 @@ describe("SubscriptionService", () => {
           accountId: testAccountId,
           beneficiaryAddress: TEST_OWNER,
           provider: Provider.BASE,
+          testnet: false,
         })
       } catch (error) {
         expect(error).toBeInstanceOf(HTTPError)
@@ -315,6 +319,7 @@ describe("SubscriptionService", () => {
           accountId: testAccountId,
           beneficiaryAddress: TEST_OWNER,
           provider: Provider.BASE,
+          testnet: false,
         }),
       ).rejects.toThrow(HTTPError)
 
@@ -324,6 +329,7 @@ describe("SubscriptionService", () => {
           accountId: testAccountId,
           beneficiaryAddress: TEST_OWNER,
           provider: Provider.BASE,
+          testnet: false,
         })
       } catch (error) {
         expect(error).toBeInstanceOf(HTTPError)
@@ -346,6 +352,7 @@ describe("SubscriptionService", () => {
           accountId: testAccountId,
           beneficiaryAddress: TEST_OWNER,
           provider: Provider.BASE,
+          testnet: false,
         }),
       ).rejects.toThrow(HTTPError)
 
@@ -355,6 +362,7 @@ describe("SubscriptionService", () => {
           accountId: testAccountId,
           beneficiaryAddress: TEST_OWNER,
           provider: Provider.BASE,
+          testnet: false,
         })
       } catch (error) {
         expect(error).toBeInstanceOf(HTTPError)
@@ -394,6 +402,7 @@ describe("SubscriptionService", () => {
         accountId: testAccountId,
         beneficiaryAddress: TEST_OWNER,
         provider: Provider.BASE,
+        testnet: false,
         orderId: testDB.orderIds[0],
         orderNumber: 1,
       })
@@ -425,6 +434,7 @@ describe("SubscriptionService", () => {
         recipient: TEST_OWNER, // Beneficiary receives payment
         provider: Provider.BASE,
         accountId: testAccountId,
+        testnet: false,
       })
     })
 
@@ -471,6 +481,7 @@ describe("SubscriptionService", () => {
         accountId: testAccountId,
         beneficiaryAddress: TEST_OWNER,
         provider: Provider.BASE,
+        testnet: false,
         orderId: testDB.orderIds[0],
         orderNumber: 1,
       })
@@ -525,6 +536,7 @@ describe("SubscriptionService", () => {
           accountId: testAccountId,
           beneficiaryAddress: TEST_OWNER,
           provider: Provider.BASE,
+          testnet: false,
           orderId: testDB.orderIds[0],
           orderNumber: 1,
         }),
@@ -739,6 +751,7 @@ describe("SubscriptionService", () => {
         subscriptionId: TEST_SUBSCRIPTION_ID,
         provider: Provider.BASE,
         accountId: testAccountId,
+        testnet: false,
       })
 
       // Verify subscription status was updated
