@@ -71,7 +71,7 @@ jobs:
     name: "Staging Deployment"
     needs: [lint, format, typecheck, test]
     runs-on: ubuntu-latest
-    environment: dev
+    environment: staging
     permissions:
       contents: read
     steps:

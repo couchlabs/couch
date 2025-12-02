@@ -91,7 +91,6 @@ const devEnv = await RepositoryEnvironment(`${ENV_NAME}-environment`, {
   repository,
   name: ENV_NAME,
   // No protection rules - automated deployments for dev/preview/staging
-  // Don't set any protection rule properties for unrestricted access
 })
 
 await createGitHubSecrets(devEnv, SECRETS)
@@ -104,7 +103,7 @@ await app.finalize()
 // =============================================================================
 
 printSummary(devEnv, {
-  stage: "dev, pr-*, staging",
+  stage: "dev, pr-*",
   network: "Base Sepolia (testnet)",
   protection: "None (auto-deploy)",
   secretCount: SECRETS.length,

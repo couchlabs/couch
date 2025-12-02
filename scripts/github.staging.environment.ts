@@ -107,17 +107,7 @@ const stagingEnv = await RepositoryEnvironment(`${ENV_NAME}-environment`, {
   owner,
   repository,
   name: ENV_NAME,
-  // Protection rules - requires approval for deployment
-  waitTimer: 0, // No wait timer (approval only)
-  preventSelfReview: false, // Allow self-approval (solo developer)
-  reviewers: {
-    users: ["nickbalestra"],
-  },
-  // TODO: Add branch protection when setting up staging CD
-  // deploymentBranchPolicy: {
-  //   protectedBranches: true,
-  //   customBranchPolicies: false,
-  // },
+  // No protection rules - automated deployments for dev/preview/staging
 })
 
 await createGitHubSecrets(stagingEnv, SECRETS)
@@ -132,7 +122,7 @@ await app.finalize()
 printSummary(stagingEnv, {
   stage: "staging",
   network: "Base Sepolia (testnet)",
-  protection: "Required approval from @nickbalestra",
+  protection: "None (auto-deploy)",
   secretCount: SECRETS.length,
   secrets: SECRETS,
   nextSteps: [
