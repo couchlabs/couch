@@ -65,6 +65,7 @@ export interface OrderDetails {
   dueAt: string
   periodInSeconds: number
   attempts: number
+  subscriptionStatus: string
 }
 
 export interface RecordTransactionParams {
@@ -346,6 +347,7 @@ export class SubscriptionRepository {
         attempts: schema.orders.attempts,
         accountId: schema.subscriptions.accountId,
         beneficiaryAddress: schema.subscriptions.beneficiaryAddress,
+        subscriptionStatus: schema.subscriptions.status,
       })
       .from(schema.orders)
       .innerJoin(
@@ -369,6 +371,7 @@ export class SubscriptionRepository {
       dueAt: result.dueAt,
       periodInSeconds: result.periodInSeconds,
       attempts: result.attempts,
+      subscriptionStatus: result.subscriptionStatus,
     }
   }
 

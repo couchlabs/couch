@@ -202,6 +202,7 @@ export class OrderService {
       status,
       orderNumber,
       attempts,
+      subscriptionStatus,
     } = order
 
     try {
@@ -212,7 +213,44 @@ export class OrderService {
         beneficiaryAddress,
         amount,
         orderNumber,
+        subscriptionStatus,
       })
+
+      // Validate subscription is active or past_due before charging
+      // This prevents charging inactive subscriptions
+      // Especially important for race conditions where subscription is canceled near renewal time
+      if (
+        subscriptionStatus !== SubscriptionStatus.ACTIVE &&
+        subscriptionStatus !== SubscriptionStatus.PAST_DUE
+      ) {
+        log.warn("Skipping charge - subscription is not active", {
+          subscriptionStatus,
+        })
+
+        // Mark order as failed with appropriate reason
+        const orderResult = await this.subscriptionRepository.updateOrder({
+          id: orderId,
+          status: OrderStatus.FAILED,
+          failureReason: ErrorCode.SUBSCRIPTION_NOT_ACTIVE,
+          rawError: `Subscription status is ${subscriptionStatus}`,
+        })
+
+        // Clean up scheduler since we won't retry
+        await scheduler.delete()
+        log.info("Deleted order scheduler for non-active subscription", {
+          orderId,
+        })
+
+        return {
+          success: false,
+          orderNumber: orderResult.orderNumber,
+          failureReason: ErrorCode.SUBSCRIPTION_NOT_ACTIVE,
+          failureMessage: `Subscription is ${subscriptionStatus}`,
+          nextOrderCreated: false,
+          subscriptionStatus: subscriptionStatus as SubscriptionStatus,
+          isUpstreamError: false,
+        }
+      }
 
       // Step 2: Attempt to charge the subscription
       log.info("Processing recurring charge")
