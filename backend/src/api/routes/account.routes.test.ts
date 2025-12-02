@@ -82,9 +82,14 @@ describe("POST /api/account", () => {
 
     expect(res.status).toBe(201)
 
-    const json = await res.json<{ api_key: string }>()
+    const json = await res.json<{
+      api_key: string
+      subscription_owner: string
+    }>()
     expect(json.api_key).toBeDefined()
     expect(json.api_key).toMatch(/^ck_testnet_[a-f0-9]{32}$/)
+    expect(json.subscription_owner).toBeDefined()
+    expect(json.subscription_owner).toMatch(/^0x[a-fA-F0-9]{40}$/)
 
     // Verify ALLOWLIST was checked
     expect(mockAllowlist.get).toHaveBeenCalledWith(TEST_ACCOUNT)

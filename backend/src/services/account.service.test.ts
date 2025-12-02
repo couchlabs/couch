@@ -4,6 +4,20 @@ import { createTestDB } from "@tests/test-db"
 import { type Address, getAddress } from "viem"
 import type { Network } from "@/constants/env.constants"
 import { ErrorCode, HTTPError } from "@/errors/http.errors"
+
+// Mock the CDP wallet creation module
+// IMPORTANT: Must be defined BEFORE importing AccountService for mock.module() to work
+const mockWalletCreation = mock(async () => ({
+  address: "0x1234567890123456789012345678901234567890",
+  walletName: "merchant-1",
+  eoaAddress: "0x0987654321098765432109876543210987654321",
+}))
+
+mock.module("@base-org/account/node", () => ({
+  getOrCreateSubscriptionOwnerWallet: mockWalletCreation,
+}))
+
+// Import AccountService AFTER setting up the mock
 import { AccountService } from "./account.service"
 
 describe("AccountService", () => {
@@ -47,12 +61,15 @@ describe("AccountService", () => {
       return null // Not in allowlist
     })
 
-    // Create service instance with mocked ALLOWLIST
+    // Create service instance with mocked ALLOWLIST and CDP credentials
     service = new AccountService({
       DB: testDB.db,
       LOGGING: "verbose",
       NETWORK,
       ALLOWLIST: mockAllowlist,
+      CDP_API_KEY_ID: "test-api-key-id",
+      CDP_API_KEY_SECRET: "test-api-key-secret",
+      CDP_WALLET_SECRET: "test-wallet-secret",
     })
   })
 
@@ -107,40 +124,39 @@ describe("AccountService", () => {
         address: TEST_ACCOUNT,
       })
 
-      // Should return API key
+      // Should return API key and wallet address
       expect(result.apiKey).toBeDefined()
       expect(result.apiKey).toMatch(/^ck_testnet_[a-f0-9]{32}$/)
+      expect(result.subscriptionOwnerWalletAddress).toBeDefined()
+      expect(result.subscriptionOwnerWalletAddress).toMatch(
+        /^0x[a-fA-F0-9]{40}$/,
+      )
 
       // Verify account was created in database
       const account = await testDB.db
-        .prepare("SELECT address FROM accounts WHERE address = ?")
+        .prepare("SELECT id, address FROM accounts WHERE address = ?")
         .bind(TEST_ACCOUNT)
-        .first<{ address: string }>()
+        .first<{ id: number; address: string }>()
 
       expect(account?.address).toBe(TEST_ACCOUNT)
+      expect(account?.id).toBeDefined()
 
-      // Verify API key was created
+      // Verify API key was created (using account_id foreign key)
+      expect(account).not.toBeNull()
       const keyCount = await testDB.db
-        .prepare(
-          "SELECT COUNT(*) as count FROM api_keys WHERE account_address = ?",
-        )
-        .bind(TEST_ACCOUNT)
+        .prepare("SELECT COUNT(*) as count FROM api_keys WHERE account_id = ?")
+        .bind(account?.id)
         .first<{ count: number }>()
 
       expect(keyCount?.count).toBe(1)
     })
 
     it("throws 403 when address is not allowlisted", async () => {
-      await expect(
-        service.createAccount({
-          address: TEST_ACCOUNT_NOT_ALLOWED,
-        }),
-      ).rejects.toThrow(HTTPError)
-
       try {
         await service.createAccount({
           address: TEST_ACCOUNT_NOT_ALLOWED,
         })
+        expect.unreachable("Should have thrown HTTPError")
       } catch (error) {
         expect(error).toBeInstanceOf(HTTPError)
         expect((error as HTTPError).code).toBe(ErrorCode.ADDRESS_NOT_ALLOWED)
@@ -155,16 +171,11 @@ describe("AccountService", () => {
       })
 
       // Try to create again
-      await expect(
-        service.createAccount({
-          address: TEST_ACCOUNT,
-        }),
-      ).rejects.toThrow(HTTPError)
-
       try {
         await service.createAccount({
           address: TEST_ACCOUNT,
         })
+        expect.unreachable("Should have thrown HTTPError")
       } catch (error) {
         expect(error).toBeInstanceOf(HTTPError)
         expect((error as HTTPError).code).toBe(ErrorCode.ACCOUNT_EXISTS)
@@ -173,16 +184,11 @@ describe("AccountService", () => {
     })
 
     it("throws 400 when address format is invalid", async () => {
-      await expect(
-        service.createAccount({
-          address: "not-a-valid-address",
-        }),
-      ).rejects.toThrow(HTTPError)
-
       try {
         await service.createAccount({
           address: "not-a-valid-address",
         })
+        expect.unreachable("Should have thrown HTTPError")
       } catch (error) {
         expect(error).toBeInstanceOf(HTTPError)
         expect((error as HTTPError).code).toBe(ErrorCode.INVALID_FORMAT)
@@ -191,7 +197,6 @@ describe("AccountService", () => {
     })
 
     it("normalizes address to checksummed format", async () => {
-      // Use lowercase address (non-checksummed)
       const lowercaseAddress = TEST_ACCOUNT.toLowerCase()
 
       await service.createAccount({
@@ -204,32 +209,64 @@ describe("AccountService", () => {
         .bind(TEST_ACCOUNT)
         .first<{ address: string }>()
 
-      expect(account?.address).toBe(TEST_ACCOUNT) // Should be checksummed
+      expect(account?.address).toBe(TEST_ACCOUNT)
+    })
+
+    it("rolls back account creation if wallet creation fails", async () => {
+      mockWalletCreation.mockImplementationOnce(async () => {
+        throw new Error("CDP wallet creation failed")
+      })
+
+      await expect(
+        service.createAccount({
+          address: TEST_ACCOUNT,
+        }),
+      ).rejects.toThrow(HTTPError)
+
+      // Verify account was rolled back (not in database)
+      const account = await testDB.db
+        .prepare("SELECT address FROM accounts WHERE address = ?")
+        .bind(TEST_ACCOUNT)
+        .first<{ address: string }>()
+
+      expect(account).toBeNull()
+
+      // Verify no API key was created
+      const keyCount = await testDB.db
+        .prepare("SELECT COUNT(*) as count FROM api_keys")
+        .first<{ count: number }>()
+
+      expect(keyCount?.count).toBe(0)
     })
   })
 
   describe("rotateApiKey", () => {
     it("rotates API key successfully for existing account", async () => {
-      // Create account first
-      const initialResult = await service.createAccount({
+      const { apiKey: initialKey } = await service.createAccount({
         address: TEST_ACCOUNT,
       })
-      const initialKey = initialResult.apiKey
 
-      // Rotate the key
-      const rotatedResult = await service.rotateApiKey(TEST_ACCOUNT)
-      const rotatedKey = rotatedResult.apiKey
+      // Get account ID from database
+      const account = await testDB.db
+        .prepare("SELECT id FROM accounts WHERE address = ?")
+        .bind(TEST_ACCOUNT)
+        .first<{ id: number }>()
+      if (!account) {
+        throw new Error("Test account not found in database")
+      }
+
+      const { apiKey: rotatedKey, subscriptionOwnerWalletAddress } =
+        await service.rotateApiKey(account.id)
 
       // Keys should be different
       expect(rotatedKey).not.toBe(initialKey)
       expect(rotatedKey).toMatch(/^ck_testnet_[a-f0-9]{32}$/)
+      expect(subscriptionOwnerWalletAddress).toBeDefined()
 
-      // Verify only one key exists (old one should be deleted)
+      // Verify only one key exists
       const keyCount = await testDB.db
-        .prepare(
-          "SELECT COUNT(*) as count FROM api_keys WHERE account_address = ?",
-        )
-        .bind(TEST_ACCOUNT)
+        .prepare("SELECT COUNT(*) as count FROM api_keys WHERE account_id = ?")
+        .bind(account.id)
         .first<{ count: number }>()
 
       expect(keyCount?.count).toBe(1)
@@ -240,46 +277,51 @@ describe("AccountService", () => {
       )
 
       // Verify new key works
-      const authenticatedAddress = await service.authenticateApiKey(rotatedKey)
-      expect(authenticatedAddress).toBe(TEST_ACCOUNT)
+      const authenticatedAccount = await service.authenticateApiKey(rotatedKey)
+      expect(authenticatedAccount.address).toBe(TEST_ACCOUNT)
     })
 
     it("generates different keys on multiple rotations", async () => {
-      // Create account
       await service.createAccount({
         address: TEST_ACCOUNT,
       })
 
-      // Rotate multiple times
-      const keys = new Set<string>()
-      for (let i = 0; i < 5; i++) {
-        const result = await service.rotateApiKey(TEST_ACCOUNT)
-        keys.add(result.apiKey)
+      // Get account ID from database
+      const account = await testDB.db
+        .prepare("SELECT id FROM accounts WHERE address = ?")
+        .bind(TEST_ACCOUNT)
+        .first<{ id: number }>()
+      if (!account) {
+        throw new Error("Test account not found in database")
       }
 
-      // All keys should be unique
+      const keys = new Set<string>()
+      for (let i = 0; i < 5; i++) {
+        const { apiKey } = await service.rotateApiKey(account.id)
+        keys.add(apiKey)
+      }
+
       expect(keys.size).toBe(5)
     })
   })
 
   describe("authenticateApiKey", () => {
-    it("authenticates valid API key", async () => {
+    it("authenticates valid API key and returns account", async () => {
       const { apiKey } = await service.createAccount({
         address: TEST_ACCOUNT,
       })
 
-      const authenticatedAddress = await service.authenticateApiKey(apiKey)
+      const account = await service.authenticateApiKey(apiKey)
 
-      expect(authenticatedAddress).toBe(TEST_ACCOUNT)
+      expect(account.address).toBe(TEST_ACCOUNT)
+      expect(account.id).toBeDefined()
+      expect(typeof account.id).toBe("number")
     })
 
     it("throws 401 when API key is invalid", async () => {
-      await expect(
-        service.authenticateApiKey("ck_testnet_invalid"),
-      ).rejects.toThrow(HTTPError)
-
       try {
         await service.authenticateApiKey("ck_testnet_invalid")
+        expect.unreachable("Should have thrown HTTPError")
       } catch (error) {
         expect(error).toBeInstanceOf(HTTPError)
         expect((error as HTTPError).code).toBe(ErrorCode.INVALID_API_KEY)
@@ -288,17 +330,24 @@ describe("AccountService", () => {
     })
 
     it("authenticates key after rotation", async () => {
-      // Create account
       await service.createAccount({
         address: TEST_ACCOUNT,
       })
 
-      // Rotate key
-      const { apiKey: newKey } = await service.rotateApiKey(TEST_ACCOUNT)
+      // Get account ID from database
+      const accountRecord = await testDB.db
+        .prepare("SELECT id FROM accounts WHERE address = ?")
+        .bind(TEST_ACCOUNT)
+        .first<{ id: number }>()
+      if (!accountRecord) {
+        throw new Error("Test account not found in database")
+      }
 
-      // New key should authenticate
-      const authenticatedAddress = await service.authenticateApiKey(newKey)
-      expect(authenticatedAddress).toBe(TEST_ACCOUNT)
+      const { apiKey: newKey } = await service.rotateApiKey(accountRecord.id)
+
+      const account = await service.authenticateApiKey(newKey)
+      expect(account.address).toBe(TEST_ACCOUNT)
+      expect(account.id).toBeDefined()
     })
   })
 })

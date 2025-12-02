@@ -1,14 +1,16 @@
 CREATE TABLE `accounts` (
-	`address` text PRIMARY KEY NOT NULL
+	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
+	`address` text NOT NULL
 );
 --> statement-breakpoint
+CREATE UNIQUE INDEX `accounts_address_unique` ON `accounts` (`address`);--> statement-breakpoint
 CREATE TABLE `api_keys` (
 	`key_hash` text PRIMARY KEY NOT NULL,
-	`account_address` text NOT NULL,
-	FOREIGN KEY (`account_address`) REFERENCES `accounts`(`address`) ON UPDATE no action ON DELETE cascade
+	`account_id` integer NOT NULL,
+	FOREIGN KEY (`account_id`) REFERENCES `accounts`(`id`) ON UPDATE no action ON DELETE cascade
 );
 --> statement-breakpoint
-CREATE INDEX `idx_api_keys_account` ON `api_keys` (`account_address`);--> statement-breakpoint
+CREATE INDEX `idx_api_keys_account` ON `api_keys` (`account_id`);--> statement-breakpoint
 CREATE TABLE `orders` (
 	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
 	`subscription_id` text NOT NULL,
@@ -39,17 +41,17 @@ CREATE INDEX `idx_orders_subscription_number` ON `orders` (`subscription_id`,`or
 CREATE TABLE `subscriptions` (
 	`subscription_id` text PRIMARY KEY NOT NULL,
 	`status` text NOT NULL,
-	`account_address` text NOT NULL,
+	`account_id` integer NOT NULL,
 	`beneficiary_address` text NOT NULL,
 	`provider` text NOT NULL,
 	`created_at` text DEFAULT CURRENT_TIMESTAMP,
 	`modified_at` text DEFAULT CURRENT_TIMESTAMP,
-	FOREIGN KEY (`account_address`) REFERENCES `accounts`(`address`) ON UPDATE no action ON DELETE no action,
+	FOREIGN KEY (`account_id`) REFERENCES `accounts`(`id`) ON UPDATE no action ON DELETE no action,
 	CONSTRAINT "status" CHECK(status IN ('processing', 'active', 'past_due', 'incomplete', 'canceled', 'unpaid')),
 	CONSTRAINT "provider" CHECK(provider IN ('base'))
 );
 --> statement-breakpoint
-CREATE INDEX `idx_subscriptions_account` ON `subscriptions` (`account_address`);--> statement-breakpoint
+CREATE INDEX `idx_subscriptions_account` ON `subscriptions` (`account_id`);--> statement-breakpoint
 CREATE INDEX `idx_subscriptions_beneficiary` ON `subscriptions` (`beneficiary_address`);--> statement-breakpoint
 CREATE INDEX `idx_subscriptions_status` ON `subscriptions` (`status`);--> statement-breakpoint
 CREATE INDEX `idx_subscriptions_created` ON `subscriptions` (`created_at`);--> statement-breakpoint
@@ -72,8 +74,8 @@ CREATE INDEX `idx_transactions_order` ON `transactions` (`order_id`);--> stateme
 CREATE INDEX `idx_transactions_hash` ON `transactions` (`transaction_hash`);--> statement-breakpoint
 CREATE INDEX `idx_transactions_status` ON `transactions` (`status`);--> statement-breakpoint
 CREATE TABLE `webhooks` (
-	`account_address` text PRIMARY KEY NOT NULL,
+	`account_id` integer PRIMARY KEY NOT NULL,
 	`url` text NOT NULL,
 	`secret` text NOT NULL,
-	FOREIGN KEY (`account_address`) REFERENCES `accounts`(`address`) ON UPDATE no action ON DELETE cascade
+	FOREIGN KEY (`account_id`) REFERENCES `accounts`(`id`) ON UPDATE no action ON DELETE cascade
 );

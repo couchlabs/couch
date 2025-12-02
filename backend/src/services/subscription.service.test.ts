@@ -33,6 +33,7 @@ describe("SubscriptionService", () => {
     dispose: () => Promise<void>
   }
   let service: SubscriptionService
+  let testAccountId: number
 
   const TEST_ACCOUNT = "0xabcd" as Address
   const TEST_OWNER = "0x5678" as Address
@@ -53,10 +54,13 @@ describe("SubscriptionService", () => {
       recurringCharge: "1000000",
       periodInSeconds: 2592000,
     },
-    context: {
-      spenderAddress: "0xspender" as Address,
-    },
   }
+
+  // Helper to access subscription with permissionExists: true (for TypeScript)
+  const MOCK_SUB = MOCK_SUBSCRIPTION_STATUS.subscription as Extract<
+    typeof MOCK_SUBSCRIPTION_STATUS.subscription,
+    { permissionExists: true }
+  >
 
   /**
    * Helper to create SubscriptionService with test dependencies
@@ -128,6 +132,16 @@ describe("SubscriptionService", () => {
     })
     dispose = testDB.dispose
 
+    // Get account ID from test database
+    const account = await testDB.db
+      .prepare("SELECT id FROM accounts WHERE address = ?")
+      .bind(TEST_ACCOUNT)
+      .first<{ id: number }>()
+    if (!account) {
+      throw new Error("Test account not found in database")
+    }
+    testAccountId = account.id
+
     // Create service instance
     service = createSubscriptionServiceForTest(testDB.db)
 
@@ -189,7 +203,7 @@ describe("SubscriptionService", () => {
     it("creates subscription successfully with valid onchain state", async () => {
       const result = await service.createSubscription({
         subscriptionId: TEST_SUBSCRIPTION_ID,
-        accountAddress: TEST_ACCOUNT,
+        accountId: testAccountId,
         beneficiaryAddress: TEST_OWNER,
         provider: Provider.BASE,
       })
@@ -215,7 +229,7 @@ describe("SubscriptionService", () => {
     it("creates self-subscription successfully (creator = beneficiary)", async () => {
       const result = await service.createSubscription({
         subscriptionId: TEST_SUBSCRIPTION_ID,
-        accountAddress: TEST_ACCOUNT,
+        accountId: testAccountId,
         beneficiaryAddress: TEST_ACCOUNT, // Self-subscription
         provider: Provider.BASE,
       })
@@ -232,12 +246,12 @@ describe("SubscriptionService", () => {
       // Verify subscription was created with same creator and beneficiary
       const subscription = await testDB.db
         .prepare(
-          "SELECT account_address, beneficiary_address FROM subscriptions WHERE subscription_id = ?",
+          "SELECT account_id, beneficiary_address FROM subscriptions WHERE subscription_id = ?",
         )
         .bind(TEST_SUBSCRIPTION_ID)
-        .first<{ account_address: string; beneficiary_address: string }>()
+        .first<{ account_id: number; beneficiary_address: string }>()
 
-      expect(subscription?.account_address).toBe(TEST_ACCOUNT)
+      expect(subscription?.account_id).toBe(testAccountId)
       expect(subscription?.beneficiary_address).toBe(TEST_ACCOUNT)
     })
 
@@ -260,7 +274,7 @@ describe("SubscriptionService", () => {
       await expect(
         service.createSubscription({
           subscriptionId: TEST_SUBSCRIPTION_ID,
-          accountAddress: TEST_ACCOUNT,
+          accountId: testAccountId,
           beneficiaryAddress: TEST_OWNER,
           provider: Provider.BASE,
         }),
@@ -269,7 +283,7 @@ describe("SubscriptionService", () => {
       try {
         await service.createSubscription({
           subscriptionId: TEST_SUBSCRIPTION_ID,
-          accountAddress: TEST_ACCOUNT,
+          accountId: testAccountId,
           beneficiaryAddress: TEST_OWNER,
           provider: Provider.BASE,
         })
@@ -286,26 +300,19 @@ describe("SubscriptionService", () => {
         subscription: {
           permissionExists: true,
           isSubscribed: false,
-          subscriptionOwner:
-            MOCK_SUBSCRIPTION_STATUS.subscription.subscriptionOwner,
-          remainingChargeInPeriod:
-            MOCK_SUBSCRIPTION_STATUS.subscription.remainingChargeInPeriod,
-          currentPeriodStart:
-            MOCK_SUBSCRIPTION_STATUS.subscription.currentPeriodStart,
-          nextPeriodStart:
-            MOCK_SUBSCRIPTION_STATUS.subscription.nextPeriodStart,
-          recurringCharge:
-            MOCK_SUBSCRIPTION_STATUS.subscription.recurringCharge,
-          periodInSeconds:
-            MOCK_SUBSCRIPTION_STATUS.subscription.periodInSeconds,
+          subscriptionOwner: MOCK_SUB.subscriptionOwner,
+          remainingChargeInPeriod: MOCK_SUB.remainingChargeInPeriod,
+          currentPeriodStart: MOCK_SUB.currentPeriodStart,
+          nextPeriodStart: MOCK_SUB.nextPeriodStart,
+          recurringCharge: MOCK_SUB.recurringCharge,
+          periodInSeconds: MOCK_SUB.periodInSeconds,
         },
-        context: MOCK_SUBSCRIPTION_STATUS.context,
       })
 
       await expect(
         service.createSubscription({
           subscriptionId: TEST_SUBSCRIPTION_ID,
-          accountAddress: TEST_ACCOUNT,
+          accountId: testAccountId,
           beneficiaryAddress: TEST_OWNER,
           provider: Provider.BASE,
         }),
@@ -314,7 +321,7 @@ describe("SubscriptionService", () => {
       try {
         await service.createSubscription({
           subscriptionId: TEST_SUBSCRIPTION_ID,
-          accountAddress: TEST_ACCOUNT,
+          accountId: testAccountId,
           beneficiaryAddress: TEST_OWNER,
           provider: Provider.BASE,
         })
@@ -331,15 +338,12 @@ describe("SubscriptionService", () => {
           isSubscribed: false,
           recurringCharge: "0",
         },
-        context: {
-          spenderAddress: "0xspender" as Address,
-        },
       })
 
       await expect(
         service.createSubscription({
           subscriptionId: TEST_SUBSCRIPTION_ID,
-          accountAddress: TEST_ACCOUNT,
+          accountId: testAccountId,
           beneficiaryAddress: TEST_OWNER,
           provider: Provider.BASE,
         }),
@@ -348,7 +352,7 @@ describe("SubscriptionService", () => {
       try {
         await service.createSubscription({
           subscriptionId: TEST_SUBSCRIPTION_ID,
-          accountAddress: TEST_ACCOUNT,
+          accountId: testAccountId,
           beneficiaryAddress: TEST_OWNER,
           provider: Provider.BASE,
         })
@@ -387,7 +391,7 @@ describe("SubscriptionService", () => {
 
       const result = await service.processActivationCharge({
         subscriptionId: TEST_SUBSCRIPTION_ID,
-        accountAddress: TEST_ACCOUNT,
+        accountId: testAccountId,
         beneficiaryAddress: TEST_OWNER,
         provider: Provider.BASE,
         orderId: testDB.orderIds[0],
@@ -396,7 +400,7 @@ describe("SubscriptionService", () => {
 
       expect(result).toMatchObject({
         subscriptionId: TEST_SUBSCRIPTION_ID,
-        accountAddress: TEST_ACCOUNT,
+        accountId: testAccountId,
         transaction: {
           hash: MOCK_CHARGE_RESULT.transactionHash,
           amount: "500000",
@@ -420,6 +424,7 @@ describe("SubscriptionService", () => {
         amount: "500000",
         recipient: TEST_OWNER, // Beneficiary receives payment
         provider: Provider.BASE,
+        accountId: testAccountId,
       })
     })
 
@@ -463,7 +468,7 @@ describe("SubscriptionService", () => {
 
       const result = await service.processActivationCharge({
         subscriptionId: TEST_SUBSCRIPTION_ID,
-        accountAddress: TEST_ACCOUNT,
+        accountId: testAccountId,
         beneficiaryAddress: TEST_OWNER,
         provider: Provider.BASE,
         orderId: testDB.orderIds[0],
@@ -505,25 +510,19 @@ describe("SubscriptionService", () => {
         subscription: {
           permissionExists: true,
           isSubscribed: true,
-          subscriptionOwner:
-            MOCK_SUBSCRIPTION_STATUS.subscription.subscriptionOwner,
-          remainingChargeInPeriod:
-            MOCK_SUBSCRIPTION_STATUS.subscription.remainingChargeInPeriod,
-          currentPeriodStart:
-            MOCK_SUBSCRIPTION_STATUS.subscription.currentPeriodStart,
+          subscriptionOwner: MOCK_SUB.subscriptionOwner,
+          remainingChargeInPeriod: MOCK_SUB.remainingChargeInPeriod,
+          currentPeriodStart: MOCK_SUB.currentPeriodStart,
           nextPeriodStart: undefined,
-          recurringCharge:
-            MOCK_SUBSCRIPTION_STATUS.subscription.recurringCharge,
-          periodInSeconds:
-            MOCK_SUBSCRIPTION_STATUS.subscription.periodInSeconds,
+          recurringCharge: MOCK_SUB.recurringCharge,
+          periodInSeconds: MOCK_SUB.periodInSeconds,
         },
-        context: MOCK_SUBSCRIPTION_STATUS.context,
       })
 
       await expect(
         service.processActivationCharge({
           subscriptionId: TEST_SUBSCRIPTION_ID,
-          accountAddress: TEST_ACCOUNT,
+          accountId: testAccountId,
           beneficiaryAddress: TEST_OWNER,
           provider: Provider.BASE,
           orderId: testDB.orderIds[0],
@@ -560,7 +559,7 @@ describe("SubscriptionService", () => {
 
       const activationResult = {
         subscriptionId: TEST_SUBSCRIPTION_ID,
-        accountAddress: TEST_ACCOUNT,
+        accountId: testAccountId,
         provider: Provider.BASE,
         transaction: {
           hash: "0xtxhash" as Hash,
@@ -619,7 +618,7 @@ describe("SubscriptionService", () => {
     it("does not throw error if activation fails (background processing)", async () => {
       const activationResult = {
         subscriptionId: "0xinvalid" as Hash, // Non-existent subscription
-        accountAddress: TEST_ACCOUNT,
+        accountId: testAccountId,
         provider: Provider.BASE,
         transaction: {
           hash: "0xtxhash" as Hash,
@@ -721,16 +720,16 @@ describe("SubscriptionService", () => {
       // Register webhook for the account (needed for emitSubscriptionCanceled)
       await testDB.db
         .prepare(
-          "INSERT INTO webhooks (account_address, url, secret) VALUES (?, ?, ?)",
+          "INSERT INTO webhooks (account_id, url, secret) VALUES (?, ?, ?)",
         )
-        .bind(TEST_ACCOUNT, "https://example.com/webhook", "test-secret")
+        .bind(testAccountId, "https://example.com/webhook", "test-secret")
         .run()
 
       const service = createServiceForRevokeTests(testDB.db)
 
       const result = await service.revokeSubscription({
         subscriptionId: TEST_SUBSCRIPTION_ID,
-        accountAddress: TEST_ACCOUNT,
+        accountId: testAccountId,
       })
 
       expect(result.status).toBe(SubscriptionStatus.CANCELED)
@@ -739,6 +738,7 @@ describe("SubscriptionService", () => {
       expect(mockRevokeSubscription).toHaveBeenCalledWith({
         subscriptionId: TEST_SUBSCRIPTION_ID,
         provider: Provider.BASE,
+        accountId: testAccountId,
       })
 
       // Verify subscription status was updated
@@ -778,7 +778,7 @@ describe("SubscriptionService", () => {
 
       const result = await service.revokeSubscription({
         subscriptionId: TEST_SUBSCRIPTION_ID,
-        accountAddress: TEST_ACCOUNT,
+        accountId: testAccountId,
       })
 
       expect(result.status).toBe(SubscriptionStatus.CANCELED)
@@ -791,14 +791,14 @@ describe("SubscriptionService", () => {
       await expect(
         service.revokeSubscription({
           subscriptionId: TEST_SUBSCRIPTION_ID,
-          accountAddress: TEST_ACCOUNT,
+          accountId: testAccountId,
         }),
       ).rejects.toThrow(HTTPError)
 
       try {
         await service.revokeSubscription({
           subscriptionId: TEST_SUBSCRIPTION_ID,
-          accountAddress: TEST_ACCOUNT,
+          accountId: testAccountId,
         })
       } catch (error) {
         expect(error).toBeInstanceOf(HTTPError)
@@ -808,9 +808,10 @@ describe("SubscriptionService", () => {
       }
     })
 
-    it("throws 403 if accountAddress does not match", async () => {
+    it("throws 403 if accountId does not match", async () => {
+      const DIFFERENT_ACCOUNT = "0xdifferent" as Address
       const testDB = await createTestDB({
-        accounts: [TEST_ACCOUNT],
+        accounts: [TEST_ACCOUNT, DIFFERENT_ACCOUNT],
         subscriptions: [
           {
             subscriptionId: TEST_SUBSCRIPTION_ID,
@@ -825,19 +826,26 @@ describe("SubscriptionService", () => {
 
       const service = createSubscriptionServiceForTest(testDB.db)
 
-      const DIFFERENT_ACCOUNT = "0xdifferent" as Address
+      // Get different account ID
+      const differentAccount = await testDB.db
+        .prepare("SELECT id FROM accounts WHERE address = ?")
+        .bind(DIFFERENT_ACCOUNT)
+        .first<{ id: number }>()
+      if (!differentAccount) {
+        throw new Error("Different test account not found in database")
+      }
 
       await expect(
         service.revokeSubscription({
           subscriptionId: TEST_SUBSCRIPTION_ID,
-          accountAddress: DIFFERENT_ACCOUNT,
+          accountId: differentAccount.id,
         }),
       ).rejects.toThrow(HTTPError)
 
       try {
         await service.revokeSubscription({
           subscriptionId: TEST_SUBSCRIPTION_ID,
-          accountAddress: DIFFERENT_ACCOUNT,
+          accountId: differentAccount.id,
         })
       } catch (error) {
         expect(error).toBeInstanceOf(HTTPError)
@@ -866,14 +874,14 @@ describe("SubscriptionService", () => {
       await expect(
         service.revokeSubscription({
           subscriptionId: TEST_SUBSCRIPTION_ID,
-          accountAddress: TEST_ACCOUNT,
+          accountId: testAccountId,
         }),
       ).rejects.toThrow(HTTPError)
 
       try {
         await service.revokeSubscription({
           subscriptionId: TEST_SUBSCRIPTION_ID,
-          accountAddress: TEST_ACCOUNT,
+          accountId: testAccountId,
         })
       } catch (error) {
         expect(error).toBeInstanceOf(HTTPError)
@@ -903,14 +911,14 @@ describe("SubscriptionService", () => {
       await expect(
         service.revokeSubscription({
           subscriptionId: TEST_SUBSCRIPTION_ID,
-          accountAddress: TEST_ACCOUNT,
+          accountId: testAccountId,
         }),
       ).rejects.toThrow(HTTPError)
 
       try {
         await service.revokeSubscription({
           subscriptionId: TEST_SUBSCRIPTION_ID,
-          accountAddress: TEST_ACCOUNT,
+          accountId: testAccountId,
         })
       } catch (error) {
         expect(error).toBeInstanceOf(HTTPError)
@@ -942,22 +950,19 @@ describe("SubscriptionService", () => {
           isSubscribed: false,
           recurringCharge: "0",
         },
-        context: {
-          spenderAddress: "0xspender" as Address,
-        },
       })
 
       await expect(
         service.revokeSubscription({
           subscriptionId: TEST_SUBSCRIPTION_ID,
-          accountAddress: TEST_ACCOUNT,
+          accountId: testAccountId,
         }),
       ).rejects.toThrow(HTTPError)
 
       try {
         await service.revokeSubscription({
           subscriptionId: TEST_SUBSCRIPTION_ID,
-          accountAddress: TEST_ACCOUNT,
+          accountId: testAccountId,
         })
       } catch (error) {
         expect(error).toBeInstanceOf(HTTPError)
@@ -984,9 +989,9 @@ describe("SubscriptionService", () => {
       // Register webhook for the account (needed for emitSubscriptionCanceled)
       await testDB.db
         .prepare(
-          "INSERT INTO webhooks (account_address, url, secret) VALUES (?, ?, ?)",
+          "INSERT INTO webhooks (account_id, url, secret) VALUES (?, ?, ?)",
         )
-        .bind(TEST_ACCOUNT, "https://example.com/webhook", "test-secret")
+        .bind(testAccountId, "https://example.com/webhook", "test-secret")
         .run()
 
       const service = createServiceForRevokeTests(testDB.db)
@@ -996,25 +1001,18 @@ describe("SubscriptionService", () => {
         subscription: {
           permissionExists: true,
           isSubscribed: false,
-          subscriptionOwner:
-            MOCK_SUBSCRIPTION_STATUS.subscription.subscriptionOwner,
-          remainingChargeInPeriod:
-            MOCK_SUBSCRIPTION_STATUS.subscription.remainingChargeInPeriod,
-          currentPeriodStart:
-            MOCK_SUBSCRIPTION_STATUS.subscription.currentPeriodStart,
-          nextPeriodStart:
-            MOCK_SUBSCRIPTION_STATUS.subscription.nextPeriodStart,
-          recurringCharge:
-            MOCK_SUBSCRIPTION_STATUS.subscription.recurringCharge,
-          periodInSeconds:
-            MOCK_SUBSCRIPTION_STATUS.subscription.periodInSeconds,
+          subscriptionOwner: MOCK_SUB.subscriptionOwner,
+          remainingChargeInPeriod: MOCK_SUB.remainingChargeInPeriod,
+          currentPeriodStart: MOCK_SUB.currentPeriodStart,
+          nextPeriodStart: MOCK_SUB.nextPeriodStart,
+          recurringCharge: MOCK_SUB.recurringCharge,
+          periodInSeconds: MOCK_SUB.periodInSeconds,
         },
-        context: MOCK_SUBSCRIPTION_STATUS.context,
       })
 
       const result = await service.revokeSubscription({
         subscriptionId: TEST_SUBSCRIPTION_ID,
-        accountAddress: TEST_ACCOUNT,
+        accountId: testAccountId,
       })
 
       expect(result.status).toBe(SubscriptionStatus.CANCELED)

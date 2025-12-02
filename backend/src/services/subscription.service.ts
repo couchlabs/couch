@@ -34,7 +34,7 @@ export interface ValidateSubscriptionIdParams {
 
 export interface CreateSubscriptionParams {
   subscriptionId: Hash
-  accountAddress: Address // Who activated subscription (receives webhooks)
+  accountId: number // Who activated subscription (receives webhooks)
   beneficiaryAddress: Address // Who receives payments
   provider: Provider
 }
@@ -50,7 +50,7 @@ export interface CreateSubscriptionResult {
 
 export interface ProcessActivationChargeParams {
   subscriptionId: Hash
-  accountAddress: Address // Who activated subscription (receives webhooks)
+  accountId: number // Who activated subscription (receives webhooks)
   beneficiaryAddress: Address // Who receives payments
   provider: Provider
   orderId: number
@@ -59,7 +59,7 @@ export interface ProcessActivationChargeParams {
 
 export interface ActivationResult {
   subscriptionId: Hash
-  accountAddress: Address // Who activated subscription (receives webhooks)
+  accountId: number // Who activated subscription (receives webhooks)
   provider: Provider
   transaction: {
     hash: Hash
@@ -182,11 +182,11 @@ export class SubscriptionService {
    */
   async revokeSubscription(params: {
     subscriptionId: Hash
-    accountAddress: Address
+    accountId: number
   }) {
-    const { subscriptionId, accountAddress } = params
+    const { subscriptionId, accountId } = params
 
-    const log = logger.with({ subscriptionId, accountAddress })
+    const log = logger.with({ subscriptionId, accountId })
 
     const subscription = await this.subscriptionRepository.getSubscription({
       subscriptionId,
@@ -201,7 +201,7 @@ export class SubscriptionService {
       )
     }
 
-    if (subscription.accountAddress !== accountAddress) {
+    if (subscription.accountId !== accountId) {
       throw new HTTPError(403, ErrorCode.FORBIDDEN, "Unauthorized", {
         subscriptionId,
       })
@@ -224,6 +224,7 @@ export class SubscriptionService {
     const status = await this.onchainRepository.getSubscriptionStatus({
       subscriptionId,
       provider: subscription.provider,
+      accountId: subscription.accountId,
     })
 
     if (!status.subscription.permissionExists) {
@@ -243,6 +244,7 @@ export class SubscriptionService {
       await this.onchainRepository.revokeSubscription({
         subscriptionId,
         provider: subscription.provider,
+        accountId: subscription.accountId,
       })
     } else {
       log.info("Subscription already revoked onchain, skipping revoke")
@@ -277,7 +279,7 @@ export class SubscriptionService {
       })
 
     await webhookService.emitSubscriptionCanceled({
-      accountAddress,
+      accountId: subscription.accountId,
       subscriptionId,
       amount: onchainSub.recurringCharge,
       periodInSeconds: onchainSub.periodInSeconds,
@@ -313,8 +315,7 @@ export class SubscriptionService {
   async createSubscription(
     params: CreateSubscriptionParams,
   ): Promise<CreateSubscriptionResult> {
-    const { subscriptionId, accountAddress, beneficiaryAddress, provider } =
-      params
+    const { subscriptionId, accountId, beneficiaryAddress, provider } = params
 
     // Validate domain constraints
     await this.validateId({ subscriptionId, provider })
@@ -340,6 +341,7 @@ export class SubscriptionService {
       {
         subscriptionId,
         provider,
+        accountId,
       },
     )
 
@@ -368,7 +370,7 @@ export class SubscriptionService {
     const result =
       await this.subscriptionRepository.createSubscriptionWithOrder({
         subscriptionId,
-        accountAddress,
+        accountId,
         beneficiaryAddress,
         provider,
         order: {
@@ -410,7 +412,7 @@ export class SubscriptionService {
   ): Promise<ActivationResult> {
     const {
       subscriptionId,
-      accountAddress,
+      accountId,
       beneficiaryAddress,
       provider,
       orderId,
@@ -424,6 +426,7 @@ export class SubscriptionService {
       {
         subscriptionId,
         provider,
+        accountId,
       },
     )
 
@@ -473,6 +476,7 @@ export class SubscriptionService {
         amount: subscription.remainingChargeInPeriod,
         recipient: beneficiaryAddress,
         provider,
+        accountId,
       })
     }
 
@@ -483,7 +487,7 @@ export class SubscriptionService {
 
     return {
       subscriptionId,
-      accountAddress,
+      accountId,
       provider,
       transaction: {
         hash: transaction.transactionHash,

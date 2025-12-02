@@ -2,7 +2,6 @@ import type { D1Database } from "@cloudflare/workers-types"
 import * as schema from "@database/schema"
 import { eq } from "drizzle-orm"
 import { drizzle } from "drizzle-orm/d1"
-import type { Address } from "viem"
 import type { LoggingLevel } from "@/constants/env.constants"
 import { DrizzleLogger } from "@/lib/logger"
 
@@ -16,13 +15,13 @@ export interface WebhookRepositoryDeps {
 }
 
 export interface CreateOrUpdateWebhookParams {
-  accountAddress: Address
+  accountId: number
   url: string
   secret: string
 }
 
 export interface GetWebhookParams {
-  accountAddress: Address
+  accountId: number
 }
 
 export class WebhookRepository {
@@ -43,7 +42,7 @@ export class WebhookRepository {
    */
   private toWebhookDomain(row: schema.WebhookRow): Webhook {
     return {
-      accountAddress: row.accountAddress as Address,
+      accountId: row.accountId,
       url: row.url,
       secret: row.secret,
     }
@@ -59,12 +58,12 @@ export class WebhookRepository {
     await this.db
       .insert(schema.webhooks)
       .values({
-        accountAddress: params.accountAddress,
+        accountId: params.accountId,
         url: params.url,
         secret: params.secret,
       })
       .onConflictDoUpdate({
-        target: schema.webhooks.accountAddress,
+        target: schema.webhooks.accountId,
         set: {
           url: params.url,
           secret: params.secret,
@@ -81,7 +80,7 @@ export class WebhookRepository {
     const result = await this.db
       .select()
       .from(schema.webhooks)
-      .where(eq(schema.webhooks.accountAddress, params.accountAddress))
+      .where(eq(schema.webhooks.accountId, params.accountId))
       .get()
 
     if (!result) {

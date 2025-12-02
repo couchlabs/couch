@@ -24,17 +24,17 @@
     "@base-org/account": "catalog:coinbase",
     "@coinbase/cdp-sdk": "catalog:coinbase",
     "hono": "catalog:cloudflare",
-    "viem": "^2.38.2",
-    "drizzle-orm": "^0.44.6"
+    "viem": "^2.40.3",
+    "drizzle-orm": "^0.44.7"
   },
   "devDependencies": {
-    "@actions/core": "^1.11.1",
     "@cloudflare/workers-types": "catalog:cloudflare",
     "@types/bun": "latest",
     "@types/node": "catalog:cloudflare",
     "alchemy": "catalog:",
-    "drizzle-kit": "^0.31.5",
     "miniflare": "catalog:cloudflare",
-    "typescript": "catalog:"
+    "typescript": "catalog:",
+    "@actions/core": "^1.11.1",
+    "drizzle-kit": "^0.31.7"
   }
 }

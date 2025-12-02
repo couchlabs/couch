@@ -41,7 +41,8 @@ const providerValues = Object.values(Provider)
 // =============================================================================
 
 export const accounts = sqliteTable("accounts", {
-  address: text("address").primaryKey(),
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  address: text("address").unique().notNull(),
 })
 
 // API Keys - SHA-256 hash of the secret part (no prefix)
@@ -49,18 +50,18 @@ export const apiKeys = sqliteTable(
   "api_keys",
   {
     keyHash: text("key_hash").primaryKey(),
-    accountAddress: text("account_address")
+    accountId: integer("account_id")
       .notNull()
-      .references(() => accounts.address, { onDelete: "cascade" }),
+      .references(() => accounts.id, { onDelete: "cascade" }),
   },
-  (table) => [index("idx_api_keys_account").on(table.accountAddress)],
+  (table) => [index("idx_api_keys_account").on(table.accountId)],
 )
 
 // Webhooks - single webhook per account (HTTPS URL for event delivery, secret for HMAC verification)
 export const webhooks = sqliteTable("webhooks", {
-  accountAddress: text("account_address")
+  accountId: integer("account_id")
     .primaryKey()
-    .references(() => accounts.address, { onDelete: "cascade" }),
+    .references(() => accounts.id, { onDelete: "cascade" }),
   url: text("url").notNull(),
   secret: text("secret").notNull(),
 })
@@ -77,9 +78,9 @@ export const subscriptions = sqliteTable(
     subscriptionId: text("subscription_id").primaryKey(),
     status: text("status").$type<SubscriptionStatus>().notNull(),
     // Account that owns this subscription
-    accountAddress: text("account_address")
+    accountId: integer("account_id")
       .notNull()
-      .references(() => accounts.address),
+      .references(() => accounts.id),
     // Who receives payments
     beneficiaryAddress: text("beneficiary_address").notNull(),
     provider: text("provider").$type<Provider>().notNull(),
@@ -87,7 +88,7 @@ export const subscriptions = sqliteTable(
     modifiedAt: text("modified_at").default(sql`CURRENT_TIMESTAMP`),
   },
   (table) => [
-    index("idx_subscriptions_account").on(table.accountAddress),
+    index("idx_subscriptions_account").on(table.accountId),
     index("idx_subscriptions_beneficiary").on(table.beneficiaryAddress),
     index("idx_subscriptions_status").on(table.status),
     index("idx_subscriptions_created").on(table.createdAt),
@@ -197,10 +198,9 @@ export type NewWebhookRow = typeof webhooks.$inferInsert
 // Repositories transform between Row and Domain types
 export type Subscription = Omit<
   SubscriptionRow,
-  "subscriptionId" | "accountAddress" | "beneficiaryAddress"
+  "subscriptionId" | "beneficiaryAddress"
 > & {
   subscriptionId: Hash
-  accountAddress: Address
   beneficiaryAddress: Address
 }
 
@@ -220,10 +220,6 @@ export type Account = Omit<AccountRow, "address"> & {
   address: Address
 }
 
-export type ApiKey = Omit<ApiKeyRow, "accountAddress"> & {
-  accountAddress: Address
-}
+export type ApiKey = ApiKeyRow
 
-export type Webhook = Omit<WebhookRow, "accountAddress"> & {
-  accountAddress: Address
-}
+export type Webhook = WebhookRow

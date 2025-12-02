@@ -8,7 +8,6 @@ import {
   Queue,
   Worker,
 } from "alchemy/cloudflare"
-import { EvmAccount, EvmSmartAccount } from "alchemy/coinbase"
 import { CloudflareStateStore, FileSystemStateStore } from "alchemy/state"
 import { resolveStageConfig } from "@/constants/env.constants"
 import type { Provider } from "@/providers/provider.interface"
@@ -52,35 +51,9 @@ export const app = await alchemy("couch-backend", {
       : new CloudflareStateStore(scope),
 })
 const NAME_PREFIX = `${app.name}-${app.stage}`
-const { NETWORK, LOGGING, DUNNING_MODE, WALLET_STAGE, GH_ENVIRONMENT } =
-  resolveStageConfig(app.stage)
-
-// =============================================================================
-// ONCHAIN RESOURCES (Coinbase)
-// =============================================================================
-
-// -----------------------------------------------------------------------------
-// EVM Accounts
-// -----------------------------------------------------------------------------
-
-/**
- * Server-side smart account for processing subscription charges.
- * Base Account SDK requires EOA and smart account to share the same CDP wallet identifier.
- * @see https://github.com/base-org/account-sdk/blob/main/packages/account-sdk/src/interface/payment/charge.ts#L114-120
- * EvmSmartAccount inherits its name from the owner account when the name property is omitted.
- *
- * Wallet Strategy (via WALLET_STAGE runtime config):
- * - dev/preview: Share test wallet (couch-backend-dev-spender-evm)
- * - sandbox: Dedicated test wallet (couch-backend-sandbox-spender-evm)
- * - prod: Dedicated mainnet wallet (couch-backend-prod-spender-evm)
- */
-const SPENDER_ACCOUNT_NAME = "spender-evm"
-export const spenderSmartAccount = await EvmSmartAccount(SPENDER_ACCOUNT_NAME, {
-  owner: await EvmAccount(`${SPENDER_ACCOUNT_NAME}-owner`, {
-    name: `${app.name}-${WALLET_STAGE}-${SPENDER_ACCOUNT_NAME}`, // CDP Identifier
-  }),
-  faucet: NETWORK === "testnet" ? { "base-sepolia": ["eth"] } : undefined,
-})
+const { NETWORK, LOGGING, DUNNING_MODE, GH_ENVIRONMENT } = resolveStageConfig(
+  app.stage,
+)
 
 // =============================================================================
 // OFFCHAIN RESOURCES (Cloudflare)
@@ -177,13 +150,10 @@ export const api = await Worker(API_NAME, {
     CDP_API_KEY_SECRET: alchemy.secret.env.CDP_API_KEY_SECRET,
     CDP_WALLET_SECRET: alchemy.secret.env.CDP_WALLET_SECRET,
     CDP_CLIENT_API_KEY: alchemy.env.CDP_CLIENT_API_KEY,
-    CDP_WALLET_NAME: spenderSmartAccount.name,
-    CDP_SPENDER_ADDRESS: spenderSmartAccount.address,
     // STAGE CONFIGS:
     NETWORK,
     LOGGING,
     DUNNING_MODE,
-    WALLET_STAGE,
     // RESOURCES:
     DB: db,
     ALLOWLIST: allowlist,

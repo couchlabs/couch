@@ -55,10 +55,13 @@ describe("OrderService", () => {
       recurringCharge: "1000000",
       periodInSeconds: 2592000,
     },
-    context: {
-      spenderAddress: "0xspender" as Address,
-    },
   }
+
+  // Helper to access subscription with permissionExists: true (for TypeScript)
+  const MOCK_SUB = MOCK_SUBSCRIPTION_STATUS.subscription as Extract<
+    typeof MOCK_SUBSCRIPTION_STATUS.subscription,
+    { permissionExists: true }
+  >
 
   /**
    * Helper to create test database with default subscription setup
@@ -139,10 +142,11 @@ describe("OrderService", () => {
       expect(orderDetails).toMatchObject({
         id: orderId,
         subscriptionId: TEST_SUBSCRIPTION_ID,
-        accountAddress: TEST_ACCOUNT,
+        accountId: 1,
         amount: "1000000",
         orderNumber: 1,
         status: OrderStatus.PROCESSING,
+        periodInSeconds: 2592000,
       })
     })
 
@@ -186,6 +190,7 @@ describe("OrderService", () => {
         amount: "1000000",
         recipient: TEST_OWNER, // Beneficiary receives payment
         provider: Provider.BASE,
+        accountId: 1,
       })
 
       // Verify order status via public getOrderDetails method
@@ -205,19 +210,13 @@ describe("OrderService", () => {
         subscription: {
           permissionExists: true,
           isSubscribed: false,
-          subscriptionOwner:
-            MOCK_SUBSCRIPTION_STATUS.subscription.subscriptionOwner,
-          remainingChargeInPeriod:
-            MOCK_SUBSCRIPTION_STATUS.subscription.remainingChargeInPeriod,
-          currentPeriodStart:
-            MOCK_SUBSCRIPTION_STATUS.subscription.currentPeriodStart,
+          subscriptionOwner: MOCK_SUB.subscriptionOwner,
+          remainingChargeInPeriod: MOCK_SUB.remainingChargeInPeriod,
+          currentPeriodStart: MOCK_SUB.currentPeriodStart,
           nextPeriodStart: undefined,
-          recurringCharge:
-            MOCK_SUBSCRIPTION_STATUS.subscription.recurringCharge,
-          periodInSeconds:
-            MOCK_SUBSCRIPTION_STATUS.subscription.periodInSeconds,
+          recurringCharge: MOCK_SUB.recurringCharge,
+          periodInSeconds: MOCK_SUB.periodInSeconds,
         },
-        context: MOCK_SUBSCRIPTION_STATUS.context,
       }
 
       mockGetSubscriptionStatus.mockResolvedValue(cancelledStatus)
@@ -586,19 +585,13 @@ describe("OrderService", () => {
         subscription: {
           permissionExists: true,
           isSubscribed: false,
-          subscriptionOwner:
-            MOCK_SUBSCRIPTION_STATUS.subscription.subscriptionOwner,
-          remainingChargeInPeriod:
-            MOCK_SUBSCRIPTION_STATUS.subscription.remainingChargeInPeriod,
-          currentPeriodStart:
-            MOCK_SUBSCRIPTION_STATUS.subscription.currentPeriodStart,
+          subscriptionOwner: MOCK_SUB.subscriptionOwner,
+          remainingChargeInPeriod: MOCK_SUB.remainingChargeInPeriod,
+          currentPeriodStart: MOCK_SUB.currentPeriodStart,
           nextPeriodStart: undefined,
-          recurringCharge:
-            MOCK_SUBSCRIPTION_STATUS.subscription.recurringCharge,
-          periodInSeconds:
-            MOCK_SUBSCRIPTION_STATUS.subscription.periodInSeconds,
+          recurringCharge: MOCK_SUB.recurringCharge,
+          periodInSeconds: MOCK_SUB.periodInSeconds,
         },
-        context: MOCK_SUBSCRIPTION_STATUS.context,
       }
 
       mockChargeSubscription.mockRejectedValue(paymentError)

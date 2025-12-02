@@ -1,6 +1,7 @@
 import path from "node:path"
 import type { D1Database } from "@cloudflare/workers-types"
 import * as schema from "@database/schema"
+import { eq } from "drizzle-orm"
 import { drizzle } from "drizzle-orm/d1"
 import { migrate } from "drizzle-orm/d1/migrator"
 import { Miniflare } from "miniflare"
@@ -78,12 +79,25 @@ export async function createTestDB(options: CreateTestDbOptions = {}): Promise<{
   const orderIds: number[] = []
   if (options.subscriptions) {
     for (const sub of options.subscriptions) {
+      // Look up account ID from address
+      const account = await drizzleD1
+        .select({ id: schema.accounts.id })
+        .from(schema.accounts)
+        .where(eq(schema.accounts.address, sub.accountAddress))
+        .get()
+
+      if (!account) {
+        throw new Error(
+          `Account ${sub.accountAddress} not found. Make sure to include it in the accounts array.`,
+        )
+      }
+
       // Insert subscription (default to PROCESSING status if not provided)
       await drizzleD1
         .insert(schema.subscriptions)
         .values({
           subscriptionId: sub.subscriptionId,
-          accountAddress: sub.accountAddress,
+          accountId: account.id,
           beneficiaryAddress: sub.beneficiaryAddress,
           provider: sub.provider,
           status: sub.status ?? SubscriptionStatus.PROCESSING,

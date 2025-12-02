@@ -60,7 +60,7 @@ export default {
 
             // Emit webhook for successful payment
             await webhookService.emitPaymentProcessed({
-              accountAddress: orderDetails.accountAddress,
+              accountId: orderDetails.accountId,
               subscriptionId: orderDetails.subscriptionId,
               orderNumber: result.orderNumber, // Guaranteed to exist
               amount: orderDetails.amount,
@@ -107,7 +107,7 @@ export default {
             } else {
               // Business logic failure (balance, permission, etc) - emit webhook and ack
               await webhookService.emitPaymentFailed({
-                accountAddress: orderDetails.accountAddress,
+                accountId: orderDetails.accountId,
                 subscriptionId: orderDetails.subscriptionId,
                 subscriptionStatus: result.subscriptionStatus,
                 orderNumber: result.orderNumber,

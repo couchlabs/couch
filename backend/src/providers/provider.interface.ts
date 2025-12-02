@@ -19,6 +19,7 @@ export interface ChargeParams {
   subscriptionId: string
   amount: string
   recipient: Address
+  walletName: string
 }
 
 export interface ChargeResult {
@@ -29,10 +30,12 @@ export interface ChargeResult {
 
 export interface StatusParams {
   subscriptionId: string
+  walletName: string
 }
 
 export interface RevokeParams {
   subscriptionId: string
+  walletName: string
 }
 
 export interface RevokeResult {
@@ -54,7 +57,6 @@ export type StatusResult =
       permissionExists: false
       isSubscribed: false
       recurringCharge: string // Always '0' when permission not found
-      spenderAddress: Address
     }
   | {
       permissionExists: true
@@ -65,5 +67,4 @@ export type StatusResult =
       nextPeriodStart?: Date // Optional - undefined means no future recurring charges
       recurringCharge: string
       periodInDays: number
-      spenderAddress: Address
     }

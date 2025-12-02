@@ -12,6 +12,7 @@ import { SubscriptionRepository } from "./subscription.repository"
 describe("SubscriptionRepository", () => {
   let repo: SubscriptionRepository
   let dispose: (() => Promise<void>) | undefined
+  let testAccountId: number
   const TEST_ACCOUNT = "0xabcd" as Address
 
   beforeEach(async () => {
@@ -20,6 +21,16 @@ describe("SubscriptionRepository", () => {
       accounts: [TEST_ACCOUNT],
     })
     dispose = testDB.dispose
+
+    // Get the account ID for test usage
+    const account = await testDB.db
+      .prepare("SELECT id FROM accounts WHERE address = ?")
+      .bind(TEST_ACCOUNT)
+      .first<{ id: number }>()
+
+    if (!account) throw new Error("Test account not created")
+    testAccountId = account.id
+
     // Initialize repository
     repo = new SubscriptionRepository({
       DB: testDB.db,
@@ -38,7 +49,7 @@ describe("SubscriptionRepository", () => {
     it("creates a new subscription", async () => {
       const created = await repo.createSubscription({
         subscriptionId: "0x1234" as Hash,
-        accountAddress: TEST_ACCOUNT,
+        accountId: testAccountId,
         beneficiaryAddress: "0x5678" as Address,
         provider: Provider.BASE,
       })
@@ -49,7 +60,7 @@ describe("SubscriptionRepository", () => {
     it("prevents duplicate subscription IDs (returns false on conflict)", async () => {
       const params = {
         subscriptionId: "0x1234" as Hash,
-        accountAddress: TEST_ACCOUNT,
+        accountId: testAccountId,
         beneficiaryAddress: "0x5678" as Address,
         provider: Provider.BASE,
       }
@@ -74,7 +85,7 @@ describe("SubscriptionRepository", () => {
     it("returns true for existing subscription", async () => {
       await repo.createSubscription({
         subscriptionId: "0x1234" as Hash,
-        accountAddress: TEST_ACCOUNT,
+        accountId: testAccountId,
         beneficiaryAddress: "0x5678" as Address,
         provider: Provider.BASE,
       })
@@ -90,7 +101,7 @@ describe("SubscriptionRepository", () => {
     it("creates subscription and initial order atomically", async () => {
       const result = await repo.createSubscriptionWithOrder({
         subscriptionId: "0x1234" as Hash,
-        accountAddress: TEST_ACCOUNT,
+        accountId: testAccountId,
         beneficiaryAddress: "0x5678" as Address,
         provider: Provider.BASE,
         order: {
@@ -113,7 +124,7 @@ describe("SubscriptionRepository", () => {
     it("returns false when subscription already exists", async () => {
       const params = {
         subscriptionId: "0x1234" as Hash,
-        accountAddress: TEST_ACCOUNT,
+        accountId: testAccountId,
         beneficiaryAddress: "0x5678" as Address,
         provider: Provider.BASE,
         order: {
@@ -144,7 +155,7 @@ describe("SubscriptionRepository", () => {
       // First create subscription with order
       const result = await repo.createSubscriptionWithOrder({
         subscriptionId: "0x1234" as Hash,
-        accountAddress: TEST_ACCOUNT,
+        accountId: testAccountId,
         beneficiaryAddress: "0x5678" as Address,
         provider: Provider.BASE,
         order: {
@@ -164,7 +175,7 @@ describe("SubscriptionRepository", () => {
       expect(details).toMatchObject({
         id: result.orderId,
         subscriptionId: "0x1234",
-        accountAddress: TEST_ACCOUNT,
+        accountId: testAccountId,
         amount: "1000000",
         orderNumber: 1,
         status: OrderStatus.PROCESSING,
@@ -178,7 +189,7 @@ describe("SubscriptionRepository", () => {
       // Create subscription with order
       const result = await repo.createSubscriptionWithOrder({
         subscriptionId: "0x1234" as Hash,
-        accountAddress: TEST_ACCOUNT,
+        accountId: testAccountId,
         beneficiaryAddress: "0x5678" as Address,
         provider: Provider.BASE,
         order: {
@@ -219,7 +230,7 @@ describe("SubscriptionRepository", () => {
         const subscriptionId = `0x${i}234` as Hash
         const result = await repo.createSubscriptionWithOrder({
           subscriptionId,
-          accountAddress: TEST_ACCOUNT,
+          accountId: testAccountId,
           beneficiaryAddress: "0x5678" as Address,
           provider: Provider.BASE,
           order: {
@@ -255,7 +266,7 @@ describe("SubscriptionRepository", () => {
     it("updates order and subscription for retry", async () => {
       const result = await repo.createSubscriptionWithOrder({
         subscriptionId: "0x1234" as Hash,
-        accountAddress: TEST_ACCOUNT,
+        accountId: testAccountId,
         beneficiaryAddress: "0x5678" as Address,
         provider: Provider.BASE,
         order: {
@@ -288,7 +299,7 @@ describe("SubscriptionRepository", () => {
     it("returns orders ready for retry", async () => {
       const result = await repo.createSubscriptionWithOrder({
         subscriptionId: "0x1234" as Hash,
-        accountAddress: TEST_ACCOUNT,
+        accountId: testAccountId,
         beneficiaryAddress: "0x5678" as Address,
         provider: Provider.BASE,
         order: {
@@ -321,7 +332,7 @@ describe("SubscriptionRepository", () => {
     it("does not return future retries", async () => {
       const result = await repo.createSubscriptionWithOrder({
         subscriptionId: "0x1234" as Hash,
-        accountAddress: TEST_ACCOUNT,
+        accountId: testAccountId,
         beneficiaryAddress: "0x5678" as Address,
         provider: Provider.BASE,
         order: {
@@ -353,7 +364,7 @@ describe("SubscriptionRepository", () => {
     it("updates subscription status", async () => {
       await repo.createSubscription({
         subscriptionId: "0x1234" as Hash,
-        accountAddress: TEST_ACCOUNT,
+        accountId: testAccountId,
         beneficiaryAddress: "0x5678" as Address,
         provider: Provider.BASE,
       })

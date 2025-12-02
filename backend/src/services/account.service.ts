@@ -1,8 +1,11 @@
+import { getOrCreateSubscriptionOwnerWallet } from "@base-org/account/node"
 import { type Address, getAddress, isAddress } from "viem"
 import type { Network } from "@/constants/env.constants"
 import { ErrorCode, HTTPError } from "@/errors/http.errors"
 import { logger } from "@/lib/logger"
+import { getSubscriptionOwnerWalletName } from "@/lib/subscription-owner-wallet"
 import {
+  type Account,
   AccountRepository,
   type AccountRepositoryDeps,
 } from "@/repositories/account.repository"
@@ -13,9 +16,13 @@ export interface CreateAccountParams {
 
 export interface AccountResult {
   apiKey: string
+  subscriptionOwnerWalletAddress: Address
 }
 
 export interface AccountServiceDeps extends AccountRepositoryDeps {
+  CDP_API_KEY_ID: string
+  CDP_API_KEY_SECRET: string
+  CDP_WALLET_SECRET: string
   NETWORK: Network
   ALLOWLIST: {
     get: (key: string) => Promise<string | null>
@@ -132,26 +139,63 @@ export class AccountService {
 
     log.info("Creating new account")
 
-    // Create account
-    await this.accountRepository.createAccount({ accountAddress })
+    // Create account in DB - returns account with auto-generated ID
+    const account = await this.accountRepository.createAccount({
+      accountAddress,
+    })
+
+    // Create subscription owner wallet for this account
+    let subscriptionOwnerWalletAddress: Address
+    try {
+      const walletName = getSubscriptionOwnerWalletName(account.id)
+
+      const wallet = await getOrCreateSubscriptionOwnerWallet({
+        cdpApiKeyId: this.env.CDP_API_KEY_ID,
+        cdpApiKeySecret: this.env.CDP_API_KEY_SECRET,
+        cdpWalletSecret: this.env.CDP_WALLET_SECRET,
+        walletName,
+      })
+
+      subscriptionOwnerWalletAddress = wallet.address as Address
+      log.info("Created subscription owner wallet", {
+        accountId: account.id,
+        walletAddress: subscriptionOwnerWalletAddress,
+        walletName,
+      })
+    } catch (error) {
+      // Rollback account creation if wallet creation fails
+      log.error("Failed to create subscription owner wallet - rolling back", {
+        error,
+        accountId: account.id,
+      })
+
+      // Delete the account we just created
+      await this.accountRepository.deleteAccount(account.id)
+
+      throw new HTTPError(
+        500,
+        ErrorCode.INTERNAL_ERROR,
+        "Failed to create subscription owner wallet",
+      )
+    }
 
     // Set API key
     const { apiKey, keyHash } = await this.generateApiKey()
     await this.accountRepository.setApiKey({
-      accountAddress,
+      accountId: account.id,
       keyHash,
     })
 
-    log.info("Account created successfully")
+    log.info("Account created successfully", { accountId: account.id })
 
-    return { apiKey }
+    return { apiKey, subscriptionOwnerWalletAddress }
   }
 
   /**
    * Rotates the API key for an authenticated account
    */
-  async rotateApiKey(accountAddress: Address): Promise<AccountResult> {
-    const log = logger.with({ accountAddress })
+  async rotateApiKey(accountId: number): Promise<AccountResult> {
+    const log = logger.with({ accountId })
 
     log.info("Rotating account API key")
 
@@ -159,21 +203,29 @@ export class AccountService {
 
     // Set API key (atomic delete + insert)
     await this.accountRepository.setApiKey({
-      accountAddress,
+      accountId,
       keyHash,
+    })
+
+    // Get wallet address for this account
+    const wallet = await getOrCreateSubscriptionOwnerWallet({
+      cdpApiKeyId: this.env.CDP_API_KEY_ID,
+      cdpApiKeySecret: this.env.CDP_API_KEY_SECRET,
+      cdpWalletSecret: this.env.CDP_WALLET_SECRET,
+      walletName: getSubscriptionOwnerWalletName(accountId),
     })
 
     log.info("Account API key rotated successfully")
 
-    return { apiKey }
+    return { apiKey, subscriptionOwnerWalletAddress: wallet.address as Address }
   }
 
   /**
    * Authenticates a request by validating the API key
-   * Returns the associated account address if valid
+   * Returns the associated account (with id and address) if valid
    * Throws HTTPError if invalid
    */
-  async authenticateApiKey(apiKey: string): Promise<Address> {
+  async authenticateApiKey(apiKey: string): Promise<Account> {
     const keyHash = await this.hashApiKey(apiKey)
 
     const account = await this.accountRepository.getAccountByApiKey({
@@ -184,6 +236,6 @@ export class AccountService {
       throw new HTTPError(401, ErrorCode.INVALID_API_KEY, "Invalid API key")
     }
 
-    return account.address
+    return account
   }
 }

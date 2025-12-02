@@ -14,7 +14,7 @@ import { GitHubSecret } from "alchemy/github"
  */
 export enum GitHubEnvironment {
   DEV = "dev",
-  SANDBOX = "sandbox",
+  STAGING = "staging",
   PROD = "prod",
 }
 

@@ -11,12 +11,12 @@ export const keysRoutes = new Hono<{ Bindings: WorkerEnv }>()
  * Returns the new API key (previous key is immediately invalidated)
  */
 keysRoutes.put("/", apiKeyAuth(), async (c) => {
-  const auth = c.get("auth")
+  const { account } = c.get("auth")
   const accountService = new AccountService(c.env)
 
-  const account = await accountService.rotateApiKey(auth.accountAddress)
+  const result = await accountService.rotateApiKey(account.id)
 
   return c.json({
-    api_key: account.apiKey,
+    api_key: result.apiKey,
   })
 })

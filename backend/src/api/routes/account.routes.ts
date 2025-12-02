@@ -19,11 +19,12 @@ accountRoutes.post("/", async (c) => {
   }
 
   const accountService = new AccountService(c.env)
-  const account = await accountService.createAccount({ address })
+  const result = await accountService.createAccount({ address })
 
   return c.json(
     {
-      api_key: account.apiKey,
+      api_key: result.apiKey,
+      subscription_owner: result.subscriptionOwnerWalletAddress,
     },
     201,
   )

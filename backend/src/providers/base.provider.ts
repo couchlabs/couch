@@ -18,9 +18,7 @@ export interface BaseProviderDeps {
   CDP_API_KEY_ID: string
   CDP_API_KEY_SECRET: string
   CDP_WALLET_SECRET: string
-  CDP_WALLET_NAME: string
   CDP_CLIENT_API_KEY: string
-  CDP_SPENDER_ADDRESS: Address
   NETWORK: Network
 }
 
@@ -32,9 +30,7 @@ export class BaseProvider implements SubscriptionProvider {
     apiKeyId: string
     apiKeySecret: string
     walletSecret: string
-    walletName: string
     clientApiKey: string
-    spenderAddress: Address
   }
 
   constructor(deps: BaseProviderDeps) {
@@ -43,9 +39,7 @@ export class BaseProvider implements SubscriptionProvider {
       apiKeyId: deps.CDP_API_KEY_ID,
       apiKeySecret: deps.CDP_API_KEY_SECRET,
       walletSecret: deps.CDP_WALLET_SECRET,
-      walletName: deps.CDP_WALLET_NAME,
       clientApiKey: deps.CDP_CLIENT_API_KEY,
-      spenderAddress: deps.CDP_SPENDER_ADDRESS,
     }
 
     const network = this.network === "testnet" ? "base-sepolia" : "base"
@@ -58,7 +52,7 @@ export class BaseProvider implements SubscriptionProvider {
         cdpApiKeyId: this.cdpConfig.apiKeyId,
         cdpApiKeySecret: this.cdpConfig.apiKeySecret,
         cdpWalletSecret: this.cdpConfig.walletSecret,
-        walletName: this.cdpConfig.walletName,
+        walletName: params.walletName,
         paymasterUrl: this.paymasterUrl,
         id: params.subscriptionId as Hash,
         amount: params.amount,
@@ -106,7 +100,6 @@ export class BaseProvider implements SubscriptionProvider {
         permissionExists: false,
         isSubscribed: false, // SDK always returns false when permission not found
         recurringCharge: subscription.recurringCharge,
-        spenderAddress: this.cdpConfig.spenderAddress,
       }
     }
 
@@ -119,7 +112,6 @@ export class BaseProvider implements SubscriptionProvider {
       nextPeriodStart: subscription.nextPeriodStart,
       recurringCharge: subscription.recurringCharge,
       periodInDays: subscription.periodInDays,
-      spenderAddress: this.cdpConfig.spenderAddress,
     }
   }
 
@@ -128,7 +120,7 @@ export class BaseProvider implements SubscriptionProvider {
       cdpApiKeyId: this.cdpConfig.apiKeyId,
       cdpApiKeySecret: this.cdpConfig.apiKeySecret,
       cdpWalletSecret: this.cdpConfig.walletSecret,
-      walletName: this.cdpConfig.walletName,
+      walletName: params.walletName,
       paymasterUrl: this.paymasterUrl,
       id: params.subscriptionId,
       testnet: this.network === "testnet",
