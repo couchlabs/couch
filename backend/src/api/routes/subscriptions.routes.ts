@@ -28,7 +28,8 @@ subscriptionRoutes.use(apiKeyAuth())
  */
 subscriptionRoutes.post("/", subscriptionBody(), async (ctx) => {
   const { account } = ctx.get("auth")
-  const { subscriptionId, provider, beneficiary } = ctx.get("subscription")
+  const { subscriptionId, provider, testnet, beneficiary } =
+    ctx.get("subscription")
 
   // Beneficiary defaults to account address if not specified
   const beneficiaryAddress = beneficiary || account.address
@@ -43,6 +44,7 @@ subscriptionRoutes.post("/", subscriptionBody(), async (ctx) => {
       accountId: account.id,
       beneficiaryAddress,
       provider,
+      testnet,
     })
 
   // Process activation charge and emit webhooks in background
@@ -55,6 +57,7 @@ subscriptionRoutes.post("/", subscriptionBody(), async (ctx) => {
           subscriptionId,
           amount: subscriptionMetadata.amount,
           periodInSeconds: subscriptionMetadata.periodInSeconds,
+          testnet,
         })
 
         // 2. Attempt activation charge
@@ -63,6 +66,7 @@ subscriptionRoutes.post("/", subscriptionBody(), async (ctx) => {
           accountId: account.id,
           beneficiaryAddress,
           provider,
+          testnet,
           orderId,
           orderNumber,
         })
@@ -87,6 +91,7 @@ subscriptionRoutes.post("/", subscriptionBody(), async (ctx) => {
           subscriptionId,
           amount: subscriptionMetadata.amount,
           periodInSeconds: subscriptionMetadata.periodInSeconds,
+          testnet,
           error,
         })
       }

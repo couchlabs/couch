@@ -34,6 +34,7 @@ export interface CreateSubscriptionParams {
   accountId: number
   beneficiaryAddress: Address
   provider: Provider
+  testnet: boolean
 }
 
 interface SubscriptionExistsParams {
@@ -52,6 +53,7 @@ export interface DueOrder {
   amount: string
   attempts: number
   provider: Provider
+  testnet: boolean
 }
 
 export interface OrderDetails {
@@ -66,6 +68,7 @@ export interface OrderDetails {
   periodInSeconds: number
   attempts: number
   subscriptionStatus: string
+  testnet: boolean
 }
 
 export interface RecordTransactionParams {
@@ -112,6 +115,7 @@ export interface DueRetry {
   amount: string
   attempts: number
   provider: Provider
+  testnet: boolean
 }
 
 export interface SubscriptionRepositoryDeps {
@@ -124,6 +128,7 @@ export interface CreateSubscriptionWithOrderParams {
   accountId: number // Who activated subscription (receives webhooks)
   beneficiaryAddress: Address // Who receives payments
   provider: Provider
+  testnet: boolean
   order: CreateOrderParams
 }
 
@@ -202,7 +207,8 @@ export class SubscriptionRepository {
    * This is atomic - prevents race conditions
    */
   async createSubscription(params: CreateSubscriptionParams): Promise<boolean> {
-    const { subscriptionId, accountId, beneficiaryAddress, provider } = params
+    const { subscriptionId, accountId, beneficiaryAddress, provider, testnet } =
+      params
     // Use INSERT OR IGNORE to handle race conditions atomically
     // This ensures only one request can create the subscription
     const result = await this.db
@@ -213,6 +219,7 @@ export class SubscriptionRepository {
         beneficiaryAddress,
         status: SubscriptionStatus.PROCESSING,
         provider: provider,
+        testnet,
       })
       .onConflictDoNothing()
       .run()
@@ -348,6 +355,7 @@ export class SubscriptionRepository {
         accountId: schema.subscriptions.accountId,
         beneficiaryAddress: schema.subscriptions.beneficiaryAddress,
         subscriptionStatus: schema.subscriptions.status,
+        testnet: schema.subscriptions.testnet,
       })
       .from(schema.orders)
       .innerJoin(
@@ -372,6 +380,7 @@ export class SubscriptionRepository {
       periodInSeconds: result.periodInSeconds,
       attempts: result.attempts,
       subscriptionStatus: result.subscriptionStatus,
+      testnet: result.testnet,
     }
   }
 
@@ -439,8 +448,14 @@ export class SubscriptionRepository {
   async createSubscriptionWithOrder(
     params: CreateSubscriptionWithOrderParams,
   ): Promise<CreateSubscriptionWithOrderResult> {
-    const { subscriptionId, accountId, beneficiaryAddress, provider, order } =
-      params
+    const {
+      subscriptionId,
+      accountId,
+      beneficiaryAddress,
+      provider,
+      testnet,
+      order,
+    } = params
 
     // First, check if subscription exists (outside batch for early exit)
     const exists = await this.subscriptionExists({ subscriptionId })
@@ -457,6 +472,7 @@ export class SubscriptionRepository {
           beneficiaryAddress,
           status: SubscriptionStatus.PROCESSING,
           provider: provider,
+          testnet,
         }),
         this.db
           .insert(schema.orders)
@@ -604,6 +620,7 @@ export class SubscriptionRepository {
       provider: string
       amount: string
       attempts: number
+      testnet: number // SQLite stores boolean as INTEGER
     }>(
       sql.raw(`
         UPDATE orders
@@ -621,6 +638,7 @@ export class SubscriptionRepository {
         RETURNING id, subscription_id,
           (SELECT account_id FROM subscriptions WHERE subscription_id = orders.subscription_id) as account_id,
           (SELECT provider FROM subscriptions WHERE subscription_id = orders.subscription_id) as provider,
+          (SELECT testnet FROM subscriptions WHERE subscription_id = orders.subscription_id) as testnet,
           amount, attempts
       `),
     )
@@ -633,6 +651,7 @@ export class SubscriptionRepository {
       amount: entry.amount,
       attempts: entry.attempts,
       provider: entry.provider as Provider,
+      testnet: Boolean(entry.testnet), // Convert INTEGER to boolean
     }))
   }
 
@@ -773,6 +792,7 @@ export class SubscriptionRepository {
         subscriptionId: schema.orders.subscriptionId,
         accountId: schema.subscriptions.accountId,
         provider: schema.subscriptions.provider,
+        testnet: schema.subscriptions.testnet,
         amount: schema.orders.amount,
         attempts: schema.orders.attempts,
       })
@@ -800,6 +820,7 @@ export class SubscriptionRepository {
       amount: entry.amount,
       attempts: entry.attempts,
       provider: entry.provider as Provider,
+      testnet: entry.testnet,
     }))
   }
 }

@@ -141,6 +141,7 @@ describe("WebhookService", () => {
         subscriptionId: TEST_SUBSCRIPTION_ID,
         accountId: testAccountId,
         provider: Provider.BASE,
+        testnet: true,
         transaction: {
           hash: "0xtxhash" as Hash,
           amount: "500000",
@@ -185,6 +186,7 @@ describe("WebhookService", () => {
         subscriptionId: TEST_SUBSCRIPTION_ID,
         accountId: testAccountId,
         provider: Provider.BASE,
+        testnet: true,
         transaction: { hash: "0xtxhash" as Hash, amount: "500000" },
         order: {
           id: 1,
@@ -224,6 +226,7 @@ describe("WebhookService", () => {
         subscriptionId: TEST_SUBSCRIPTION_ID,
         amount: "1000000",
         periodInSeconds: 2592000,
+        testnet: false,
       })
 
       // Verify queue was called
@@ -257,6 +260,7 @@ describe("WebhookService", () => {
         transactionHash: "0xtxhash" as Hash,
         orderDueAt: new Date("2025-02-01T00:00:00Z"),
         orderPeriodInSeconds: 2592000,
+        testnet: false,
       })
 
       // Verify queue was called
@@ -291,6 +295,7 @@ describe("WebhookService", () => {
         orderNumber: 2,
         amount: "1000000",
         periodInSeconds: 2592000,
+        testnet: false,
         failureReason: ErrorCode.INSUFFICIENT_BALANCE,
         failureMessage: "Insufficient USDC balance",
       })
@@ -326,6 +331,7 @@ describe("WebhookService", () => {
         orderNumber: 2,
         amount: "1000000",
         periodInSeconds: 2592000,
+        testnet: false,
         failureReason: ErrorCode.INSUFFICIENT_BALANCE,
         failureMessage: "Insufficient USDC balance",
         nextRetryAt: nextRetryDate,
@@ -363,6 +369,7 @@ describe("WebhookService", () => {
         subscriptionId: TEST_SUBSCRIPTION_ID,
         amount: "500000",
         periodInSeconds: 2592000,
+        testnet: false,
         error: paymentError,
       })
 
@@ -396,6 +403,7 @@ describe("WebhookService", () => {
         subscriptionId: TEST_SUBSCRIPTION_ID,
         amount: "500000",
         periodInSeconds: 2592000,
+        testnet: false,
         error: internalError,
       })
 
@@ -424,6 +432,7 @@ describe("WebhookService", () => {
         subscriptionId: TEST_SUBSCRIPTION_ID,
         amount: "1000000",
         periodInSeconds: 2592000,
+        testnet: false,
       })
 
       // Verify queue was called
@@ -451,6 +460,7 @@ describe("WebhookService", () => {
           subscriptionId: TEST_SUBSCRIPTION_ID,
           amount: "1000000",
           periodInSeconds: 2592000,
+          testnet: false,
         }),
       ).resolves.toBeUndefined()
 

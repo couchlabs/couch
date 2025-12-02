@@ -203,6 +203,7 @@ export class OrderService {
       orderNumber,
       attempts,
       subscriptionStatus,
+      testnet,
     } = order
 
     try {
@@ -260,6 +261,7 @@ export class OrderService {
         recipient: beneficiaryAddress, // Send USDC to beneficiary
         provider,
         accountId,
+        testnet,
       })
 
       // Step 3: Record successful transaction
@@ -296,6 +298,7 @@ export class OrderService {
           subscriptionId,
           provider,
           accountId,
+          testnet,
         })
 
       // Step 5: Create next order
@@ -494,6 +497,7 @@ export class OrderService {
               subscriptionId,
               provider,
               accountId,
+              testnet,
             })
 
           // Create next order if subscription still active

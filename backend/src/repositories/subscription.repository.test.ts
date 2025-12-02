@@ -52,6 +52,7 @@ describe("SubscriptionRepository", () => {
         accountId: testAccountId,
         beneficiaryAddress: "0x5678" as Address,
         provider: Provider.BASE,
+        testnet: false,
       })
 
       expect(created).toBe(true)
@@ -63,6 +64,7 @@ describe("SubscriptionRepository", () => {
         accountId: testAccountId,
         beneficiaryAddress: "0x5678" as Address,
         provider: Provider.BASE,
+        testnet: false,
       }
 
       const first = await repo.createSubscription(params)
@@ -71,6 +73,18 @@ describe("SubscriptionRepository", () => {
       // Second attempt should return false (conflict)
       const second = await repo.createSubscription(params)
       expect(second).toBe(false)
+    })
+
+    it("creates a testnet subscription", async () => {
+      const created = await repo.createSubscription({
+        subscriptionId: "0x1234" as Hash,
+        accountId: testAccountId,
+        beneficiaryAddress: "0x5678" as Address,
+        provider: Provider.BASE,
+        testnet: true,
+      })
+
+      expect(created).toBe(true)
     })
   })
 
@@ -88,6 +102,7 @@ describe("SubscriptionRepository", () => {
         accountId: testAccountId,
         beneficiaryAddress: "0x5678" as Address,
         provider: Provider.BASE,
+        testnet: false,
       })
 
       const exists = await repo.subscriptionExists({
@@ -104,6 +119,7 @@ describe("SubscriptionRepository", () => {
         accountId: testAccountId,
         beneficiaryAddress: "0x5678" as Address,
         provider: Provider.BASE,
+        testnet: false,
         order: {
           subscriptionId: "0x1234" as Hash,
           type: OrderType.INITIAL,
@@ -127,6 +143,7 @@ describe("SubscriptionRepository", () => {
         accountId: testAccountId,
         beneficiaryAddress: "0x5678" as Address,
         provider: Provider.BASE,
+        testnet: false,
         order: {
           subscriptionId: "0x1234" as Hash,
           type: OrderType.INITIAL,
@@ -158,6 +175,7 @@ describe("SubscriptionRepository", () => {
         accountId: testAccountId,
         beneficiaryAddress: "0x5678" as Address,
         provider: Provider.BASE,
+        testnet: false,
         order: {
           subscriptionId: "0x1234" as Hash,
           type: OrderType.INITIAL,
@@ -180,7 +198,32 @@ describe("SubscriptionRepository", () => {
         orderNumber: 1,
         status: OrderStatus.PROCESSING,
         periodInSeconds: 2592000,
+        testnet: false,
       })
+    })
+
+    it("retrieves testnet flag in order details", async () => {
+      const result = await repo.createSubscriptionWithOrder({
+        subscriptionId: "0xabcd" as Hash,
+        accountId: testAccountId,
+        beneficiaryAddress: "0x5678" as Address,
+        provider: Provider.BASE,
+        testnet: true,
+        order: {
+          subscriptionId: "0xabcd" as Hash,
+          type: OrderType.INITIAL,
+          dueAt: "2025-01-01T00:00:00Z",
+          amount: "1000000",
+          periodInSeconds: 2592000,
+          status: OrderStatus.PROCESSING,
+        },
+      })
+
+      if (!result.created)
+        throw new Error("Expected subscription to be created")
+
+      const details = await repo.getOrderDetails(result.orderId)
+      expect(details?.testnet).toBe(true)
     })
   })
 
@@ -192,6 +235,7 @@ describe("SubscriptionRepository", () => {
         accountId: testAccountId,
         beneficiaryAddress: "0x5678" as Address,
         provider: Provider.BASE,
+        testnet: false,
         order: {
           subscriptionId: "0x1234" as Hash,
           type: OrderType.INITIAL,
@@ -222,6 +266,42 @@ describe("SubscriptionRepository", () => {
       expect(claimed.length).toBe(1)
       expect(claimed[0].id).toBe(result.orderId)
       expect(claimed[0].subscriptionId).toBe("0x1234")
+      expect(claimed[0].testnet).toBe(false)
+    })
+
+    it("includes testnet flag when claiming orders", async () => {
+      const result = await repo.createSubscriptionWithOrder({
+        subscriptionId: "0xabcd" as Hash,
+        accountId: testAccountId,
+        beneficiaryAddress: "0x5678" as Address,
+        provider: Provider.BASE,
+        testnet: true,
+        order: {
+          subscriptionId: "0xabcd" as Hash,
+          type: OrderType.INITIAL,
+          dueAt: "2020-01-01T00:00:00Z",
+          amount: "1000000",
+          periodInSeconds: 2592000,
+          status: OrderStatus.PROCESSING,
+        },
+      })
+
+      if (!result.created)
+        throw new Error("Expected subscription to be created")
+
+      await repo.updateSubscription({
+        subscriptionId: "0xabcd" as Hash,
+        status: SubscriptionStatus.ACTIVE,
+      })
+
+      await repo.updateOrder({
+        id: result.orderId,
+        status: OrderStatus.PENDING,
+      })
+
+      const claimed = await repo.claimDueOrders(10)
+      expect(claimed.length).toBe(1)
+      expect(claimed[0].testnet).toBe(true)
     })
 
     it("respects the limit parameter", async () => {
@@ -233,6 +313,7 @@ describe("SubscriptionRepository", () => {
           accountId: testAccountId,
           beneficiaryAddress: "0x5678" as Address,
           provider: Provider.BASE,
+          testnet: false,
           order: {
             subscriptionId,
             type: OrderType.INITIAL,
@@ -269,6 +350,7 @@ describe("SubscriptionRepository", () => {
         accountId: testAccountId,
         beneficiaryAddress: "0x5678" as Address,
         provider: Provider.BASE,
+        testnet: false,
         order: {
           subscriptionId: "0x1234" as Hash,
           type: OrderType.INITIAL,
@@ -302,6 +384,7 @@ describe("SubscriptionRepository", () => {
         accountId: testAccountId,
         beneficiaryAddress: "0x5678" as Address,
         provider: Provider.BASE,
+        testnet: false,
         order: {
           subscriptionId: "0x1234" as Hash,
           type: OrderType.INITIAL,
@@ -327,6 +410,38 @@ describe("SubscriptionRepository", () => {
       expect(retries[0].id).toBe(result.orderId)
       expect(retries[0].subscriptionId).toBe("0x1234")
       expect(retries[0].attempts).toBe(1)
+      expect(retries[0].testnet).toBe(false)
+    })
+
+    it("includes testnet flag in retries", async () => {
+      const result = await repo.createSubscriptionWithOrder({
+        subscriptionId: "0xabcd" as Hash,
+        accountId: testAccountId,
+        beneficiaryAddress: "0x5678" as Address,
+        provider: Provider.BASE,
+        testnet: true,
+        order: {
+          subscriptionId: "0xabcd" as Hash,
+          type: OrderType.INITIAL,
+          dueAt: "2020-01-01T00:00:00Z",
+          amount: "1000000",
+          periodInSeconds: 2592000,
+          status: OrderStatus.PROCESSING,
+        },
+      })
+
+      if (!result.created)
+        throw new Error("Expected subscription to be created")
+
+      await repo.scheduleRetry({
+        orderId: result.orderId,
+        subscriptionId: "0xabcd" as Hash,
+        nextRetryAt: "2020-01-02T00:00:00Z",
+      })
+
+      const retries = await repo.getDueRetries(10)
+      expect(retries.length).toBe(1)
+      expect(retries[0].testnet).toBe(true)
     })
 
     it("does not return future retries", async () => {
@@ -335,6 +450,7 @@ describe("SubscriptionRepository", () => {
         accountId: testAccountId,
         beneficiaryAddress: "0x5678" as Address,
         provider: Provider.BASE,
+        testnet: false,
         order: {
           subscriptionId: "0x1234" as Hash,
           type: OrderType.INITIAL,
@@ -367,6 +483,7 @@ describe("SubscriptionRepository", () => {
         accountId: testAccountId,
         beneficiaryAddress: "0x5678" as Address,
         provider: Provider.BASE,
+        testnet: false,
       })
 
       await repo.updateSubscription({

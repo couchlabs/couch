@@ -37,6 +37,7 @@ export interface CreateSubscriptionParams {
   accountId: number // Who activated subscription (receives webhooks)
   beneficiaryAddress: Address // Who receives payments
   provider: Provider
+  testnet: boolean // Network: false = mainnet, true = testnet
 }
 
 export interface CreateSubscriptionResult {
@@ -53,6 +54,7 @@ export interface ProcessActivationChargeParams {
   accountId: number // Who activated subscription (receives webhooks)
   beneficiaryAddress: Address // Who receives payments
   provider: Provider
+  testnet: boolean // Network: false = mainnet, true = testnet
   orderId: number
   orderNumber: number
 }
@@ -61,6 +63,7 @@ export interface ActivationResult {
   subscriptionId: Hash
   accountId: number // Who activated subscription (receives webhooks)
   provider: Provider
+  testnet: boolean // Network where subscription was created
   transaction: {
     hash: Hash
     amount: string
@@ -225,6 +228,7 @@ export class SubscriptionService {
       subscriptionId,
       provider: subscription.provider,
       accountId: subscription.accountId,
+      testnet: subscription.testnet,
     })
 
     if (!status.subscription.permissionExists) {
@@ -245,6 +249,7 @@ export class SubscriptionService {
         subscriptionId,
         provider: subscription.provider,
         accountId: subscription.accountId,
+        testnet: subscription.testnet,
       })
     } else {
       log.info("Subscription already revoked onchain, skipping revoke")
@@ -283,6 +288,7 @@ export class SubscriptionService {
       subscriptionId,
       amount: onchainSub.recurringCharge,
       periodInSeconds: onchainSub.periodInSeconds,
+      testnet: subscription.testnet,
     })
 
     log.info("Subscription revoked successfully")
@@ -315,12 +321,13 @@ export class SubscriptionService {
   async createSubscription(
     params: CreateSubscriptionParams,
   ): Promise<CreateSubscriptionResult> {
-    const { subscriptionId, accountId, beneficiaryAddress, provider } = params
+    const { subscriptionId, accountId, beneficiaryAddress, provider, testnet } =
+      params
 
     // Validate domain constraints
     await this.validateId({ subscriptionId, provider })
 
-    const log = logger.with({ subscriptionId })
+    const log = logger.with({ subscriptionId, testnet })
 
     // Check if subscription already exists (early exit)
     const exists = await this.subscriptionRepository.subscriptionExists({
@@ -342,6 +349,7 @@ export class SubscriptionService {
         subscriptionId,
         provider,
         accountId,
+        testnet,
       },
     )
 
@@ -373,6 +381,7 @@ export class SubscriptionService {
         accountId,
         beneficiaryAddress,
         provider,
+        testnet,
         order: {
           subscriptionId: subscriptionId,
           type: OrderType.INITIAL,
@@ -415,11 +424,12 @@ export class SubscriptionService {
       accountId,
       beneficiaryAddress,
       provider,
+      testnet,
       orderId,
       orderNumber,
     } = params
 
-    const log = logger.with({ subscriptionId })
+    const log = logger.with({ subscriptionId, testnet })
 
     // Get onchain subscription status again (for charge details)
     const { subscription } = await this.onchainRepository.getSubscriptionStatus(
@@ -427,6 +437,7 @@ export class SubscriptionService {
         subscriptionId,
         provider,
         accountId,
+        testnet,
       },
     )
 
@@ -477,6 +488,7 @@ export class SubscriptionService {
         recipient: beneficiaryAddress,
         provider,
         accountId,
+        testnet,
       })
     }
 
@@ -489,6 +501,7 @@ export class SubscriptionService {
       subscriptionId,
       accountId,
       provider,
+      testnet,
       transaction: {
         hash: transaction.transactionHash,
         amount: subscription.remainingChargeInPeriod,

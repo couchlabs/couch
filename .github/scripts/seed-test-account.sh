@@ -16,8 +16,8 @@ echo "🌱 Seeding test account in database $DATABASE_NAME"
 echo "   Account: $COUCH_TEST_ACCOUNT_ADDRESS"
 
 # Extract secret part from API key and hash it
-# API key format: ck_testnet_<secret> or ck_mainnet_<secret>
-SECRET_PART=$(echo "$COUCH_TEST_ACCOUNT_APIKEY" | sed -E 's/^ck_[^_]+_//')
+# API key format: ck_<secret>
+SECRET_PART=$(echo "$COUCH_TEST_ACCOUNT_APIKEY" | sed -E 's/^ck_//')
 
 # Generate SHA-256 hash of the secret part
 KEY_HASH=$(echo -n "$SECRET_PART" | shasum -a 256 | awk '{print $1}')

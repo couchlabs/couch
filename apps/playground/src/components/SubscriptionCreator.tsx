@@ -71,6 +71,7 @@ export function SubscriptionCreator() {
         body: JSON.stringify({
           id: subscription.id,
           provider: "base",
+          testnet: true,
         }),
       })
 

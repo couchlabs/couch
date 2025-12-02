@@ -8,13 +8,11 @@ export enum Stage {
  * Runtime configuration flags passed via worker bindings
  * These are the single source of truth for environment behavior
  */
-export type Network = "testnet" | "mainnet"
 export type LoggingLevel = "verbose" | "minimal"
 export type DunningMode = "fast" | "standard"
 export type GHEnvironment = "dev" | "staging" | "prod"
 
 export interface StageConfig {
-  NETWORK: Network
   LOGGING: LoggingLevel
   DUNNING_MODE: DunningMode
   GH_ENVIRONMENT: GHEnvironment
@@ -38,9 +36,6 @@ export function resolveStageConfig(stage: string): StageConfig {
     )
   }
 
-  // Network: Only prod uses mainnet
-  const NETWORK: Network = stage === Stage.PROD ? "mainnet" : "testnet"
-
   // Logging: Minimal for staging/prod (production-like), verbose for dev/previews
   const LOGGING: LoggingLevel =
     stage === Stage.STAGING || stage === Stage.PROD ? "minimal" : "verbose"
@@ -54,7 +49,6 @@ export function resolveStageConfig(stage: string): StageConfig {
     stage === Stage.PROD ? "prod" : stage === Stage.STAGING ? "staging" : "dev" // dev/pr-* share dev environment
 
   return {
-    NETWORK,
     LOGGING,
     DUNNING_MODE,
     GH_ENVIRONMENT,

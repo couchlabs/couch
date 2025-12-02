@@ -191,6 +191,7 @@ describe("OrderService", () => {
         recipient: TEST_OWNER, // Beneficiary receives payment
         provider: Provider.BASE,
         accountId: 1,
+        testnet: false,
       })
 
       // Verify order status via public getOrderDetails method

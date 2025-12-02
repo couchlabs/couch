@@ -49,7 +49,6 @@ describe("PUT /api/keys", () => {
     env = {
       DB: testDB.db,
       LOGGING: "verbose",
-      NETWORK: "testnet",
       ALLOWLIST: mockAllowlist,
       // biome-ignore lint/suspicious/noExplicitAny: Test mock
     } as any as Partial<WorkerEnv>
@@ -99,7 +98,7 @@ describe("PUT /api/keys", () => {
 
     const json = await res.json<{ api_key: string }>()
     expect(json.api_key).toBeDefined()
-    expect(json.api_key).toMatch(/^ck_testnet_[a-f0-9]{32}$/)
+    expect(json.api_key).toMatch(/^ck_[a-f0-9]{32}$/)
 
     // New key should be different from initial key
     expect(json.api_key).not.toBe(initialApiKey)

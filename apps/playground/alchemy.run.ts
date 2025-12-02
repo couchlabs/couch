@@ -42,7 +42,7 @@ export const app = await alchemy("couch-playground", {
       : new CloudflareStateStore(scope),
 })
 const NAME_PREFIX = `${app.name}-${app.stage}`
-const { NETWORK, GH_ENVIRONMENT } = resolveStageConfig(app.stage)
+const { GH_ENVIRONMENT } = resolveStageConfig(app.stage)
 
 // Cloudflare Worker Flags
 const compatibilityFlags = ["nodejs_compat", "disallow_importable_env"]
@@ -100,7 +100,6 @@ if (process.env.PULL_REQUEST) {
     body: `## Ahoy! Preview Deployed
 
 **Stage:** \`${app.stage}\`
-**Network:** ${NETWORK}
 
 🌐 **[Playground](${website.url})**
 ⚙️ **[Backend API](${api.url})**

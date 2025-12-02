@@ -183,6 +183,7 @@ export const Checkout = () => {
           id: subscription.id,
           provider: "base",
           beneficiary: beneficiary,
+          testnet: true,
         }),
       })
 

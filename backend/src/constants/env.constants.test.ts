@@ -7,7 +7,6 @@ describe("resolveStageConfig", () => {
       const result = resolveStageConfig(Stage.DEV)
 
       expect(result).toEqual({
-        NETWORK: "testnet",
         LOGGING: "verbose",
         DUNNING_MODE: "fast",
         GH_ENVIRONMENT: "dev",
@@ -20,7 +19,6 @@ describe("resolveStageConfig", () => {
       const result = resolveStageConfig(Stage.STAGING)
 
       expect(result).toEqual({
-        NETWORK: "testnet",
         LOGGING: "minimal",
         DUNNING_MODE: "standard",
         GH_ENVIRONMENT: "staging",
@@ -33,7 +31,6 @@ describe("resolveStageConfig", () => {
       const result = resolveStageConfig(Stage.PROD)
 
       expect(result).toEqual({
-        NETWORK: "mainnet",
         LOGGING: "minimal",
         DUNNING_MODE: "standard",
         GH_ENVIRONMENT: "prod",
@@ -46,7 +43,6 @@ describe("resolveStageConfig", () => {
       const result = resolveStageConfig("pr-123")
 
       expect(result).toEqual({
-        NETWORK: "testnet",
         LOGGING: "verbose",
         DUNNING_MODE: "fast",
         GH_ENVIRONMENT: "dev",
@@ -57,7 +53,6 @@ describe("resolveStageConfig", () => {
       const result = resolveStageConfig("pr-456")
 
       expect(result).toEqual({
-        NETWORK: "testnet",
         LOGGING: "verbose",
         DUNNING_MODE: "fast",
         GH_ENVIRONMENT: "dev",
@@ -68,7 +63,6 @@ describe("resolveStageConfig", () => {
       const result = resolveStageConfig("pr-feature-branch")
 
       expect(result).toEqual({
-        NETWORK: "testnet",
         LOGGING: "verbose",
         DUNNING_MODE: "fast",
         GH_ENVIRONMENT: "dev",
@@ -103,13 +97,6 @@ describe("resolveStageConfig", () => {
 
       expect(devConfig.GH_ENVIRONMENT).toBe("dev")
       expect(previewConfig.GH_ENVIRONMENT).toBe("dev")
-    })
-
-    it("only prod uses mainnet", () => {
-      const stages = [Stage.DEV, Stage.STAGING, Stage.PROD]
-      const networks = stages.map((stage) => resolveStageConfig(stage).NETWORK)
-
-      expect(networks).toEqual(["testnet", "testnet", "mainnet"])
     })
 
     it("only staging and prod use minimal logging", () => {

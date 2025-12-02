@@ -1,0 +1,1 @@
+ALTER TABLE `subscriptions` ADD `testnet` integer DEFAULT false NOT NULL;

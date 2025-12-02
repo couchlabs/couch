@@ -14,7 +14,7 @@ describe("subscriptionBody middleware", () => {
     return c.json(subscription)
   })
 
-  it("validates and parses required fields (id, provider)", async () => {
+  it("validates and parses required fields (id, provider) with testnet defaulting to false", async () => {
     const response = await app.request("/test", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -29,6 +29,7 @@ describe("subscriptionBody middleware", () => {
     expect(data).toMatchObject({
       subscriptionId: "0x1234",
       provider: Provider.BASE,
+      testnet: false,
     })
   })
 
@@ -48,7 +49,48 @@ describe("subscriptionBody middleware", () => {
     expect(data).toMatchObject({
       subscriptionId: "0x1234",
       provider: Provider.BASE,
+      testnet: false,
       beneficiary: "0xabcd1234567890123456789012345678abcd1234",
+    })
+  })
+
+  it("accepts testnet: true for testnet subscriptions", async () => {
+    const response = await app.request("/test", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        id: "0x1234" as Hash,
+        provider: Provider.BASE,
+        testnet: true,
+      }),
+    })
+
+    expect(response.status).toBe(200)
+    const data = await response.json()
+    expect(data).toMatchObject({
+      subscriptionId: "0x1234",
+      provider: Provider.BASE,
+      testnet: true,
+    })
+  })
+
+  it("accepts testnet: false for mainnet subscriptions", async () => {
+    const response = await app.request("/test", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        id: "0x1234" as Hash,
+        provider: Provider.BASE,
+        testnet: false,
+      }),
+    })
+
+    expect(response.status).toBe(200)
+    const data = await response.json()
+    expect(data).toMatchObject({
+      subscriptionId: "0x1234",
+      provider: Provider.BASE,
+      testnet: false,
     })
   })
 
@@ -128,5 +170,22 @@ describe("subscriptionBody middleware", () => {
     const data = (await response.json()) as { code: string; error: string }
     expect(data.code).toBe(ErrorCode.INVALID_FORMAT)
     expect(data.error).toContain("Invalid beneficiary address")
+  })
+
+  it("throws error for invalid testnet type", async () => {
+    const response = await app.request("/test", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        id: "0x1234",
+        provider: Provider.BASE,
+        testnet: "not-a-boolean",
+      }),
+    })
+
+    expect(response.status).toBe(400)
+    const data = (await response.json()) as { code: string; error: string }
+    expect(data.code).toBe(ErrorCode.INVALID_FORMAT)
+    expect(data.error).toContain("testnet must be a boolean")
   })
 })

@@ -84,6 +84,8 @@ export const subscriptions = sqliteTable(
     // Who receives payments
     beneficiaryAddress: text("beneficiary_address").notNull(),
     provider: text("provider").$type<Provider>().notNull(),
+    // Network flag: false = mainnet (ie Base), true = testnet (ie Base Sepolia)
+    testnet: integer("testnet", { mode: "boolean" }).notNull().default(false),
     createdAt: text("created_at").default(sql`CURRENT_TIMESTAMP`),
     modifiedAt: text("modified_at").default(sql`CURRENT_TIMESTAMP`),
   },
@@ -202,6 +204,7 @@ export type Subscription = Omit<
 > & {
   subscriptionId: Hash
   beneficiaryAddress: Address
+  testnet: boolean // Drizzle's mode: "boolean" makes this boolean not number
 }
 
 export type Order = Omit<OrderRow, "subscriptionId"> & {

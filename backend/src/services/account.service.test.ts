@@ -2,7 +2,6 @@ import { afterEach, beforeEach, describe, expect, it, mock } from "bun:test"
 import type { D1Database } from "@cloudflare/workers-types"
 import { createTestDB } from "@tests/test-db"
 import { type Address, getAddress } from "viem"
-import type { Network } from "@/constants/env.constants"
 import { ErrorCode, HTTPError } from "@/errors/http.errors"
 
 // Mock the CDP wallet creation module
@@ -38,7 +37,6 @@ describe("AccountService", () => {
   const TEST_ACCOUNT_NOT_ALLOWED = getAddress(
     "0x1234567890123456789012345678901234567890",
   ) as Address
-  const NETWORK: Network = "testnet"
 
   beforeEach(async () => {
     // Create test database
@@ -65,7 +63,6 @@ describe("AccountService", () => {
     service = new AccountService({
       DB: testDB.db,
       LOGGING: "verbose",
-      NETWORK,
       ALLOWLIST: mockAllowlist,
       CDP_API_KEY_ID: "test-api-key-id",
       CDP_API_KEY_SECRET: "test-api-key-secret",
@@ -126,7 +123,7 @@ describe("AccountService", () => {
 
       // Should return API key and wallet address
       expect(result.apiKey).toBeDefined()
-      expect(result.apiKey).toMatch(/^ck_testnet_[a-f0-9]{32}$/)
+      expect(result.apiKey).toMatch(/^ck_[a-f0-9]{32}$/)
       expect(result.subscriptionOwnerWalletAddress).toBeDefined()
       expect(result.subscriptionOwnerWalletAddress).toMatch(
         /^0x[a-fA-F0-9]{40}$/,
@@ -260,7 +257,7 @@ describe("AccountService", () => {
 
       // Keys should be different
       expect(rotatedKey).not.toBe(initialKey)
-      expect(rotatedKey).toMatch(/^ck_testnet_[a-f0-9]{32}$/)
+      expect(rotatedKey).toMatch(/^ck_[a-f0-9]{32}$/)
       expect(subscriptionOwnerWalletAddress).toBeDefined()
 
       // Verify only one key exists
@@ -320,7 +317,7 @@ describe("AccountService", () => {
 
     it("throws 401 when API key is invalid", async () => {
       try {
-        await service.authenticateApiKey("ck_testnet_invalid")
+        await service.authenticateApiKey("ck_invalid")
         expect.unreachable("Should have thrown HTTPError")
       } catch (error) {
         expect(error).toBeInstanceOf(HTTPError)
