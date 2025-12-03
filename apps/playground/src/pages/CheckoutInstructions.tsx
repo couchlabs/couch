@@ -1,5 +1,5 @@
 import { Check, Copy, ExternalLink } from "lucide-react"
-import { useEffect, useId, useState } from "react"
+import { useEffect, useId, useRef, useState } from "react"
 import { NetworkSelector } from "../components/NetworkSelector"
 import { Button } from "../components/ui/button"
 import {
@@ -32,6 +32,7 @@ export const CheckoutInstructions = () => {
   >("seconds")
   const [successUrl, setSuccessUrl] = useState("")
   const [copied, setCopied] = useState(false)
+  const prevNetworkRef = useRef<"testnet" | "mainnet">(network)
 
   // Filter period units based on network
   const periodUnits = isTestnet
@@ -40,14 +41,18 @@ export const CheckoutInstructions = () => {
 
   // Reset period unit when switching networks
   useEffect(() => {
-    if (!isTestnet && periodUnit !== "days") {
-      // Switching to mainnet: reset to 'days'
-      setPeriodUnit("days")
-    } else if (isTestnet && periodUnit === "days") {
-      // Switching to testnet: reset to 'seconds' for better testing UX
-      setPeriodUnit("seconds")
+    // Only reset if network actually changed
+    if (prevNetworkRef.current !== network) {
+      if (!isTestnet && periodUnit !== "days") {
+        // Switching to mainnet: reset to 'days'
+        setPeriodUnit("days")
+      } else if (isTestnet && periodUnit === "days") {
+        // Switching to testnet: reset to 'seconds' for better testing UX
+        setPeriodUnit("seconds")
+      }
+      prevNetworkRef.current = network
     }
-  }, [isTestnet, periodUnit])
+  }, [network, isTestnet, periodUnit])
 
   // Generate unique IDs for form fields
   const beneficiaryId = useId()

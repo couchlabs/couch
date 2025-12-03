@@ -1,5 +1,5 @@
 import { base } from "@base-org/account"
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { Button } from "@/components/ui/button"
 import {
   Card,
@@ -29,6 +29,7 @@ export function SubscriptionCreator() {
     "seconds" | "minutes" | "hours" | "days"
   >("seconds")
   const [isSubscribing, setIsSubscribing] = useState(false)
+  const prevNetworkRef = useRef<"testnet" | "mainnet">(network)
 
   // Filter period units based on network
   const periodUnits = isTestnet
@@ -37,14 +38,18 @@ export function SubscriptionCreator() {
 
   // Reset period unit when switching networks
   useEffect(() => {
-    if (!isTestnet && periodUnit !== "days") {
-      // Switching to mainnet: reset to 'days'
-      setPeriodUnit("days")
-    } else if (isTestnet && periodUnit === "days") {
-      // Switching to testnet: reset to 'seconds' for better testing UX
-      setPeriodUnit("seconds")
+    // Only reset if network actually changed
+    if (prevNetworkRef.current !== network) {
+      if (!isTestnet && periodUnit !== "days") {
+        // Switching to mainnet: reset to 'days'
+        setPeriodUnit("days")
+      } else if (isTestnet && periodUnit === "days") {
+        // Switching to testnet: reset to 'seconds' for better testing UX
+        setPeriodUnit("seconds")
+      }
+      prevNetworkRef.current = network
     }
-  }, [isTestnet, periodUnit])
+  }, [network, isTestnet, periodUnit])
 
   // Dynamic width calculation with minimum sizes
   const getAmountWidth = () => {
