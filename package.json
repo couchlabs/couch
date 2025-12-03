@@ -37,7 +37,7 @@
         "hono": "^4.10.7"
       },
       "coinbase": {
-        "@base-org/account": "^2.5.0",
+        "@base-org/account": "2.5.0",
         "@coinbase/cdp-sdk": "^1.38.6"
       }
     }
@@ -47,5 +47,8 @@
     "bun": "latest",
     "@biomejs/biome": "latest"
   },
-  "packageManager": "bun@1.3.0"
+  "packageManager": "bun@1.3.0",
+  "patchedDependencies": {
+    "@base-org/account@2.5.0": "patches/@base-org%2Faccount@2.5.0.patch"
+  }
 }

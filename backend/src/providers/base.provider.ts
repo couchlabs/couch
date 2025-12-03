@@ -36,6 +36,13 @@ export class BaseProvider implements SubscriptionProvider {
       walletSecret: deps.CDP_WALLET_SECRET,
       clientApiKey: deps.CDP_CLIENT_API_KEY,
     }
+
+    // Set RPC URLs for Base SDK to use CDP managed infrastructure
+    // This works with our patched @base-org/account package which checks RPC_URL_<CHAIN_ID>
+    // Base mainnet (chainId: 8453)
+    process.env.RPC_URL_8453 = `https://api.developer.coinbase.com/rpc/v1/base/${deps.CDP_CLIENT_API_KEY}`
+    // Base Sepolia testnet (chainId: 84532)
+    process.env.RPC_URL_84532 = `https://api.developer.coinbase.com/rpc/v1/base-sepolia/${deps.CDP_CLIENT_API_KEY}`
   }
 
   /**

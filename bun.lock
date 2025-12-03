@@ -69,6 +69,9 @@
       },
     },
   },
+  "patchedDependencies": {
+    "@base-org/account@2.5.0": "patches/@base-org%2Faccount@2.5.0.patch",
+  },
   "catalog": {
     "alchemy": "^0.79.0",
     "typescript": "^5.9.3",
@@ -81,7 +84,7 @@
       "miniflare": "^4.20251125.0",
     },
     "coinbase": {
-      "@base-org/account": "^2.5.0",
+      "@base-org/account": "2.5.0",
       "@coinbase/cdp-sdk": "^1.38.6",
     },
   },
