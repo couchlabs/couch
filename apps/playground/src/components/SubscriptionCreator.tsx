@@ -35,10 +35,14 @@ export function SubscriptionCreator() {
     ? ["seconds", "minutes", "hours", "days"]
     : ["days"]
 
-  // Reset period unit to 'days' when switching to mainnet
+  // Reset period unit when switching networks
   useEffect(() => {
     if (!isTestnet && periodUnit !== "days") {
+      // Switching to mainnet: reset to 'days'
       setPeriodUnit("days")
+    } else if (isTestnet && periodUnit === "days") {
+      // Switching to testnet: reset to 'seconds' for better testing UX
+      setPeriodUnit("seconds")
     }
   }, [isTestnet, periodUnit])
 

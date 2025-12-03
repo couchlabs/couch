@@ -29,7 +29,7 @@ export const CheckoutInstructions = () => {
   const [periodValue, setPeriodValue] = useState("1")
   const [periodUnit, setPeriodUnit] = useState<
     "seconds" | "minutes" | "hours" | "days"
-  >("days")
+  >("seconds")
   const [successUrl, setSuccessUrl] = useState("")
   const [copied, setCopied] = useState(false)
 
@@ -38,10 +38,14 @@ export const CheckoutInstructions = () => {
     ? ["seconds", "minutes", "hours", "days"]
     : ["days"]
 
-  // Reset period unit to 'days' when switching to mainnet
+  // Reset period unit when switching networks
   useEffect(() => {
     if (!isTestnet && periodUnit !== "days") {
+      // Switching to mainnet: reset to 'days'
       setPeriodUnit("days")
+    } else if (isTestnet && periodUnit === "days") {
+      // Switching to testnet: reset to 'seconds' for better testing UX
+      setPeriodUnit("seconds")
     }
   }, [isTestnet, periodUnit])
 
