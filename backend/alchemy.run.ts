@@ -59,7 +59,16 @@ const { LOGGING, DUNNING_MODE, GH_ENVIRONMENT } = resolveStageConfig(app.stage)
 
 // Cloudflare Worker Flags
 const compatibilityFlags = ["nodejs_compat", "disallow_importable_env"]
-const url = GH_ENVIRONMENT !== "prod" // Generate URLs for dev, staging, and previews (not prod)
+
+// Custom Domains
+// For dev/previews, domains remains empty (uses couchlabs.workers.dev)
+let domains: { domainName: string }[] = []
+if (GH_ENVIRONMENT === "staging") {
+  domains = [{ domainName: "api.staging.cou.ch" }]
+}
+if (GH_ENVIRONMENT === "prod") {
+  domains = [{ domainName: "api.cou.ch" }]
+}
 
 // -----------------------------------------------------------------------------
 // DATABASES
@@ -162,7 +171,8 @@ export const api = await Worker(API_NAME, {
   },
   compatibilityFlags,
   dev: { port: 3000 },
-  url,
+  url: GH_ENVIRONMENT !== "prod",
+  domains,
 })
 
 // -----------------------------------------------------------------------------
@@ -198,7 +208,6 @@ export const orderConsumer = await Worker(ORDER_CONSUMER_NAME, {
   },
   compatibilityFlags,
   dev: { port: 3200 },
-  url,
 })
 
 // webhook.consumer: Delivers webhooks to merchant endpoints
@@ -229,7 +238,6 @@ export const webhookConsumer = await Worker(WEBHOOK_CONSUMER_NAME, {
   },
   compatibilityFlags,
   dev: { port: 3201 },
-  url,
 })
 
 // -----------------------------------------------------------------------------
@@ -258,7 +266,6 @@ export const orderDLQConsumer = await Worker(ORDER_DLQ_CONSUMER_NAME, {
   ],
   compatibilityFlags,
   dev: { port: 3202 },
-  url,
 })
 
 // webhook.dlq.consumer: Logs permanently failed webhooks (unreachable endpoints)
@@ -283,7 +290,6 @@ export const webhookDLQConsumer = await Worker(WEBHOOK_DLQ_CONSUMER_NAME, {
   ],
   compatibilityFlags,
   dev: { port: 3203 },
-  url,
 })
 
 // Log all resources in dev, machine-readable output in other stages
@@ -304,7 +310,10 @@ if (app.local) {
 }
 if (process.env.GITHUB_OUTPUT) {
   // Use new GitHub Actions environment file method
-  fs.appendFileSync(alchemy.env.GITHUB_OUTPUT, `api_url=${api.url}\n`)
+  fs.appendFileSync(
+    alchemy.env.GITHUB_OUTPUT,
+    `api_url=${api.url || `https://${api?.domains?.[0]?.name}`}\n`,
+  )
   fs.appendFileSync(alchemy.env.GITHUB_OUTPUT, `db_name=${db.name}\n`)
 }
 
