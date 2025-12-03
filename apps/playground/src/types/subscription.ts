@@ -10,6 +10,7 @@ export interface Subscription {
   transaction_hash: string | null
   period_in_seconds: number | null
   amount: string | null
+  testnet?: boolean // Only present when true (mainnet = absent)
   created_at: string
   updated_at: string
 }
@@ -37,6 +38,7 @@ export interface WebhookEventData {
         | "unpaid"
       amount: string // Always present - immutable subscription terms
       period_in_seconds: number // Always present - immutable subscription terms
+      testnet?: boolean // Network indicator - only present when true
     }
     order?: {
       number: number

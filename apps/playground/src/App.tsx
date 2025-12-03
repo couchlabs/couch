@@ -4,20 +4,23 @@ import { WebSocketProvider } from "@/hooks/useWebSocket"
 import { Checkout } from "@/pages/Checkout"
 import { CheckoutInstructions } from "@/pages/CheckoutInstructions"
 import { Playground } from "@/pages/Playground"
+import { NetworkProvider } from "@/store/NetworkContext"
 
 export function App() {
   return (
-    <WebSocketProvider>
-      <Router>
-        <Routes>
-          <Route path="/*" element={<Playground />} />
-          <Route path="/checkout" element={<Checkout />} />
-          <Route
-            path="/checkout-instructions"
-            element={<CheckoutInstructions />}
-          />
-        </Routes>
-      </Router>
-    </WebSocketProvider>
+    <NetworkProvider>
+      <WebSocketProvider>
+        <Router>
+          <Routes>
+            <Route path="/*" element={<Playground />} />
+            <Route path="/checkout" element={<Checkout />} />
+            <Route
+              path="/checkout-instructions"
+              element={<CheckoutInstructions />}
+            />
+          </Routes>
+        </Router>
+      </WebSocketProvider>
+    </NetworkProvider>
   )
 }

@@ -10,6 +10,7 @@ import {
 import { useWebSocket } from "@/hooks/useWebSocket"
 import { getSubscriptions } from "@/lib/api"
 import { formatSubscriptionSummary } from "@/lib/formatPeriod"
+import { useNetwork } from "@/store/NetworkContext"
 import type { Subscription } from "@/types/subscription"
 
 interface SubscriptionsListProps {
@@ -21,9 +22,17 @@ export function SubscriptionsList({
   selectedId,
   onSelect,
 }: SubscriptionsListProps) {
+  const { network } = useNetwork()
   const [subscriptions, setSubscriptions] = useState<Subscription[]>([])
   const [loading, setLoading] = useState(true)
   const { lastMessage } = useWebSocket()
+
+  // Filter subscriptions by selected network
+  const filteredSubscriptions = subscriptions.filter((sub) => {
+    const isSubTestnet = sub.testnet === true
+    const isTestnetNetwork = network === "testnet"
+    return isSubTestnet === isTestnetNetwork
+  })
 
   // Initial fetch on mount
   useEffect(() => {
@@ -116,10 +125,10 @@ export function SubscriptionsList({
           <div className="text-center py-8">
             <Loader2 className="h-6 w-6 animate-spin mx-auto text-muted-foreground" />
           </div>
-        ) : subscriptions.length === 0 ? (
+        ) : filteredSubscriptions.length === 0 ? (
           <div className="text-center py-8">
             <p className="text-sm text-muted-foreground">
-              No subscriptions yet.
+              No {network} subscriptions yet.
             </p>
             <p className="text-xs text-muted-foreground mt-1">
               Create your first subscription above to get started.
@@ -127,7 +136,7 @@ export function SubscriptionsList({
           </div>
         ) : (
           <div className="border rounded-md overflow-hidden">
-            {subscriptions.map((subscription, index) => {
+            {filteredSubscriptions.map((subscription, index) => {
               if (!subscription?.id) return null
               return (
                 <button
@@ -152,10 +161,12 @@ export function SubscriptionsList({
                       )}
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-mono font-semibold truncate">
-                        {subscription.id.slice(0, 8)}...
-                        {subscription.id.slice(-4)}
-                      </p>
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-mono font-semibold truncate">
+                          {subscription.id.slice(0, 8)}...
+                          {subscription.id.slice(-4)}
+                        </p>
+                      </div>
                       {subscription.amount && subscription.period_in_seconds ? (
                         <p
                           className={`text-xs mt-1 ${selectedId === subscription.id ? "text-primary-foreground/80" : "text-muted-foreground"}`}

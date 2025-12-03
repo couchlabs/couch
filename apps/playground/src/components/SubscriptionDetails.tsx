@@ -140,6 +140,14 @@ export function SubscriptionDetails({
     })
   }
 
+  // Helper to get correct BaseScan URL based on network
+  const getBaseScanUrl = (txHash: string) => {
+    const baseUrl = subscription?.testnet
+      ? "https://sepolia.basescan.org"
+      : "https://basescan.org"
+    return `${baseUrl}/tx/${txHash}`
+  }
+
   const fetchOnchainStatus = useCallback(async () => {
     if (!subscriptionId) return
 
@@ -381,9 +389,13 @@ export function SubscriptionDetails({
     <Card>
       <CardHeader>
         <CardTitle className="font-mono text-base">
-          {subscriptionId && subscriptionId.length >= 12
-            ? `${subscriptionId.slice(0, 8)}...${subscriptionId.slice(-4)}`
-            : subscriptionId}
+          <div className="flex items-center gap-2">
+            <span>
+              {subscriptionId && subscriptionId.length >= 12
+                ? `${subscriptionId.slice(0, 8)}...${subscriptionId.slice(-4)}`
+                : subscriptionId}
+            </span>
+          </div>
         </CardTitle>
         <CardDescription>Subscription details and events</CardDescription>
       </CardHeader>
@@ -453,7 +465,7 @@ export function SubscriptionDetails({
                 <p className="text-sm">
                   <span className="font-medium">Initial Transaction:</span>{" "}
                   <a
-                    href={`https://sepolia.basescan.org/tx/${subscription.transaction_hash}`}
+                    href={getBaseScanUrl(subscription.transaction_hash)}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="text-xs font-mono opacity-90 hover:underline cursor-pointer break-all"
@@ -734,7 +746,7 @@ export function SubscriptionDetails({
                                       onClick={(e) => {
                                         e.stopPropagation()
                                         window.open(
-                                          `https://sepolia.basescan.org/tx/${txHash}`,
+                                          getBaseScanUrl(txHash),
                                           "_blank",
                                         )
                                       }}
