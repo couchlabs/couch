@@ -1,0 +1,44 @@
+diff --git a/dist/interface/public-utilities/spend-permission/utils.node.js b/dist/interface/public-utilities/spend-permission/utils.node.js
+index 6e9a5bc44d6f6b2005de9d2a344d815bf3bea20a..b0e68d5244a4ab709fdabe0c3b19ee7d057e3566 100644
+--- a/dist/interface/public-utilities/spend-permission/utils.node.js
++++ b/dist/interface/public-utilities/spend-permission/utils.node.js
+@@ -14,9 +14,15 @@ export function getPublicClientFromChainId(chainId) {
+     if (!viemChain) {
+         return undefined;
+     }
++
++    // PATCHED: Check process.env for custom RPC URLs
++    // Format: RPC_URL_<CHAIN_ID> (e.g., RPC_URL_8453)
++    const envKey = `RPC_URL_${chainId}`;
++    const rpcUrl = process.env[envKey];
++
+     return createPublicClient({
+         chain: viemChain,
+-        transport: http(),
++        transport: http(rpcUrl), // Pass rpcUrl or undefined (falls back to chain default)
+     });
+ }
+ //# sourceMappingURL=utils.node.js.map
+\ No newline at end of file
+diff --git a/dist/store/chain-clients/utils.js b/dist/store/chain-clients/utils.js
+index fff38d2bec4def3ed92ebb47b3a900939755e8b0..7d90eb052b5163090882801e372fb6530b7b8102 100644
+--- a/dist/store/chain-clients/utils.js
++++ b/dist/store/chain-clients/utils.js
+@@ -29,7 +29,17 @@ function getSupportedChainById(chainId) {
+     return SUPPORTED_CHAINS_BY_ID.get(chainId);
+ }
+ // Get fallback RPC URL from viem's chain definitions
++// PATCHED: Check process.env for custom RPC URLs
+ function getFallbackRpcUrl(chainId) {
++    // Check for custom RPC URL: RPC_URL_<CHAIN_ID> (e.g., RPC_URL_8453)
++    const envKey = `RPC_URL_${chainId}`;
++    const customRpcUrl = process.env[envKey];
++
++    if (customRpcUrl) {
++        return customRpcUrl;
++    }
++
++    // Fallback to default viem chain RPC URLs
+     const viemChain = getSupportedChainById(chainId);
+     if (viemChain?.rpcUrls?.default?.http?.[0]) {
+         return viemChain.rpcUrls.default.http[0];

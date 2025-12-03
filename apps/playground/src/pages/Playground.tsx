@@ -13,7 +13,6 @@ export const Playground = () => {
   >(null)
 
   // Deselect subscription when network changes
-  // biome-ignore lint/correctness/useExhaustiveDependencies: We want to run this effect when network changes
   useEffect(() => {
     setSelectedSubscriptionId(null)
   }, [network])
