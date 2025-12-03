@@ -140,6 +140,14 @@ export function SubscriptionDetails({
     })
   }
 
+  // Helper to get correct BaseScan URL based on network
+  const getBaseScanUrl = (txHash: string) => {
+    const baseUrl = subscription?.testnet
+      ? "https://sepolia.basescan.org"
+      : "https://basescan.org"
+    return `${baseUrl}/tx/${txHash}`
+  }
+
   const fetchOnchainStatus = useCallback(async () => {
     if (!subscriptionId) return
 
@@ -457,7 +465,7 @@ export function SubscriptionDetails({
                 <p className="text-sm">
                   <span className="font-medium">Initial Transaction:</span>{" "}
                   <a
-                    href={`https://sepolia.basescan.org/tx/${subscription.transaction_hash}`}
+                    href={getBaseScanUrl(subscription.transaction_hash)}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="text-xs font-mono opacity-90 hover:underline cursor-pointer break-all"
@@ -738,7 +746,7 @@ export function SubscriptionDetails({
                                       onClick={(e) => {
                                         e.stopPropagation()
                                         window.open(
-                                          `https://sepolia.basescan.org/tx/${txHash}`,
+                                          getBaseScanUrl(txHash),
                                           "_blank",
                                         )
                                       }}
