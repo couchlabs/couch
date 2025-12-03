@@ -31,14 +31,25 @@
     },
     "catalogs": {
       "cloudflare": {
-        "miniflare": "^4.20251125.0",
-        "@cloudflare/workers-types": "^4.20251128.0",
+        "miniflare": "^4.20251202.0",
+        "@cloudflare/workers-types": "^4.20251202.0",
         "@types/node": "^24.10.1",
-        "hono": "^4.10.7"
+        "hono": "^4.10.7",
+        "@cloudflare/vite-plugin": "^1.16.1"
       },
       "coinbase": {
         "@base-org/account": "2.5.0",
         "@coinbase/cdp-sdk": "^1.38.6"
+      },
+      "crypto": {
+        "viem": "^2.41.2"
+      },
+      "react": {
+        "react": "^19.2.1",
+        "react-dom": "^19.2.1",
+        "react-router-dom": "^7.10.0",
+        "@types/react": "19.2.7",
+        "@types/react-dom": "19.2.3"
       }
     }
   },
