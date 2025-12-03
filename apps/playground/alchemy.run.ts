@@ -46,6 +46,11 @@ const { GH_ENVIRONMENT } = resolveStageConfig(app.stage)
 
 // Cloudflare Worker Flags
 const compatibilityFlags = ["nodejs_compat", "disallow_importable_env"]
+// Custom Domains
+let domains: { domainName: string }[] = []
+if (GH_ENVIRONMENT === "staging") {
+  domains = [{ domainName: "playground.staging.cou.ch" }]
+}
 
 // -----------------------------------------------------------------------------
 // Web App
@@ -80,7 +85,8 @@ export const website = await Vite(WEBSITE_NAME, {
     }),
   },
   compatibilityFlags,
-  url: GH_ENVIRONMENT !== "prod", // Generate URLs for dev, staging, and previews (not prod)
+  url: GH_ENVIRONMENT === "dev", // Generate URLs for dev (previews deployments)
+  domains,
 })
 
 if (app.local) {

@@ -114,11 +114,8 @@ jobs:
           BACKEND_URL="${{ steps.backend.outputs.api_url }}"
           API_KEY="${{ secrets.COUCH_TEST_ACCOUNT_APIKEY }}"
 
-          # Construct playground URL from backend URL
-          # Backend: couch-backend-staging-api.workers.dev
-          # Playground: couch-playground-staging-website.workers.dev
-          PLAYGROUND_URL="${BACKEND_URL/couch-backend/couch-playground}"
-          PLAYGROUND_URL="${PLAYGROUND_URL/-api/-website}"
+          # Staging always uses custom domains
+          PLAYGROUND_URL="https://playground.staging.cou.ch"
 
           echo "Registering webhook at $PLAYGROUND_URL/api/webhook..."
           WEBHOOK_RESPONSE=$(curl -X PUT $BACKEND_URL/api/webhook \
