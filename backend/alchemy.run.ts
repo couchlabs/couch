@@ -171,7 +171,7 @@ export const api = await Worker(API_NAME, {
   },
   compatibilityFlags,
   dev: { port: 3000 },
-  url: GH_ENVIRONMENT !== "prod",
+  url: GH_ENVIRONMENT === "dev",
   domains,
 })
 
