@@ -72,6 +72,7 @@ app.post("/api/webhook", async (c) => {
   const status = event.data.subscription.status
   const amount = event.data.subscription.amount
   const periodInSeconds = event.data.subscription.period_in_seconds
+  const testnet = event.data.subscription.testnet
 
   const store = c.env.STORE.get(c.env.STORE.idFromName("global"))
 
@@ -82,6 +83,7 @@ app.post("/api/webhook", async (c) => {
     transaction_hash: event.data.transaction?.hash,
     amount,
     period_in_seconds: periodInSeconds,
+    testnet,
   })
 
   // Insert webhook event
@@ -226,6 +228,7 @@ interface WebhookEvent {
         | "unpaid"
       amount: string // Recurring charge amount (always present)
       period_in_seconds: number // Billing period (always present)
+      testnet?: boolean // Network indicator - only present when true
     }
     order?: {
       number: number

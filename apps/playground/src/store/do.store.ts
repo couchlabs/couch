@@ -6,6 +6,7 @@ interface Subscription {
   transaction_hash?: string
   amount: string
   period_in_seconds: number
+  testnet?: boolean
   created_at: string
   updated_at: string
 }
@@ -27,10 +28,47 @@ interface WebhookEvent {
  */
 export class Store extends DurableObject {
   private sessions: Map<WebSocket, { alive: boolean }> = new Map()
+
+  /**
+   * Migrate existing subscriptions to add testnet field
+   * This runs once per deployment and marks old subscriptions as testnet
+   */
+  private async migrateSubscriptions(): Promise<void> {
+    const migrationKey = "migration:testnet-field"
+    const migrated = await this.ctx.storage.get<boolean>(migrationKey)
+
+    if (migrated) {
+      return // Already migrated
+    }
+
+    // Get all subscriptions
+    const subscriptions = await this.ctx.storage.list<Subscription>({
+      prefix: "subscription:",
+    })
+
+    // Update subscriptions that don't have testnet field
+    const updates: Record<string, Subscription> = {}
+    for (const [key, sub] of subscriptions) {
+      if (sub.testnet === undefined) {
+        updates[key] = { ...sub, testnet: true } // Mark old subscriptions as testnet
+      }
+    }
+
+    // Batch update
+    if (Object.keys(updates).length > 0) {
+      await this.ctx.storage.put(updates)
+    }
+
+    // Mark migration as complete
+    await this.ctx.storage.put(migrationKey, true)
+  }
+
   /**
    * Get all subscriptions (ordered by created_at DESC)
    */
   async getSubscriptions(): Promise<Subscription[]> {
+    // Run migration before returning subscriptions
+    await this.migrateSubscriptions()
     const subscriptions = await this.ctx.storage.list<Subscription>({
       prefix: "subscription:",
     })
@@ -59,6 +97,7 @@ export class Store extends DurableObject {
     transaction_hash?: string
     amount: string
     period_in_seconds: number
+    testnet?: boolean
   }): Promise<void> {
     const existing = await this.getSubscription(data.id)
     const now = new Date().toISOString()
@@ -73,6 +112,7 @@ export class Store extends DurableObject {
       transaction_hash: existing?.transaction_hash || data.transaction_hash,
       amount: existing?.amount || data.amount,
       period_in_seconds: existing?.period_in_seconds || data.period_in_seconds,
+      testnet: existing?.testnet || data.testnet,
       created_at: existing?.created_at || now,
       updated_at: now,
     }

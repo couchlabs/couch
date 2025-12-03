@@ -1,5 +1,6 @@
 import { Check, Copy, ExternalLink } from "lucide-react"
-import { useId, useState } from "react"
+import { useEffect, useId, useState } from "react"
+import { NetworkSelector } from "../components/NetworkSelector"
 import { Button } from "../components/ui/button"
 import {
   Card,
@@ -17,26 +18,60 @@ import {
   SelectTrigger,
   SelectValue,
 } from "../components/ui/select"
+import { useNetwork } from "../store/NetworkContext"
 
 export const CheckoutInstructions = () => {
+  const { network } = useNetwork()
+  const isTestnet = network === "testnet"
+
   const [beneficiary, setBeneficiary] = useState("")
   const [amount, setAmount] = useState("0.0001")
   const [periodValue, setPeriodValue] = useState("1")
-  const [periodUnit, setPeriodUnit] = useState<"days" | "hours" | "minutes">(
-    "days",
-  )
+  const [periodUnit, setPeriodUnit] = useState<
+    "seconds" | "minutes" | "hours" | "days"
+  >("days")
   const [successUrl, setSuccessUrl] = useState("")
   const [copied, setCopied] = useState(false)
+
+  // Filter period units based on network
+  const periodUnits = isTestnet
+    ? ["seconds", "minutes", "hours", "days"]
+    : ["days"]
+
+  // Reset period unit to 'days' when switching to mainnet
+  useEffect(() => {
+    if (!isTestnet && periodUnit !== "days") {
+      setPeriodUnit("days")
+    }
+  }, [isTestnet, periodUnit])
 
   // Generate unique IDs for form fields
   const beneficiaryId = useId()
   const amountId = useId()
   const successUrlId = useId()
 
-  // Convert period to days for the URL
-  const convertPeriodToDays = (): string => {
+  // Convert period to appropriate unit for the URL
+  const convertPeriod = (): string => {
     const value = parseFloat(periodValue)
+
+    // For testnet with non-day units, convert to seconds
+    if (isTestnet && periodUnit !== "days") {
+      switch (periodUnit) {
+        case "seconds":
+          return value.toString()
+        case "minutes":
+          return (value * 60).toString()
+        case "hours":
+          return (value * 60 * 60).toString()
+        default:
+          return value.toString()
+      }
+    }
+
+    // For mainnet or testnet with days, convert to days
     switch (periodUnit) {
+      case "seconds":
+        return (value / 86400).toString() // 86400 seconds in a day
       case "minutes":
         return (value / 1440).toString() // 1440 minutes in a day
       case "hours":
@@ -54,8 +89,9 @@ export const CheckoutInstructions = () => {
 
     params.append("beneficiary", beneficiary)
     params.append("amount", amount)
-    params.append("period", convertPeriodToDays())
+    params.append("period", convertPeriod())
     if (successUrl) params.append("successUrl", successUrl)
+    if (isTestnet) params.append("testnet", "true")
 
     return `${window.location.origin}/checkout?${params.toString()}`
   }
@@ -73,11 +109,14 @@ export const CheckoutInstructions = () => {
   return (
     <div className="min-h-screen bg-muted p-6">
       <div className="mx-auto max-w-7xl">
-        <div className="mb-8">
-          <h1 className="text-3xl font-semibold">Checkout Link Generator</h1>
-          <p className="text-muted-foreground mt-2">
-            Create custom checkout links for subscription payments
-          </p>
+        <div className="mb-8 flex items-start justify-between">
+          <div>
+            <h1 className="text-3xl font-semibold">Checkout Link Generator</h1>
+            <p className="text-muted-foreground mt-2">
+              Create custom checkout links for subscription payments
+            </p>
+          </div>
+          <NetworkSelector />
         </div>
 
         <div className="grid gap-6 lg:grid-cols-[450px_1fr]">
@@ -140,9 +179,11 @@ export const CheckoutInstructions = () => {
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="minutes">minutes</SelectItem>
-                        <SelectItem value="hours">hours</SelectItem>
-                        <SelectItem value="days">days</SelectItem>
+                        {periodUnits.map((unit) => (
+                          <SelectItem key={unit} value={unit}>
+                            {unit}
+                          </SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </div>

@@ -381,9 +381,13 @@ export function SubscriptionDetails({
     <Card>
       <CardHeader>
         <CardTitle className="font-mono text-base">
-          {subscriptionId && subscriptionId.length >= 12
-            ? `${subscriptionId.slice(0, 8)}...${subscriptionId.slice(-4)}`
-            : subscriptionId}
+          <div className="flex items-center gap-2">
+            <span>
+              {subscriptionId && subscriptionId.length >= 12
+                ? `${subscriptionId.slice(0, 8)}...${subscriptionId.slice(-4)}`
+                : subscriptionId}
+            </span>
+          </div>
         </CardTitle>
         <CardDescription>Subscription details and events</CardDescription>
       </CardHeader>

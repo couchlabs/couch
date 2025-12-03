@@ -1,5 +1,5 @@
 import { base } from "@base-org/account"
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { Button } from "@/components/ui/button"
 import {
   Card,
@@ -17,14 +17,30 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Separator } from "@/components/ui/separator"
+import { useNetwork } from "@/store/NetworkContext"
 
 export function SubscriptionCreator() {
+  const { network } = useNetwork()
+  const isTestnet = network === "testnet"
+
   const [chargeAmount, setChargeAmount] = useState("0.0001")
   const [periodValue, setPeriodValue] = useState("60")
   const [periodUnit, setPeriodUnit] = useState<
     "seconds" | "minutes" | "hours" | "days"
   >("seconds")
   const [isSubscribing, setIsSubscribing] = useState(false)
+
+  // Filter period units based on network
+  const periodUnits = isTestnet
+    ? ["seconds", "minutes", "hours", "days"]
+    : ["days"]
+
+  // Reset period unit to 'days' when switching to mainnet
+  useEffect(() => {
+    if (!isTestnet && periodUnit !== "days") {
+      setPeriodUnit("days")
+    }
+  }, [isTestnet, periodUnit])
 
   // Dynamic width calculation with minimum sizes
   const getAmountWidth = () => {
@@ -54,13 +70,18 @@ export function SubscriptionCreator() {
       )
 
       // Create subscription via Coinbase Wallet
-      const subscription = await base.subscription.subscribe({
+      const subscriptionOptions = {
         recurringCharge: chargeAmount, // USDC amount
         subscriptionOwner: accountAddress, // Backend wallet address (spender)
-        periodInDays: Math.ceil(periodInSeconds / 86400), // Convert seconds to days
-        overridePeriodInSecondsForTestnet: periodInSeconds, // For testing with short periods
-        testnet: true, // Use Base Sepolia
-      })
+        testnet: isTestnet, // Use network from context
+        ...(isTestnet && periodUnit !== "days"
+          ? { overridePeriodInSecondsForTestnet: periodInSeconds } // For testing with short periods
+          : { periodInDays: Math.ceil(periodInSeconds / 86400) }), // Convert to days for mainnet
+        // biome-ignore lint/suspicious/noExplicitAny: Base SDK type doesn't properly support conditional parameters
+      } as any
+
+      const subscription =
+        await base.subscription.subscribe(subscriptionOptions)
 
       // Use service binding through our /activate endpoint (RPC-style)
       const response = await fetch("/activate", {
@@ -71,7 +92,7 @@ export function SubscriptionCreator() {
         body: JSON.stringify({
           id: subscription.id,
           provider: "base",
-          testnet: true,
+          testnet: isTestnet, // Use network from context
         }),
       })
 
@@ -152,10 +173,11 @@ export function SubscriptionCreator() {
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="seconds">seconds</SelectItem>
-              <SelectItem value="minutes">minutes</SelectItem>
-              <SelectItem value="hours">hours</SelectItem>
-              <SelectItem value="days">days</SelectItem>
+              {periodUnits.map((unit) => (
+                <SelectItem key={unit} value={unit}>
+                  {unit}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>

@@ -57,6 +57,7 @@ export const Checkout = () => {
   const amount = searchParams.get("amount")
   const period = searchParams.get("period")
   const successUrl = searchParams.get("successUrl")
+  const testnet = searchParams.get("testnet") === "true"
 
   // State
   const [pageState, setPageState] = useState<PageState>("initial")
@@ -148,9 +149,8 @@ export const Checkout = () => {
     setErrorMessage("")
 
     try {
-      // Convert period in days to seconds (support decimals)
-      const periodInDays = parseFloat(period)
-      const periodInSeconds = Math.floor(periodInDays * 86400)
+      // Parse period value - can be days or seconds depending on URL params
+      const periodValue = parseFloat(period)
 
       // Get spender address from env (set by alchemy.run.ts)
       // This is ALWAYS the subscription owner (the wallet that gets permission to charge)
@@ -162,13 +162,18 @@ export const Checkout = () => {
       // Create subscription using Base SDK
       // The user (payer) is whoever connects their Coinbase Wallet
       // The subscriptionOwner is always the backend spender wallet
-      const subscription = await base.subscription.subscribe({
+      const subscriptionOptions = {
         recurringCharge: amount,
         subscriptionOwner: spenderAddress, // Always use spender address as owner
-        periodInDays: Math.ceil(periodInSeconds / 86400),
-        overridePeriodInSecondsForTestnet: periodInSeconds,
-        testnet: true,
-      })
+        testnet,
+        ...(testnet
+          ? { overridePeriodInSecondsForTestnet: Math.floor(periodValue) } // For testnet, period can be in seconds
+          : { periodInDays: Math.ceil(periodValue) }), // For mainnet, period is in days
+        // biome-ignore lint/suspicious/noExplicitAny: Base SDK type doesn't properly support conditional parameters
+      } as any
+
+      const subscription =
+        await base.subscription.subscribe(subscriptionOptions)
 
       setSubscriptionId(subscription.id)
 
@@ -183,7 +188,7 @@ export const Checkout = () => {
           id: subscription.id,
           provider: "base",
           beneficiary: beneficiary,
-          testnet: true,
+          testnet,
         }),
       })
 
@@ -237,7 +242,10 @@ export const Checkout = () => {
     return null
   }
 
-  const periodInSeconds = Math.floor(parseFloat(period) * 86400)
+  // For testnet, period might already be in seconds; for mainnet, it's in days
+  const periodInSeconds = testnet
+    ? Math.floor(parseFloat(period)) // Testnet: period is in seconds
+    : Math.floor(parseFloat(period) * 86400) // Mainnet: period is in days, convert to seconds
 
   return (
     <div className="min-h-screen bg-muted p-6">
