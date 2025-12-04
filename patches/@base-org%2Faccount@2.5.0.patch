@@ -1,5 +1,8 @@
+diff --git a/node_modules/@base-org/account/.bun-tag-fbf93fa74a915f1e b/.bun-tag-fbf93fa74a915f1e
+new file mode 100644
+index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
 diff --git a/dist/interface/public-utilities/spend-permission/utils.node.js b/dist/interface/public-utilities/spend-permission/utils.node.js
-index 6e9a5bc44d6f6b2005de9d2a344d815bf3bea20a..b0e68d5244a4ab709fdabe0c3b19ee7d057e3566 100644
+index 6e9a5bc44d6f6b2005de9d2a344d815bf3bea20a..8ade4b60541f8ce599888c21b4e28a8e7749212f 100644
 --- a/dist/interface/public-utilities/spend-permission/utils.node.js
 +++ b/dist/interface/public-utilities/spend-permission/utils.node.js
 @@ -14,9 +14,15 @@ export function getPublicClientFromChainId(chainId) {
@@ -15,7 +18,7 @@ index 6e9a5bc44d6f6b2005de9d2a344d815bf3bea20a..b0e68d5244a4ab709fdabe0c3b19ee7d
      return createPublicClient({
          chain: viemChain,
 -        transport: http(),
-+        transport: http(rpcUrl), // Pass rpcUrl or undefined (falls back to chain default)
++        transport: http(rpcUrl, { timeout: 30_000 }), // Pass rpcUrl or undefined (falls back to chain default), 30s timeout
      });
  }
  //# sourceMappingURL=utils.node.js.map
