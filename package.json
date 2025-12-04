@@ -6,16 +6,12 @@
   "scripts": {
     "dev": "turbo dev --ui=tui",
     "dev:cleanup": "bun scripts/alchemy.dev.cleanup.ts",
-    "dev:faucet": "bun node_modules/alchemy/src/coinbase/faucet.ts",
     "test": "turbo typecheck && turbo test:unit",
     "test:unit": "turbo test:unit",
     "lint": "biome lint .",
     "format": "biome format .",
     "typecheck": "turbo typecheck",
     "fix": "biome check . --write",
-    "gh:setup:dev": "alchemy deploy scripts/github.dev.environment.ts",
-    "gh:setup:staging": "alchemy deploy scripts/github.staging.environment.ts",
-    "gh:setup:prod": "alchemy deploy scripts/github.prod.environment.ts",
     "db:generate": "turbo db:generate",
     "infra:deploy": "turbo infra:deploy",
     "infra:destroy": "turbo infra:destroy"
