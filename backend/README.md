@@ -89,7 +89,7 @@ src/
 
 **Example Flow:**
 ```
-POST /api/subscriptions
+POST /v1/subscriptions
   → subscriptions.routes.ts (validate request)
     → subscription.service.ts (business logic)
       → subscription.repository.ts (DB insert)
@@ -389,7 +389,7 @@ All webhook events use the `subscription.updated` event type with conditional fi
 
 - **Signature**: `X-Webhook-Signature: sha256=<hex>` header with HMAC-SHA256 of payload
 - **Timestamp**: `X-Webhook-Timestamp: <unix>` header for replay attack prevention
-- **Secret**: Returned from `PUT /api/webhook` endpoint (format: `whsec_<64_hex_chars>`)
+- **Secret**: Returned from `PUT /v1/webhook` endpoint (format: `whsec_<64_hex_chars>`)
 
 **Verification Example**:
 ```typescript
@@ -409,21 +409,21 @@ if (signature !== expectedSignature) {
 
 ## API Reference
 
-**Base URL**: `http://localhost:3000/api`
+**Base URL**: `http://localhost:3000/v1`
 
 ### Endpoints
 
-- **`GET /api/health`** - Health check
-- **`PUT /api/account`** - Create account or rotate API key
+- **`GET /v1/health`** - Health check
+- **`PUT /v1/account`** - Create account or rotate API key
   - **Requires**: `account_address`
   - **Returns**: `{ apiKey: string }`
 
-- **`POST /api/subscriptions`** - Register subscription (bind onchain permission to infrastructure)
+- **`POST /v1/subscriptions`** - Register subscription (bind onchain permission to infrastructure)
   - **Requires**: `Authorization: Bearer <api_key>` header
   - **Body**: `{ id: string, provider: "base", beneficiary?: string }`
   - **Returns**: `{ status: "processing" }`
 
-- **`PUT /api/webhook`** - Set webhook URL for events
+- **`PUT /v1/webhook`** - Set webhook URL for events
   - **Requires**: `Authorization: Bearer <api_key>` header
   - **Body**: `{ url: string }`
   - **Returns**: `{ url: string, secret: string }`
@@ -436,7 +436,7 @@ All endpoints (except `/health` and `/account`) require API key authentication:
 Authorization: Bearer <api_key>
 ```
 
-API keys are obtained via `PUT /api/account` and are tied to a merchant account address.
+API keys are obtained via `PUT /v1/account` and are tied to a merchant account address.
 
 ## Database Schema
 
@@ -456,8 +456,8 @@ transactions       -- Blockchain transactions
 
 **1. Setup Merchant Account**
 
-1. Create an Account & Get API Key via `/api/account` endpoint
-2. Set Webhook URL (Optional) via `/api/webhook` endpoint
+1. Create an Account & Get API Key via `/v1/account` endpoint
+2. Set Webhook URL (Optional) via `/v1/webhook` endpoint
 
 **2a. Subscribe using the included playground app (Recommended)**
 

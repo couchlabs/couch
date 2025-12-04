@@ -6,7 +6,7 @@ import type { WorkerEnv } from "@/types/api.env"
 export const keysRoutes = new Hono<{ Bindings: WorkerEnv }>()
 
 /**
- * PUT /api/keys
+ * PUT /v1/keys
  * Rotates the API key for the authenticated account
  * Returns the new API key (previous key is immediately invalidated)
  */

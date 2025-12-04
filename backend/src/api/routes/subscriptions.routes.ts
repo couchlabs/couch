@@ -22,7 +22,7 @@ export const subscriptionRoutes = new Hono<{
 subscriptionRoutes.use(apiKeyAuth())
 
 /**
- * POST /api/subscriptions
+ * POST /v1/subscriptions
  * Creates and activates a subscription with initial charge
  * Returns the activated subscription details containing first onchain trnsaction
  */
@@ -113,7 +113,7 @@ subscriptionRoutes.post("/", subscriptionBody(), async (ctx) => {
 })
 
 /**
- * DELETE /api/subscriptions/:id
+ * DELETE /v1/subscriptions/:id
  * Revokes a subscription on-chain and updates database
  * Returns the canceled subscription object (idempotent)
  */

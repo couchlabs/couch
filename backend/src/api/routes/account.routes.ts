@@ -6,7 +6,7 @@ import type { WorkerEnv } from "@/types/api.env"
 export const accountRoutes = new Hono<{ Bindings: WorkerEnv }>()
 
 /**
- * POST /api/account
+ * POST /v1/account
  * Creates a new account (only if allowlisted and doesn't exist)
  * Returns the API key (one-time only)
  */

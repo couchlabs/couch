@@ -154,7 +154,7 @@ jobs:
           PLAYGROUND_URL="${PLAYGROUND_URL/-api/-website}"
 
           echo "Registering webhook at $PLAYGROUND_URL/api/webhook..."
-          WEBHOOK_RESPONSE=$(curl -X PUT $BACKEND_URL/api/webhook \
+          WEBHOOK_RESPONSE=$(curl -X PUT $BACKEND_URL/v1/webhook \
             -H "Content-Type: application/json" \
             -H "Authorization: Bearer $API_KEY" \
             -d "{\"url\":\"$PLAYGROUND_URL/api/webhook\"}" \

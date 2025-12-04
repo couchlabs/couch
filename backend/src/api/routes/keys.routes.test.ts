@@ -7,7 +7,7 @@ import { keysRoutes } from "@/api/routes/keys.routes"
 import { AccountService } from "@/services/account.service"
 import type { WorkerEnv } from "@/types/api.env"
 
-describe("PUT /api/keys", () => {
+describe("PUT /v1/keys", () => {
   let dispose: (() => Promise<void>) | undefined
   let testDB: {
     db: D1Database

@@ -13,7 +13,7 @@ export const webhookRoutes = new Hono<{
 webhookRoutes.use(apiKeyAuth())
 
 /**
- * PUT /api/webhook
+ * PUT /v1/webhook
  * Sets or updates the webhook URL for the authenticated account
  * Returns the webhook secret for HMAC verification
  */

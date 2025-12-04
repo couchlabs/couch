@@ -7,14 +7,14 @@
   "variable": [
     {
       "key": "baseUrl",
-      "value": "http://localhost:3000/api",
+      "value": "http://localhost:3000/v1",
       "type": "string"
     },
     {
       "key": "apiKey",
       "value": "",
       "type": "string",
-      "description": "API key obtained from PUT /api/account"
+      "description": "API key obtained from PUT /v1/account"
     },
     {
       "key": "testAddress",
