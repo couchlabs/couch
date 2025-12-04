@@ -117,7 +117,7 @@ app.get("/test-binding", async (c) => {
   }
 
   try {
-    const response = await c.env.BACKEND_API.fetch("https://backend/api/health")
+    const response = await c.env.BACKEND_API.fetch("https://backend/v1/health")
     const data = await response.json()
     return c.json({
       success: true,
@@ -146,7 +146,7 @@ app.post("/activate", async (c) => {
     headers.set("Authorization", `Bearer ${c.env.COUCH_TEST_ACCOUNT_APIKEY}`)
 
     const response = await c.env.BACKEND_API.fetch(
-      "https://backend/api/subscriptions",
+      "https://backend/v1/subscriptions",
       {
         method: "POST",
         headers: headers,
@@ -184,7 +184,7 @@ app.delete("/revoke/:id", async (c) => {
     headers.set("Content-Type", "application/json")
 
     const response = await c.env.BACKEND_API.fetch(
-      `https://backend/api/subscriptions/${subscriptionId}`,
+      `https://backend/v1/subscriptions/${subscriptionId}`,
       {
         method: "DELETE",
         headers: headers,

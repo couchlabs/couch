@@ -6,7 +6,7 @@ import { getAddress } from "viem"
 import { accountRoutes } from "@/api/routes/account.routes"
 import type { WorkerEnv } from "@/types/api.env"
 
-describe("POST /api/account", () => {
+describe("POST /v1/account", () => {
   let dispose: (() => Promise<void>) | undefined
   let testDB: {
     db: D1Database

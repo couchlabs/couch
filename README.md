@@ -40,7 +40,7 @@ bun dev --filter=backend
 First, create your account and get an API key:
 
 ```bash
-curl -X POST http://localhost:3000/api/account \
+curl -X POST http://localhost:3000/v1/account \
   -H "Content-Type: application/json" \
   -d '{"address": "YOUR_WALLET_ADDRESS"}'
 ```
@@ -48,7 +48,7 @@ curl -X POST http://localhost:3000/api/account \
 Use the returned `api_key` to register the webhook:
 
 ```bash
-curl -X PUT http://localhost:3000/api/webhook \
+curl -X PUT http://localhost:3000/v1/webhook \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer YOUR_API_KEY" \
   -d '{"url": "http://localhost:8000/api/webhook"}'

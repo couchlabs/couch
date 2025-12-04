@@ -156,7 +156,7 @@ export function createAutoLogger(url: string): Logger {
   else if (url.includes("/consumers/")) type = "consumer"
   else if (url.includes("/schedulers/")) type = "scheduler"
   else if (url.includes("/routes/")) type = "route"
-  else if (url.includes("/api/")) type = "api"
+  else if (url.includes("/v1/")) type = "api"
 
   return logger.with({
     file: filename, // Just filename for quick reference

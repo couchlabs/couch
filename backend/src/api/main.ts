@@ -10,7 +10,7 @@ import { ErrorCode } from "@/errors/http.errors"
 import { logger } from "@/lib/logger"
 import type { WorkerEnv } from "@/types/api.env"
 
-const app = new Hono<{ Bindings: WorkerEnv }>().basePath("/api")
+const app = new Hono<{ Bindings: WorkerEnv }>().basePath("/v1")
 
 // CORS middleware
 app.use(cors())
