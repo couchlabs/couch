@@ -1,3 +1,4 @@
+// Main API entry point for Couch subscription service
 import { Hono } from "hono"
 import { cors } from "hono/cors"
 import { HTTPException } from "hono/http-exception"
