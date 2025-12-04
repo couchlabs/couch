@@ -441,8 +441,99 @@ export class OrderService {
 
         case "upstream_error": {
           log.info(
-            `Upstream service error: ${errorCode} - will retry via queue with exponential backoff`,
+            `Upstream service error: ${errorCode} - verifying on-chain state before retry`,
           )
+
+          // For upstream errors (like 504 timeouts), the transaction might have succeeded
+          // on-chain even though we didn't get a response. Check on-chain state to verify.
+          try {
+            log.info(
+              "Checking on-chain subscription status to verify payment state",
+            )
+
+            const { subscription: onchainStatus } =
+              await this.onchainRepository.getSubscriptionStatus({
+                subscriptionId,
+                provider,
+                accountId,
+                testnet,
+              })
+
+            // If the subscription exists and has advanced to the next period,
+            // the charge succeeded on-chain despite the timeout
+            if (
+              onchainStatus.permissionExists &&
+              onchainStatus.isSubscribed &&
+              "currentPeriodStart" in onchainStatus
+            ) {
+              const orderDueAt = new Date(order.dueAt)
+              const onchainPeriodStart = onchainStatus.currentPeriodStart
+
+              // If on-chain period is after our order's due date, payment succeeded
+              if (onchainPeriodStart > orderDueAt) {
+                log.info(
+                  "Charge succeeded on-chain despite upstream timeout - marking as paid",
+                  {
+                    orderDueAt: orderDueAt.toISOString(),
+                    onchainPeriodStart: onchainPeriodStart.toISOString(),
+                  },
+                )
+
+                // Update order status to PAID (we don't have tx hash from timeout)
+                await this.subscriptionRepository.updateOrder({
+                  id: orderId,
+                  status: OrderStatus.PAID,
+                })
+
+                // If this was a retry that succeeded, reactivate subscription
+                if (status === OrderStatus.FAILED) {
+                  log.info("Successful retry - reactivating subscription")
+                  await this.subscriptionRepository.reactivateSubscription({
+                    orderId,
+                    subscriptionId,
+                  })
+                }
+
+                // Create and schedule next order
+                const nextOrderCreated = await this.createAndScheduleNextOrder({
+                  subscriptionId,
+                  onchainStatus,
+                  provider,
+                  log,
+                  logReason: "after recovering from timeout",
+                })
+
+                // Clean up current order's scheduler
+                await scheduler.delete()
+                log.info("Deleted order scheduler after successful recovery", {
+                  orderId,
+                })
+
+                return {
+                  success: true,
+                  transactionHash:
+                    "0x0000000000000000000000000000000000000000000000000000000000000000" as Hash, // Unknown due to timeout
+                  orderNumber: orderResult.orderNumber,
+                  nextOrderCreated,
+                  subscriptionStatus: SubscriptionStatus.ACTIVE,
+                }
+              }
+
+              log.info(
+                "On-chain period has not advanced - charge truly failed, will retry",
+                {
+                  orderDueAt: orderDueAt.toISOString(),
+                  onchainPeriodStart: onchainPeriodStart.toISOString(),
+                },
+              )
+            }
+          } catch (verifyError) {
+            log.warn(
+              "Failed to verify on-chain state after upstream error - proceeding with retry",
+              verifyError,
+            )
+            // Fall through to normal upstream error handling
+          }
 
           // DON'T delete scheduler - keep as backup in case queue retries fail
           // DON'T create next order - queue will retry current order
