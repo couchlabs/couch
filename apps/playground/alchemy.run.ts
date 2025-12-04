@@ -56,8 +56,6 @@ if (GH_ENVIRONMENT === "staging") {
 // Web App
 // -----------------------------------------------------------------------------
 
-if (!api.url) throw new Error(`${api.name} didn't expose url`)
-
 const WEBSITE_NAME = "website"
 export const website = await Vite(WEBSITE_NAME, {
   name: `${NAME_PREFIX}-${WEBSITE_NAME}`,
@@ -98,6 +96,16 @@ if (app.local) {
 // =============================================================================
 
 if (process.env.PULL_REQUEST) {
+  // Get URLs for PR comments (use custom domains or workers.dev URLs)
+  const playgroundUrl =
+    website.url ||
+    (website.domains?.[0]?.name
+      ? `https://${website.domains[0].name}`
+      : undefined)
+  const apiUrl =
+    api.url ||
+    (api.domains?.[0]?.name ? `https://${api.domains[0].name}` : undefined)
+
   await GitHubComment("preview-comment", {
     owner: "couchlabs",
     repository: "couch",
@@ -107,8 +115,8 @@ if (process.env.PULL_REQUEST) {
 
 **Stage:** \`${app.stage}\`
 
-🌐 **[Playground](${website.url})**
-⚙️ **[Backend API](${api.url})**
+🌐 **[Playground](${playgroundUrl})**
+⚙️ **[Backend API](${apiUrl})**
 
 ---
 <sub>🏴‍☠️ Built from commit ${process.env.GITHUB_SHA?.slice(0, 7)} • This comment updates automatically with each push</sub>`,
