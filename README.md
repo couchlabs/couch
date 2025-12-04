@@ -11,7 +11,6 @@ couch/
 ├── backend/         Offchain orchestrator for recurring payments
 ├── apps/
 │ └── playground/    Playground application for testing
-├── scripts/         Development Scripts & Utilities
 ```
 
 ## Getting started
