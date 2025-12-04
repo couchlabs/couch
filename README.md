@@ -8,9 +8,10 @@ Couch is an offchain orchestrator for SpendPermission-based recurring payments. 
 
 ```
 couch/
+├── backend/         Offchain orchestrator for recurring payments
 ├── apps/
-│ ├── backend/       Offchain orchestrator for recurring payments
 │ └── playground/    Playground application for testing
+├── scripts/         Development Scripts & Utilities
 ```
 
 ## Getting started
