@@ -84,7 +84,7 @@ jobs:
       - name: "Deploy backend"
         id: backend
         run: bun run infra:deploy --filter=backend
-        # Note: api_url and db_id outputs are set in alchemy.run.ts
+        # Note: api_url and db_name outputs are set in alchemy.run.ts
         env:
           STAGE: ${{ env.STAGE }}
           ALCHEMY_PASSWORD: ${{ secrets.ALCHEMY_PASSWORD }}
@@ -98,6 +98,9 @@ jobs:
           COUCH_TEST_ACCOUNT_ADDRESS: ${{ secrets.COUCH_TEST_ACCOUNT_ADDRESS }}
           GITHUB_SHA: ${{ github.sha }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: "Output backend deployment URL"
+        run: echo "::notice::Backend deployed to ${{ steps.backend.outputs.api_url }}"
 
       - name: "Seed test account in database"
         run: .github/scripts/seed-test-account.sh
@@ -148,12 +151,9 @@ jobs:
 
           echo "✅ Webhook registered successfully"
 
-          # Output webhook secret for playground deployment
+          # Output webhook secret and playground URL for next step
           echo "webhook_secret=$WEBHOOK_SECRET" >> $GITHUB_OUTPUT
-
-          # Output URLs for summary
-          echo "::notice::Backend deployed to $BACKEND_URL"
-          echo "::notice::Playground will be deployed to $PLAYGROUND_URL"
+          echo "playground_url=$PLAYGROUND_URL" >> $GITHUB_OUTPUT
 
       - name: "Deploy playground"
         run: bun run infra:deploy --filter=playground
@@ -173,3 +173,6 @@ jobs:
           COUCH_TEST_ACCOUNT_APIKEY: ${{ secrets.COUCH_TEST_ACCOUNT_APIKEY }}
           GITHUB_SHA: ${{ github.sha }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: "Output playground deployment URL"
+        run: echo "::notice::Playground deployed to ${{ steps.couch.outputs.playground_url }}"
