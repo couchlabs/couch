@@ -22,7 +22,7 @@
     "rewriteRelativeImportExtensions": true,
     "strict": true,
     "skipLibCheck": true,
-    "types": ["@cloudflare/workers-types"],
+    "types": ["@cloudflare/workers-types", "@types/node"],
     "paths": {
       "@/*": ["./src/*", "../../backend/src/*"],
       "@public/*": ["./public/*"]
