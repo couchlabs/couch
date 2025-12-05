@@ -1,0 +1,46 @@
+{
+  "name": "merchant",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "alchemy dev --stage dev --adopt --app couch-merchant",
+    "infra:deploy": "alchemy deploy --stage $STAGE --adopt --app couch-merchant",
+    "infra:destroy": "alchemy destroy --stage $STAGE --app couch-merchant",
+    "test:unit": "echo 'No tests configured'",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "backend": "workspace:*",
+    "hono": "catalog:cloudflare",
+    "@base-org/account": "catalog:coinbase",
+    "@coinbase/cdp-core": "catalog:coinbase",
+    "@coinbase/cdp-hooks": "catalog:coinbase",
+    "viem": "catalog:crypto",
+    "wagmi": "catalog:crypto",
+    "react": "catalog:react",
+    "react-dom": "catalog:react",
+    "react-router-dom": "catalog:react",
+    "@tanstack/react-query": "catalog:react",
+    "tailwind-merge": "catalog:tailwind",
+    "tailwindcss": "catalog:tailwind",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "lucide-react": "^0.555.0"
+  },
+  "devDependencies": {
+    "typescript": "catalog:",
+    "alchemy": "catalog:",
+    "miniflare": "catalog:cloudflare",
+    "@cloudflare/workers-types": "catalog:cloudflare",
+    "@cloudflare/vite-plugin": "catalog:cloudflare",
+    "@types/node": "catalog:cloudflare",
+    "@types/react": "catalog:react",
+    "@types/react-dom": "catalog:react",
+    "vite": "catalog:vite",
+    "vite-plugin-node-polyfills": "catalog:vite",
+    "@vitejs/plugin-react": "catalog:vite",
+    "vite-tsconfig-paths": "catalog:vite",
+    "@tailwindcss/vite": "catalog:vite",
+    "tw-animate-css": "catalog:tailwind"
+  }
+}
