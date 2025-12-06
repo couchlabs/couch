@@ -10,6 +10,7 @@ describe("resolveStageConfig", () => {
         LOGGING: "verbose",
         DUNNING_MODE: "fast",
         GH_ENVIRONMENT: "dev",
+        PUBLIC_APP_NAME: "Couch - Dev",
       })
     })
   })
@@ -22,6 +23,7 @@ describe("resolveStageConfig", () => {
         LOGGING: "minimal",
         DUNNING_MODE: "standard",
         GH_ENVIRONMENT: "staging",
+        PUBLIC_APP_NAME: "Couch - Staging",
       })
     })
   })
@@ -34,6 +36,7 @@ describe("resolveStageConfig", () => {
         LOGGING: "minimal",
         DUNNING_MODE: "standard",
         GH_ENVIRONMENT: "prod",
+        PUBLIC_APP_NAME: "Couch",
       })
     })
   })
@@ -46,6 +49,7 @@ describe("resolveStageConfig", () => {
         LOGGING: "verbose",
         DUNNING_MODE: "fast",
         GH_ENVIRONMENT: "dev",
+        PUBLIC_APP_NAME: "Couch - Dev",
       })
     })
 
@@ -56,6 +60,7 @@ describe("resolveStageConfig", () => {
         LOGGING: "verbose",
         DUNNING_MODE: "fast",
         GH_ENVIRONMENT: "dev",
+        PUBLIC_APP_NAME: "Couch - Dev",
       })
     })
 
@@ -66,6 +71,7 @@ describe("resolveStageConfig", () => {
         LOGGING: "verbose",
         DUNNING_MODE: "fast",
         GH_ENVIRONMENT: "dev",
+        PUBLIC_APP_NAME: "Couch - Dev",
       })
     })
   })

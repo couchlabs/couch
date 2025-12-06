@@ -37,7 +37,8 @@
         "@base-org/account": "2.5.0",
         "@coinbase/cdp-sdk": "^1.38.6",
         "@coinbase/cdp-core": "^0.0.71",
-        "@coinbase/cdp-hooks": "^0.0.71"
+        "@coinbase/cdp-hooks": "^0.0.71",
+        "@coinbase/cdp-react": "^0.0.71"
       },
       "crypto": {
         "viem": "^2.41.2",
