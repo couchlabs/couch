@@ -14,9 +14,6 @@ describe("PUT /v1/keys", () => {
     orderIds: number[]
     dispose: () => Promise<void>
   }
-  let mockAllowlist: {
-    get: ReturnType<typeof mock>
-  }
   let env: Partial<WorkerEnv>
   let app: Hono<{ Bindings: WorkerEnv }>
   let accountService: AccountService
@@ -32,24 +29,10 @@ describe("PUT /v1/keys", () => {
     })
     dispose = testDB.dispose
 
-    // Create mock ALLOWLIST KV namespace
-    mockAllowlist = {
-      get: mock(),
-    }
-
-    // Default behavior: TEST_ACCOUNT is allowlisted
-    mockAllowlist.get.mockImplementation(async (key: string) => {
-      if (key.toLowerCase() === TEST_ACCOUNT.toLowerCase()) {
-        return "2025-01-01T00:00:00.000Z"
-      }
-      return null
-    })
-
     // Create mock environment
     env = {
       DB: testDB.db,
       LOGGING: "verbose",
-      ALLOWLIST: mockAllowlist,
       // biome-ignore lint/suspicious/noExplicitAny: Test mock
     } as any as Partial<WorkerEnv>
 
@@ -57,12 +40,11 @@ describe("PUT /v1/keys", () => {
     app = new Hono<{ Bindings: WorkerEnv }>()
     app.route("/", keysRoutes)
 
-    // Create account and get initial API key
+    // Create account
     accountService = new AccountService(env as WorkerEnv)
-    const result = await accountService.createAccount({
+    await accountService.createAccount({
       address: TEST_ACCOUNT,
     })
-    initialApiKey = result.apiKey
 
     // Get account ID from database
     const account = await testDB.db
@@ -73,6 +55,10 @@ describe("PUT /v1/keys", () => {
       throw new Error("Test account not found in database")
     }
     testAccountId = account.id
+
+    // Generate initial API key via rotation
+    const { apiKey } = await accountService.rotateApiKey(testAccountId)
+    initialApiKey = apiKey
   })
 
   afterEach(async () => {

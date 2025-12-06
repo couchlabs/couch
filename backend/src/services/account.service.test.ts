@@ -27,9 +27,6 @@ describe("AccountService", () => {
     dispose: () => Promise<void>
   }
   let service: AccountService
-  let mockAllowlist: {
-    get: ReturnType<typeof mock>
-  }
 
   const TEST_ACCOUNT = getAddress(
     "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb1",
@@ -45,25 +42,10 @@ describe("AccountService", () => {
     })
     dispose = testDB.dispose
 
-    // Create mock ALLOWLIST KV namespace
-    mockAllowlist = {
-      get: mock(),
-    }
-
-    // Default behavior: TEST_ACCOUNT is allowlisted, TEST_ACCOUNT_NOT_ALLOWED is not
-    // Use case-insensitive comparison since addresses might be in different cases
-    mockAllowlist.get.mockImplementation(async (key: string) => {
-      if (key.toLowerCase() === TEST_ACCOUNT.toLowerCase()) {
-        return "2025-01-01T00:00:00.000Z" // Allowlisted (value is timestamp)
-      }
-      return null // Not in allowlist
-    })
-
-    // Create service instance with mocked ALLOWLIST and CDP credentials
+    // Create service instance with CDP credentials
     service = new AccountService({
       DB: testDB.db,
       LOGGING: "verbose",
-      ALLOWLIST: mockAllowlist,
       CDP_API_KEY_ID: "test-api-key-id",
       CDP_API_KEY_SECRET: "test-api-key-secret",
       CDP_WALLET_SECRET: "test-wallet-secret",
@@ -79,19 +61,20 @@ describe("AccountService", () => {
     mock.clearAllMocks()
   })
 
-  describe("isAddressAllowed", () => {
-    it("returns true when address is in allowlist", async () => {
-      const isAllowed = await service.isAddressAllowed(TEST_ACCOUNT)
+  // NOTE: Allowlist removed - authentication now handled by CDP at merchant app level
 
-      expect(isAllowed).toBe(true)
-      expect(mockAllowlist.get).toHaveBeenCalledWith(TEST_ACCOUNT)
+  describe("accountExists", () => {
+    it("returns true when account exists", async () => {
+      // Create account first
+      await service.createAccount({ address: TEST_ACCOUNT })
+
+      const exists = await service.accountExists(TEST_ACCOUNT)
+      expect(exists).toBe(true)
     })
 
-    it("returns false when address is not in allowlist", async () => {
-      const isAllowed = await service.isAddressAllowed(TEST_ACCOUNT_NOT_ALLOWED)
-
-      expect(isAllowed).toBe(false)
-      expect(mockAllowlist.get).toHaveBeenCalledWith(TEST_ACCOUNT_NOT_ALLOWED)
+    it("returns false when account does not exist", async () => {
+      const exists = await service.accountExists(TEST_ACCOUNT_NOT_ALLOWED)
+      expect(exists).toBe(false)
     })
   })
 
@@ -121,9 +104,7 @@ describe("AccountService", () => {
         address: TEST_ACCOUNT,
       })
 
-      // Should return API key and wallet address
-      expect(result.apiKey).toBeDefined()
-      expect(result.apiKey).toMatch(/^ck_[a-f0-9]{32}$/)
+      // Should return wallet address only (API keys managed separately)
       expect(result.subscriptionOwnerWalletAddress).toBeDefined()
       expect(result.subscriptionOwnerWalletAddress).toMatch(
         /^0x[a-fA-F0-9]{40}$/,
@@ -138,27 +119,26 @@ describe("AccountService", () => {
       expect(account?.address).toBe(TEST_ACCOUNT)
       expect(account?.id).toBeDefined()
 
-      // Verify API key was created (using account_id foreign key)
+      // Verify account was created (no API key - managed separately)
       expect(account).not.toBeNull()
       const keyCount = await testDB.db
         .prepare("SELECT COUNT(*) as count FROM api_keys WHERE account_id = ?")
         .bind(account?.id)
         .first<{ count: number }>()
 
-      expect(keyCount?.count).toBe(1)
+      expect(keyCount?.count).toBe(0) // No API key created
     })
 
-    it("throws 403 when address is not allowlisted", async () => {
-      try {
-        await service.createAccount({
-          address: TEST_ACCOUNT_NOT_ALLOWED,
-        })
-        expect.unreachable("Should have thrown HTTPError")
-      } catch (error) {
-        expect(error).toBeInstanceOf(HTTPError)
-        expect((error as HTTPError).code).toBe(ErrorCode.ADDRESS_NOT_ALLOWED)
-        expect((error as HTTPError).status).toBe(403)
-      }
+    // NOTE: Allowlist check removed - authentication now handled by CDP at merchant app level
+    it("creates account successfully (no allowlist check)", async () => {
+      const result = await service.createAccount({
+        address: TEST_ACCOUNT_NOT_ALLOWED,
+      })
+
+      expect(result).toHaveProperty("subscriptionOwnerWalletAddress")
+      expect(result.subscriptionOwnerWalletAddress).toMatch(
+        /^0x[a-fA-F0-9]{40}$/,
+      )
     })
 
     it("throws 409 when account already exists", async () => {
@@ -180,34 +160,8 @@ describe("AccountService", () => {
       }
     })
 
-    it("throws 400 when address format is invalid", async () => {
-      try {
-        await service.createAccount({
-          address: "not-a-valid-address",
-        })
-        expect.unreachable("Should have thrown HTTPError")
-      } catch (error) {
-        expect(error).toBeInstanceOf(HTTPError)
-        expect((error as HTTPError).code).toBe(ErrorCode.INVALID_FORMAT)
-        expect((error as HTTPError).status).toBe(400)
-      }
-    })
-
-    it("normalizes address to checksummed format", async () => {
-      const lowercaseAddress = TEST_ACCOUNT.toLowerCase()
-
-      await service.createAccount({
-        address: lowercaseAddress,
-      })
-
-      // Verify address was stored in checksummed format
-      const account = await testDB.db
-        .prepare("SELECT address FROM accounts WHERE address = ?")
-        .bind(TEST_ACCOUNT)
-        .first<{ address: string }>()
-
-      expect(account?.address).toBe(TEST_ACCOUNT)
-    })
+    // NOTE: Address validation tests removed - createAccount() trusts caller to validate
+    // Validation is now done in getOrCreateAccount() which is the public entry point
 
     it("rolls back account creation if wallet creation fails", async () => {
       mockWalletCreation.mockImplementationOnce(async () => {
@@ -239,7 +193,8 @@ describe("AccountService", () => {
 
   describe("rotateApiKey", () => {
     it("rotates API key successfully for existing account", async () => {
-      const { apiKey: initialKey } = await service.createAccount({
+      // Create account first (no API key returned)
+      await service.createAccount({
         address: TEST_ACCOUNT,
       })
 
@@ -255,8 +210,8 @@ describe("AccountService", () => {
       const { apiKey: rotatedKey, subscriptionOwnerWalletAddress } =
         await service.rotateApiKey(account.id)
 
-      // Keys should be different
-      expect(rotatedKey).not.toBe(initialKey)
+      // Should return new API key
+      expect(rotatedKey).toBeDefined()
       expect(rotatedKey).toMatch(/^ck_[a-f0-9]{32}$/)
       expect(subscriptionOwnerWalletAddress).toBeDefined()
 
@@ -267,11 +222,6 @@ describe("AccountService", () => {
         .first<{ count: number }>()
 
       expect(keyCount?.count).toBe(1)
-
-      // Verify old key no longer works
-      await expect(service.authenticateApiKey(initialKey)).rejects.toThrow(
-        HTTPError,
-      )
 
       // Verify new key works
       const authenticatedAccount = await service.authenticateApiKey(rotatedKey)
@@ -304,9 +254,19 @@ describe("AccountService", () => {
 
   describe("authenticateApiKey", () => {
     it("authenticates valid API key and returns account", async () => {
-      const { apiKey } = await service.createAccount({
+      // Create account
+      await service.createAccount({
         address: TEST_ACCOUNT,
       })
+
+      // Get account ID and rotate to get an API key
+      const accountRecord = await testDB.db
+        .prepare("SELECT id FROM accounts WHERE address = ?")
+        .bind(TEST_ACCOUNT)
+        .first<{ id: number }>()
+      if (!accountRecord) throw new Error("Account not created")
+
+      const { apiKey } = await service.rotateApiKey(accountRecord.id)
 
       const account = await service.authenticateApiKey(apiKey)
 
@@ -345,6 +305,97 @@ describe("AccountService", () => {
       const account = await service.authenticateApiKey(newKey)
       expect(account.address).toBe(TEST_ACCOUNT)
       expect(account.id).toBeDefined()
+    })
+  })
+
+  describe("getOrCreateAccount", () => {
+    it("validates and normalizes address format", async () => {
+      // Use lowercase address (should be normalized to checksummed)
+      const lowercaseAddress = TEST_ACCOUNT.toLowerCase()
+
+      const result = await service.getOrCreateAccount({
+        address: lowercaseAddress,
+      })
+
+      expect(result.success).toBe(true)
+
+      // Verify account was created with checksummed address
+      const account = await testDB.db
+        .prepare("SELECT address FROM accounts WHERE address = ?")
+        .bind(TEST_ACCOUNT)
+        .first<{ address: string }>()
+
+      expect(account?.address).toBe(TEST_ACCOUNT) // Checksummed version
+    })
+
+    it("throws 400 when address format is invalid", async () => {
+      try {
+        await service.getOrCreateAccount({
+          address: "invalid-address",
+        })
+        expect.unreachable("Should have thrown HTTPError")
+      } catch (error) {
+        expect(error).toBeInstanceOf(HTTPError)
+        expect((error as HTTPError).code).toBe(ErrorCode.INVALID_FORMAT)
+        expect((error as HTTPError).status).toBe(400)
+      }
+    })
+
+    it("creates new account successfully", async () => {
+      const result = await service.getOrCreateAccount({
+        address: TEST_ACCOUNT,
+      })
+
+      expect(result.success).toBe(true)
+
+      // Verify account was created
+      const account = await testDB.db
+        .prepare("SELECT id, address FROM accounts WHERE address = ?")
+        .bind(TEST_ACCOUNT)
+        .first<{ id: number; address: string }>()
+
+      expect(account).not.toBeNull()
+      expect(account?.address).toBe(TEST_ACCOUNT)
+      expect(account?.id).toBeDefined()
+    })
+
+    it("returns success for existing account (idempotent)", async () => {
+      // Create account first
+      await service.createAccount({ address: TEST_ACCOUNT })
+
+      // Call getOrCreateAccount - should return success without error
+      const result = await service.getOrCreateAccount({
+        address: TEST_ACCOUNT,
+      })
+
+      expect(result.success).toBe(true)
+
+      // Verify only one account exists
+      const count = await testDB.db
+        .prepare("SELECT COUNT(*) as count FROM accounts WHERE address = ?")
+        .bind(TEST_ACCOUNT)
+        .first<{ count: number }>()
+
+      expect(count?.count).toBe(1)
+    })
+
+    it("returns success for existing account with different case", async () => {
+      // Create account with checksummed address
+      await service.createAccount({ address: TEST_ACCOUNT })
+
+      // Call with lowercase address
+      const result = await service.getOrCreateAccount({
+        address: TEST_ACCOUNT.toLowerCase(),
+      })
+
+      expect(result.success).toBe(true)
+
+      // Verify only one account exists
+      const count = await testDB.db
+        .prepare("SELECT COUNT(*) as count FROM accounts")
+        .first<{ count: number }>()
+
+      expect(count?.count).toBe(1)
     })
   })
 })
