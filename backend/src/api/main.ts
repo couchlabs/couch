@@ -2,7 +2,6 @@
 import { Hono } from "hono"
 import { cors } from "hono/cors"
 import { HTTPException } from "hono/http-exception"
-import { accountRoutes } from "@/api/routes/account.routes"
 import { healthRoutes } from "@/api/routes/health.routes"
 import { keysRoutes } from "@/api/routes/keys.routes"
 import { subscriptionRoutes } from "@/api/routes/subscriptions.routes"
@@ -42,7 +41,6 @@ app.onError((error, ctx) => {
 
 // Mount routes
 app.route("/health", healthRoutes)
-app.route("/account", accountRoutes)
 app.route("/webhook", webhookRoutes)
 app.route("/keys", keysRoutes)
 app.route("/subscriptions", subscriptionRoutes)
