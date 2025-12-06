@@ -10,10 +10,14 @@ import {
 } from "@/repositories/account.repository"
 
 export interface CreateAccountParams {
-  address: string
+  address: Address
 }
 
 export interface AccountResult {
+  subscriptionOwnerWalletAddress: Address
+}
+
+export interface RotateApiKeyResult {
   apiKey: string
   subscriptionOwnerWalletAddress: Address
 }
@@ -22,9 +26,6 @@ export interface AccountServiceDeps extends AccountRepositoryDeps {
   CDP_API_KEY_ID: string
   CDP_API_KEY_SECRET: string
   CDP_WALLET_SECRET: string
-  ALLOWLIST: {
-    get: (key: string) => Promise<string | null>
-  }
 }
 
 export class AccountService {
@@ -90,14 +91,6 @@ export class AccountService {
   }
 
   /**
-   * Checks if an address is in the allowlist
-   */
-  async isAddressAllowed(address: Address): Promise<boolean> {
-    const exists = await this.env.ALLOWLIST.get(address)
-    return exists !== null
-  }
-
-  /**
    * Checks if an account already exists
    */
   async accountExists(address: Address): Promise<boolean> {
@@ -106,21 +99,14 @@ export class AccountService {
   }
 
   /**
-   * Creates a new account (only if allowlisted and doesn't exist)
+   * Creates a new account
+   * Note: Authentication is handled by CDP at the merchant app level
+   * API keys will be managed separately via API key CRUD operations
+   * Note: Caller is responsible for address validation (already done in getOrCreateAccount)
    */
   async createAccount(params: CreateAccountParams): Promise<AccountResult> {
-    const accountAddress = this.validateAddress(params.address)
+    const accountAddress = params.address
     const log = logger.with({ accountAddress })
-
-    // Check if address is allowlisted
-    const isAllowed = await this.isAddressAllowed(accountAddress)
-    if (!isAllowed) {
-      throw new HTTPError(
-        403,
-        ErrorCode.ADDRESS_NOT_ALLOWED,
-        "Address not authorized for account creation",
-      )
-    }
 
     // Check if account already exists
     const exists = await this.accountExists(accountAddress)
@@ -128,7 +114,7 @@ export class AccountService {
       throw new HTTPError(
         409,
         ErrorCode.ACCOUNT_EXISTS,
-        "Account already exists. Use /api/keys to manage API keys.",
+        "Account already exists",
       )
     }
 
@@ -174,22 +160,15 @@ export class AccountService {
       )
     }
 
-    // Set API key
-    const { apiKey, keyHash } = await this.generateApiKey()
-    await this.accountRepository.setApiKey({
-      accountId: account.id,
-      keyHash,
-    })
-
     log.info("Account created successfully", { accountId: account.id })
 
-    return { apiKey, subscriptionOwnerWalletAddress }
+    return { subscriptionOwnerWalletAddress }
   }
 
   /**
    * Rotates the API key for an authenticated account
    */
-  async rotateApiKey(accountId: number): Promise<AccountResult> {
+  async rotateApiKey(accountId: number): Promise<RotateApiKeyResult> {
     const log = logger.with({ accountId })
 
     log.info("Rotating account API key")
@@ -232,5 +211,30 @@ export class AccountService {
     }
 
     return account
+  }
+
+  /**
+   * Gets or creates an account (for internal RPC use)
+   * Returns success status only - no sensitive data
+   * Authentication is handled by CDP at the merchant app level
+   */
+  async getOrCreateAccount(params: {
+    address: string
+  }): Promise<{ success: boolean }> {
+    const accountAddress = this.validateAddress(params.address)
+    const log = logger.with({ accountAddress })
+
+    // Check if account exists
+    const existing =
+      await this.accountRepository.getAccountByAddress(accountAddress)
+    if (existing) {
+      log.info("Account already exists")
+      return { success: true }
+    }
+
+    log.info("Creating new account via RPC")
+    await this.createAccount({ address: accountAddress })
+
+    return { success: true }
   }
 }

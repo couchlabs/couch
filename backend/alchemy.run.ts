@@ -87,18 +87,6 @@ const db = await D1Database(DB_NAME, {
   },
 })
 
-// allowlist: KV store for authorized account addresses
-const ALLOWLIST_NAME = "allowlist"
-export const allowlist = await KVNamespace(ALLOWLIST_NAME, {
-  title: `${NAME_PREFIX}-${ALLOWLIST_NAME}`,
-  values: [
-    {
-      key: alchemy.env.COUCH_TEST_ACCOUNT_ADDRESS,
-      value: "Note: COUCH_TEST_ACCOUNT_ADDRESS",
-    },
-  ],
-})
-
 // -----------------------------------------------------------------------------
 // QUEUES
 // -----------------------------------------------------------------------------
@@ -162,7 +150,6 @@ export const api = await Worker(API_NAME, {
     DUNNING_MODE,
     // RESOURCES:
     DB: db,
-    ALLOWLIST: allowlist,
     ORDER_QUEUE: orderQueue,
     WEBHOOK_QUEUE: webhookQueue,
     ORDER_SCHEDULER: DurableObjectNamespace<OrderScheduler>("order-scheduler", {
@@ -173,6 +160,27 @@ export const api = await Worker(API_NAME, {
   dev: { port: 3000 },
   url: GH_ENVIRONMENT === "dev",
   domains,
+})
+
+// -----------------------------------------------------------------------------
+// INTERNAL RPC SERVICE
+// -----------------------------------------------------------------------------
+
+// rpc: Internal RPC service
+const RPC_NAME = "rpc"
+export const rpc = await Worker(RPC_NAME, {
+  name: `${NAME_PREFIX}-${RPC_NAME}`,
+  entrypoint: path.join(import.meta.dirname, "src", "rpc", "main.ts"),
+  bindings: {
+    // RPC service needs same bindings as API for account creation
+    CDP_API_KEY_ID: alchemy.secret.env.CDP_API_KEY_ID,
+    CDP_API_KEY_SECRET: alchemy.secret.env.CDP_API_KEY_SECRET,
+    CDP_WALLET_SECRET: alchemy.secret.env.CDP_WALLET_SECRET,
+    LOGGING,
+    DB: db,
+  },
+  compatibilityFlags,
+  dev: { port: 3001 },
 })
 
 // -----------------------------------------------------------------------------
@@ -296,8 +304,8 @@ export const webhookDLQConsumer = await Worker(WEBHOOK_DLQ_CONSUMER_NAME, {
 if (app.local) {
   console.log({
     [API_NAME]: api,
+    [RPC_NAME]: rpc,
     [DB_NAME]: db,
-    [ALLOWLIST_NAME]: allowlist,
     [ORDER_QUEUE_NAME]: orderQueue,
     [ORDER_CONSUMER_NAME]: orderConsumer,
     [WEBHOOK_QUEUE_NAME]: webhookQueue,
@@ -318,10 +326,3 @@ if (process.env.GITHUB_OUTPUT) {
 }
 
 await app.finalize()
-
-// TODOS
-// Reconciler components - see commit ee65232 for commented implementation
-// - subscription-reconciler-scheduler:  Audits permission consistency (Worker with cron trigger)
-// - subscription-orphan-cache (KV)
-// - subscription-revoke-queue: Queue for revocation tasks (Queue)
-// - subscription-revoke-consumer:  Revokes cancelled subscriptions (Worker with Queue consumer settings)
