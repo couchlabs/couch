@@ -11,11 +11,13 @@ export enum Stage {
 export type LoggingLevel = "verbose" | "minimal"
 export type DunningMode = "fast" | "standard"
 export type GHEnvironment = "dev" | "staging" | "prod"
+export type AppName = "Couch - Dev" | "Couch - Staging" | "Couch"
 
 export interface StageConfig {
   LOGGING: LoggingLevel
   DUNNING_MODE: DunningMode
   GH_ENVIRONMENT: GHEnvironment
+  PUBLIC_APP_NAME: AppName
 }
 
 /**
@@ -48,9 +50,18 @@ export function resolveStageConfig(stage: string): StageConfig {
   const GH_ENVIRONMENT: GHEnvironment =
     stage === Stage.PROD ? "prod" : stage === Stage.STAGING ? "staging" : "dev" // dev/pr-* share dev environment
 
+  // Public App Name to expose to systems
+  const PUBLIC_APP_NAME =
+    stage === Stage.PROD
+      ? "Couch"
+      : stage === Stage.STAGING
+        ? "Couch - Staging"
+        : "Couch - Dev"
+
   return {
     LOGGING,
     DUNNING_MODE,
     GH_ENVIRONMENT,
+    PUBLIC_APP_NAME,
   }
 }

@@ -12,9 +12,9 @@
   "dependencies": {
     "backend": "workspace:*",
     "hono": "catalog:cloudflare",
-    "@base-org/account": "catalog:coinbase",
     "@coinbase/cdp-core": "catalog:coinbase",
     "@coinbase/cdp-hooks": "catalog:coinbase",
+    "@coinbase/cdp-react": "catalog:coinbase",
     "viem": "catalog:crypto",
     "wagmi": "catalog:crypto",
     "react": "catalog:react",

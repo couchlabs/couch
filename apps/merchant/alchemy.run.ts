@@ -39,7 +39,7 @@ export const app = await alchemy("couch-merchant", {
       : new CloudflareStateStore(scope),
 })
 const NAME_PREFIX = `${app.name}-${app.stage}`
-const { GH_ENVIRONMENT } = resolveStageConfig(app.stage)
+const { GH_ENVIRONMENT, PUBLIC_APP_NAME } = resolveStageConfig(app.stage)
 
 const compatibilityFlags = ["nodejs_compat", "disallow_importable_env"]
 
@@ -57,8 +57,18 @@ export const website = await Vite(WEBSITE_NAME, {
   name: `${NAME_PREFIX}-${WEBSITE_NAME}`,
   // entrypoint: path.join(import.meta.dirname, "src", "api", "main.ts"),
   // Envs exposed to vite build
-  dev: { env: {} },
-  build: { env: {} },
+  dev: {
+    env: {
+      VITE_COUCH_PUBLIC_APP_NAME: PUBLIC_APP_NAME,
+      VITE_CDP_PROJECT_ID: alchemy.env.CDP_PROJECT_ID,
+    },
+  },
+  build: {
+    env: {
+      VITE_COUCH_PUBLIC_APP_NAME: PUBLIC_APP_NAME,
+      VITE_CDP_PROJECT_ID: alchemy.env.CDP_PROJECT_ID,
+    },
+  },
   // Envs exposed to worker only
   bindings: {},
   compatibilityFlags,
