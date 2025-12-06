@@ -8,7 +8,9 @@ export class RPC extends WorkerEntrypoint {
    * Skips allowlist check - trusted internal caller (merchant app)
    * Returns only success status - no sensitive data exposed
    */
-  async getOrCreateAccount(address: Address): Promise<{ success: boolean }> {
+  async getOrCreateAccount(params: {
+    address: Address
+  }): Promise<{ success: boolean }> {
     const accountService = new AccountService({
       DB: this.env.DB,
       LOGGING: this.env.LOGGING,
@@ -18,7 +20,7 @@ export class RPC extends WorkerEntrypoint {
     })
 
     // Skip allowlist check - trusted internal caller
-    return accountService.getOrCreateAccount({ address })
+    return accountService.getOrCreateAccount({ address: params.address })
   }
 }
 

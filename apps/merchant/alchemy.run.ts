@@ -1,7 +1,8 @@
+import path from "node:path"
 import alchemy from "alchemy"
 import { Vite } from "alchemy/cloudflare"
 import { CloudflareStateStore, FileSystemStateStore } from "alchemy/state"
-
+import { rpc } from "backend/alchemy"
 import { resolveStageConfig } from "@/constants/env.constants"
 
 // =============================================================================
@@ -55,7 +56,7 @@ if (GH_ENVIRONMENT === "staging") {
 const WEBSITE_NAME = "website"
 export const website = await Vite(WEBSITE_NAME, {
   name: `${NAME_PREFIX}-${WEBSITE_NAME}`,
-  // entrypoint: path.join(import.meta.dirname, "src", "api", "main.ts"),
+  entrypoint: path.join(import.meta.dirname, "src", "api", "main.ts"),
   // Envs exposed to vite build
   dev: {
     env: {
@@ -70,7 +71,9 @@ export const website = await Vite(WEBSITE_NAME, {
     },
   },
   // Envs exposed to worker only
-  bindings: {},
+  bindings: {
+    COUCH_BACKEND_RPC: rpc,
+  },
   compatibilityFlags,
   url: GH_ENVIRONMENT === "dev", // Generate URLs for dev (previews deployments)
   domains,

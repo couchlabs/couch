@@ -1,16 +1,16 @@
 import * as fs from "node:fs"
 import path from "node:path"
-import alchemy from "alchemy"
+import alchemy, { type } from "alchemy"
 import {
   D1Database,
   DurableObjectNamespace,
-  KVNamespace,
   Queue,
   Worker,
 } from "alchemy/cloudflare"
 import { CloudflareStateStore, FileSystemStateStore } from "alchemy/state"
 import { resolveStageConfig } from "@/constants/env.constants"
 import type { Provider } from "@/providers/provider.interface"
+import type { RPC } from "@/rpc/main"
 import type { OrderScheduler } from "@/schedulers/order.scheduler"
 import drizzleConfig from "./drizzle.config"
 
@@ -171,6 +171,7 @@ const RPC_NAME = "rpc"
 export const rpc = await Worker(RPC_NAME, {
   name: `${NAME_PREFIX}-${RPC_NAME}`,
   entrypoint: path.join(import.meta.dirname, "src", "rpc", "main.ts"),
+  rpc: type<RPC>,
   bindings: {
     // RPC service needs same bindings as API for account creation
     CDP_API_KEY_ID: alchemy.secret.env.CDP_API_KEY_ID,
