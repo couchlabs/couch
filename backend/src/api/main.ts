@@ -3,7 +3,6 @@ import { Hono } from "hono"
 import { cors } from "hono/cors"
 import { HTTPException } from "hono/http-exception"
 import { healthRoutes } from "@/api/routes/health.routes"
-// import { keysRoutes } from "@/api/routes/keys.routes" // DEPRECATED: Removed in Phase 1, will be deleted in Phase 8
 import { subscriptionRoutes } from "@/api/routes/subscriptions.routes"
 import { webhookRoutes } from "@/api/routes/webhook.routes"
 import { ErrorCode } from "@/errors/http.errors"
@@ -42,7 +41,6 @@ app.onError((error, ctx) => {
 // Mount routes
 app.route("/health", healthRoutes)
 app.route("/webhook", webhookRoutes)
-// app.route("/keys", keysRoutes) // DEPRECATED: Removed in Phase 1, will be deleted in Phase 8
 app.route("/subscriptions", subscriptionRoutes)
 
 export default app

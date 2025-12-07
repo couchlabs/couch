@@ -22,11 +22,6 @@ export interface AccountResult {
   subscriptionOwnerWalletAddress: Address
 }
 
-export interface RotateApiKeyResult {
-  apiKey: string
-  subscriptionOwnerWalletAddress: Address
-}
-
 export interface AccountServiceDeps extends AccountRepositoryDeps {
   CDP_API_KEY_ID: string
   CDP_API_KEY_SECRET: string
@@ -182,36 +177,6 @@ export class AccountService {
 
     return { subscriptionOwnerWalletAddress }
   }
-
-  /**
-   * DEPRECATED: Will be removed in Phase 8
-   * Rotates the API key for an authenticated account
-   */
-  // async rotateApiKey(accountId: number): Promise<RotateApiKeyResult> {
-  //   const log = logger.with({ accountId })
-
-  //   log.info("Rotating account API key")
-
-  //   const { apiKey, keyHash } = await this.generateApiKey()
-
-  //   // Set API key (atomic delete + insert)
-  //   await this.accountRepository.setApiKey({
-  //     accountId,
-  //     keyHash,
-  //   })
-
-  //   // Get wallet address for this account
-  //   const wallet = await getOrCreateSubscriptionOwnerWallet({
-  //     cdpApiKeyId: this.env.CDP_API_KEY_ID,
-  //     cdpApiKeySecret: this.env.CDP_API_KEY_SECRET,
-  //     cdpWalletSecret: this.env.CDP_WALLET_SECRET,
-  //     walletName: getSubscriptionOwnerWalletName(accountId),
-  //   })
-
-  //   log.info("Account API key rotated successfully")
-
-  //   return { apiKey, subscriptionOwnerWalletAddress: wallet.address as Address }
-  // }
 
   /**
    * Creates a new API key for an account
