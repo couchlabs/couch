@@ -7,6 +7,7 @@ import {
   text,
 } from "drizzle-orm/sqlite-core"
 import type { Address, Hash } from "viem"
+import { API_KEY_PREFIX } from "@/constants/account.constants"
 import {
   OrderStatus,
   OrderType,
@@ -56,8 +57,8 @@ export const apiKeys = sqliteTable(
       .notNull()
       .references(() => accounts.id, { onDelete: "cascade" }),
     name: text("name").notNull(),
-    prefix: text("prefix").notNull().default("ck_"),
-    start: text("start").notNull(), // First 6 chars for UI preview
+    prefix: text("prefix").notNull().default(API_KEY_PREFIX),
+    start: text("start").notNull(), // First N chars for UI preview
     enabled: integer("enabled", { mode: "boolean" }).notNull().default(true),
     createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
     lastUsedAt: text("last_used_at"),

@@ -31,6 +31,9 @@ describe("AccountService", () => {
   const TEST_ACCOUNT = getAddress(
     "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb1",
   ) as Address
+  const TEST_ACCOUNT_2 = getAddress(
+    "0x8888888888888888888888888888888888888888",
+  ) as Address
   const TEST_ACCOUNT_NOT_ALLOWED = getAddress(
     "0x1234567890123456789012345678901234567890",
   ) as Address
@@ -53,6 +56,9 @@ describe("AccountService", () => {
   })
 
   afterEach(async () => {
+    // Wait for any pending background operations to complete
+    await service.waitForPendingUpdates()
+
     // Clean up database
     if (dispose) {
       await dispose()
@@ -198,10 +204,532 @@ describe("AccountService", () => {
   //   })
   // })
 
+  describe("API Key CRUD Operations", () => {
+    describe("createApiKey", () => {
+      it("creates a new API key with valid name", async () => {
+        // Create account first
+        await service.createAccount({ address: TEST_ACCOUNT })
+
+        const account = await testDB.db
+          .prepare("SELECT id FROM accounts WHERE address = ?")
+          .bind(TEST_ACCOUNT)
+          .first<{ id: number }>()
+        if (!account) throw new Error("Account not created")
+
+        // Create API key
+        const result = await service.createApiKey({
+          accountId: account.id,
+          name: "Test Key",
+        })
+
+        // Verify response
+        expect(result.id).toBeDefined()
+        expect(result.apiKey).toBeDefined()
+        expect(result.apiKey).toMatch(/^ck_[a-f0-9]{32}$/)
+        expect(result.name).toBe("Test Key")
+        expect(result.prefix).toBe("ck_")
+        expect(result.start).toBeDefined()
+        expect(result.start.length).toBe(6)
+        expect(result.enabled).toBe(true)
+        expect(result.createdAt).toBeDefined()
+
+        // Verify it's in the database
+        const dbKey = await testDB.db
+          .prepare("SELECT * FROM api_keys WHERE id = ?")
+          .bind(result.id)
+          .first<{ name: string; enabled: number }>()
+
+        expect(dbKey).toBeDefined()
+        expect(dbKey?.name).toBe("Test Key")
+        expect(dbKey?.enabled).toBe(1)
+      })
+
+      it("generates default name when not provided", async () => {
+        await service.createAccount({ address: TEST_ACCOUNT })
+        const account = await testDB.db
+          .prepare("SELECT id FROM accounts WHERE address = ?")
+          .bind(TEST_ACCOUNT)
+          .first<{ id: number }>()
+        if (!account) throw new Error("Account not created")
+
+        const result1 = await service.createApiKey({
+          accountId: account.id,
+        })
+        expect(result1.name).toBe("API Key 1")
+
+        const result2 = await service.createApiKey({
+          accountId: account.id,
+        })
+        expect(result2.name).toBe("API Key 2")
+      })
+
+      it("trims whitespace from key name", async () => {
+        await service.createAccount({ address: TEST_ACCOUNT })
+        const account = await testDB.db
+          .prepare("SELECT id FROM accounts WHERE address = ?")
+          .bind(TEST_ACCOUNT)
+          .first<{ id: number }>()
+        if (!account) throw new Error("Account not created")
+
+        const result = await service.createApiKey({
+          accountId: account.id,
+          name: "  Trimmed Key  ",
+        })
+
+        expect(result.name).toBe("Trimmed Key")
+      })
+
+      it("throws error when name is empty string", async () => {
+        await service.createAccount({ address: TEST_ACCOUNT })
+        const account = await testDB.db
+          .prepare("SELECT id FROM accounts WHERE address = ?")
+          .bind(TEST_ACCOUNT)
+          .first<{ id: number }>()
+        if (!account) throw new Error("Account not created")
+
+        try {
+          await service.createApiKey({
+            accountId: account.id,
+            name: "",
+          })
+          expect.unreachable("Should have thrown HTTPError")
+        } catch (error) {
+          expect(error).toBeInstanceOf(HTTPError)
+          expect((error as HTTPError).status).toBe(400)
+          expect((error as HTTPError).code).toBe(ErrorCode.INVALID_FORMAT)
+        }
+      })
+
+      it("throws error when name is too long", async () => {
+        await service.createAccount({ address: TEST_ACCOUNT })
+        const account = await testDB.db
+          .prepare("SELECT id FROM accounts WHERE address = ?")
+          .bind(TEST_ACCOUNT)
+          .first<{ id: number }>()
+        if (!account) throw new Error("Account not created")
+
+        const longName = "a".repeat(33)
+
+        try {
+          await service.createApiKey({
+            accountId: account.id,
+            name: longName,
+          })
+          expect.unreachable("Should have thrown HTTPError")
+        } catch (error) {
+          expect(error).toBeInstanceOf(HTTPError)
+          expect((error as HTTPError).status).toBe(400)
+          expect((error as HTTPError).code).toBe(ErrorCode.INVALID_FORMAT)
+        }
+      })
+
+      it("creates multiple keys for the same account", async () => {
+        await service.createAccount({ address: TEST_ACCOUNT })
+        const account = await testDB.db
+          .prepare("SELECT id FROM accounts WHERE address = ?")
+          .bind(TEST_ACCOUNT)
+          .first<{ id: number }>()
+        if (!account) throw new Error("Account not created")
+
+        const key1 = await service.createApiKey({
+          accountId: account.id,
+          name: "Key 1",
+        })
+        const key2 = await service.createApiKey({
+          accountId: account.id,
+          name: "Key 2",
+        })
+
+        expect(key1.id).not.toBe(key2.id)
+        expect(key1.apiKey).not.toBe(key2.apiKey)
+
+        // Verify both exist in database
+        const count = await testDB.db
+          .prepare(
+            "SELECT COUNT(*) as count FROM api_keys WHERE account_id = ?",
+          )
+          .bind(account.id)
+          .first<{ count: number }>()
+
+        expect(count?.count).toBe(2)
+      })
+    })
+
+    describe("listApiKeys", () => {
+      it("lists all keys for an account", async () => {
+        await service.createAccount({ address: TEST_ACCOUNT })
+        const account = await testDB.db
+          .prepare("SELECT id FROM accounts WHERE address = ?")
+          .bind(TEST_ACCOUNT)
+          .first<{ id: number }>()
+        if (!account) throw new Error("Account not created")
+
+        // Create multiple keys
+        await service.createApiKey({ accountId: account.id, name: "Key 1" })
+        await service.createApiKey({ accountId: account.id, name: "Key 2" })
+        await service.createApiKey({ accountId: account.id, name: "Key 3" })
+
+        const keys = await service.listApiKeys({ accountId: account.id })
+
+        expect(keys.length).toBe(3)
+        expect(keys.map((k) => k.name)).toEqual(
+          expect.arrayContaining(["Key 1", "Key 2", "Key 3"]),
+        )
+
+        // Verify no keyHash in response (security)
+        keys.forEach((key) => {
+          expect(key).not.toHaveProperty("keyHash")
+          expect(key.id).toBeDefined()
+          expect(key.name).toBeDefined()
+          expect(key.prefix).toBe("ck_")
+          expect(key.start).toBeDefined()
+          expect(key.enabled).toBe(true)
+          expect(key.createdAt).toBeDefined()
+        })
+      })
+
+      it("returns empty array when no keys exist", async () => {
+        await service.createAccount({ address: TEST_ACCOUNT })
+        const account = await testDB.db
+          .prepare("SELECT id FROM accounts WHERE address = ?")
+          .bind(TEST_ACCOUNT)
+          .first<{ id: number }>()
+        if (!account) throw new Error("Account not created")
+
+        const keys = await service.listApiKeys({ accountId: account.id })
+
+        expect(keys).toEqual([])
+      })
+
+      it("returns all keys for an account", async () => {
+        await service.createAccount({ address: TEST_ACCOUNT })
+        const account = await testDB.db
+          .prepare("SELECT id FROM accounts WHERE address = ?")
+          .bind(TEST_ACCOUNT)
+          .first<{ id: number }>()
+        if (!account) throw new Error("Account not created")
+
+        await service.createApiKey({
+          accountId: account.id,
+          name: "First",
+        })
+        await service.createApiKey({
+          accountId: account.id,
+          name: "Second",
+        })
+
+        const keys = await service.listApiKeys({ accountId: account.id })
+
+        // Should return both keys
+        expect(keys).toHaveLength(2)
+        const names = keys.map((k) => k.name).sort()
+        expect(names).toEqual(["First", "Second"])
+      })
+    })
+
+    describe("updateApiKey", () => {
+      it("updates key name", async () => {
+        await service.createAccount({ address: TEST_ACCOUNT })
+        const account = await testDB.db
+          .prepare("SELECT id FROM accounts WHERE address = ?")
+          .bind(TEST_ACCOUNT)
+          .first<{ id: number }>()
+        if (!account) throw new Error("Account not created")
+
+        const created = await service.createApiKey({
+          accountId: account.id,
+          name: "Old Name",
+        })
+
+        const updated = await service.updateApiKey({
+          accountId: account.id,
+          keyId: created.id,
+          name: "New Name",
+        })
+
+        expect(updated.name).toBe("New Name")
+        expect(updated.id).toBe(created.id)
+      })
+
+      it("updates enabled status", async () => {
+        await service.createAccount({ address: TEST_ACCOUNT })
+        const account = await testDB.db
+          .prepare("SELECT id FROM accounts WHERE address = ?")
+          .bind(TEST_ACCOUNT)
+          .first<{ id: number }>()
+        if (!account) throw new Error("Account not created")
+
+        const created = await service.createApiKey({
+          accountId: account.id,
+          name: "Test Key",
+        })
+
+        const updated = await service.updateApiKey({
+          accountId: account.id,
+          keyId: created.id,
+          enabled: false,
+        })
+
+        expect(updated.enabled).toBe(false)
+      })
+
+      it("updates both name and enabled status", async () => {
+        await service.createAccount({ address: TEST_ACCOUNT })
+        const account = await testDB.db
+          .prepare("SELECT id FROM accounts WHERE address = ?")
+          .bind(TEST_ACCOUNT)
+          .first<{ id: number }>()
+        if (!account) throw new Error("Account not created")
+
+        const created = await service.createApiKey({
+          accountId: account.id,
+          name: "Old Name",
+        })
+
+        const updated = await service.updateApiKey({
+          accountId: account.id,
+          keyId: created.id,
+          name: "New Name",
+          enabled: false,
+        })
+
+        expect(updated.name).toBe("New Name")
+        expect(updated.enabled).toBe(false)
+      })
+
+      it("throws error when key not found", async () => {
+        await service.createAccount({ address: TEST_ACCOUNT })
+        const account = await testDB.db
+          .prepare("SELECT id FROM accounts WHERE address = ?")
+          .bind(TEST_ACCOUNT)
+          .first<{ id: number }>()
+        if (!account) throw new Error("Account not created")
+
+        try {
+          await service.updateApiKey({
+            accountId: account.id,
+            keyId: 99999,
+            name: "New Name",
+          })
+          expect.unreachable("Should have thrown HTTPError")
+        } catch (error) {
+          expect(error).toBeInstanceOf(HTTPError)
+          expect((error as HTTPError).status).toBe(404)
+        }
+      })
+
+      it("throws error when name is empty", async () => {
+        await service.createAccount({ address: TEST_ACCOUNT })
+        const account = await testDB.db
+          .prepare("SELECT id FROM accounts WHERE address = ?")
+          .bind(TEST_ACCOUNT)
+          .first<{ id: number }>()
+        if (!account) throw new Error("Account not created")
+
+        const created = await service.createApiKey({
+          accountId: account.id,
+          name: "Test Key",
+        })
+
+        try {
+          await service.updateApiKey({
+            accountId: account.id,
+            keyId: created.id,
+            name: "   ",
+          })
+          expect.unreachable("Should have thrown HTTPError")
+        } catch (error) {
+          expect(error).toBeInstanceOf(HTTPError)
+          expect((error as HTTPError).status).toBe(400)
+        }
+      })
+
+      it("enforces account ownership", async () => {
+        // Create two accounts
+        await service.createAccount({ address: TEST_ACCOUNT })
+        await service.createAccount({ address: TEST_ACCOUNT_2 })
+
+        const account1 = await testDB.db
+          .prepare("SELECT id FROM accounts WHERE address = ?")
+          .bind(TEST_ACCOUNT)
+          .first<{ id: number }>()
+        const account2 = await testDB.db
+          .prepare("SELECT id FROM accounts WHERE address = ?")
+          .bind(TEST_ACCOUNT_2)
+          .first<{ id: number }>()
+        if (!account1 || !account2) throw new Error("Accounts not created")
+
+        // Create key for account1
+        const key = await service.createApiKey({
+          accountId: account1.id,
+          name: "Account 1 Key",
+        })
+
+        // Try to update it using account2's ID
+        try {
+          await service.updateApiKey({
+            accountId: account2.id,
+            keyId: key.id,
+            name: "Hacked",
+          })
+          expect.unreachable("Should have thrown HTTPError")
+        } catch (error) {
+          expect(error).toBeInstanceOf(HTTPError)
+          expect((error as HTTPError).status).toBe(404)
+        }
+      })
+    })
+
+    describe("deleteApiKey", () => {
+      it("deletes a key", async () => {
+        await service.createAccount({ address: TEST_ACCOUNT })
+        const account = await testDB.db
+          .prepare("SELECT id FROM accounts WHERE address = ?")
+          .bind(TEST_ACCOUNT)
+          .first<{ id: number }>()
+        if (!account) throw new Error("Account not created")
+
+        const created = await service.createApiKey({
+          accountId: account.id,
+          name: "To Delete",
+        })
+
+        const result = await service.deleteApiKey({
+          accountId: account.id,
+          keyId: created.id,
+        })
+
+        expect(result.success).toBe(true)
+
+        // Verify it's gone from database
+        const dbKey = await testDB.db
+          .prepare("SELECT * FROM api_keys WHERE id = ?")
+          .bind(created.id)
+          .first()
+
+        expect(dbKey).toBeNull()
+      })
+
+      it("throws error when key not found", async () => {
+        await service.createAccount({ address: TEST_ACCOUNT })
+        const account = await testDB.db
+          .prepare("SELECT id FROM accounts WHERE address = ?")
+          .bind(TEST_ACCOUNT)
+          .first<{ id: number }>()
+        if (!account) throw new Error("Account not created")
+
+        try {
+          await service.deleteApiKey({
+            accountId: account.id,
+            keyId: 99999,
+          })
+          expect.unreachable("Should have thrown HTTPError")
+        } catch (error) {
+          expect(error).toBeInstanceOf(HTTPError)
+          expect((error as HTTPError).status).toBe(404)
+        }
+      })
+
+      it("enforces account ownership", async () => {
+        // Create two accounts
+        await service.createAccount({ address: TEST_ACCOUNT })
+        await service.createAccount({ address: TEST_ACCOUNT_2 })
+
+        const account1 = await testDB.db
+          .prepare("SELECT id FROM accounts WHERE address = ?")
+          .bind(TEST_ACCOUNT)
+          .first<{ id: number }>()
+        const account2 = await testDB.db
+          .prepare("SELECT id FROM accounts WHERE address = ?")
+          .bind(TEST_ACCOUNT_2)
+          .first<{ id: number }>()
+        if (!account1 || !account2) throw new Error("Accounts not created")
+
+        // Create key for account1
+        const key = await service.createApiKey({
+          accountId: account1.id,
+          name: "Account 1 Key",
+        })
+
+        // Try to delete it using account2's ID
+        try {
+          await service.deleteApiKey({
+            accountId: account2.id,
+            keyId: key.id,
+          })
+          expect.unreachable("Should have thrown HTTPError")
+        } catch (error) {
+          expect(error).toBeInstanceOf(HTTPError)
+          expect((error as HTTPError).status).toBe(404)
+        }
+
+        // Verify key still exists
+        const dbKey = await testDB.db
+          .prepare("SELECT * FROM api_keys WHERE id = ?")
+          .bind(key.id)
+          .first()
+
+        expect(dbKey).toBeDefined()
+      })
+    })
+  })
+
   describe("authenticateApiKey", () => {
-    // DEPRECATED: Tests using rotateApiKey temporarily disabled, will be rewritten with new CRUD methods
-    // it("authenticates valid API key and returns account", async () => { ... })
-    // it("authenticates key after rotation", async () => { ... })
+    it("authenticates valid API key and returns account", async () => {
+      // Create account
+      await service.createAccount({ address: TEST_ACCOUNT })
+
+      const account = await testDB.db
+        .prepare("SELECT id FROM accounts WHERE address = ?")
+        .bind(TEST_ACCOUNT)
+        .first<{ id: number }>()
+      if (!account) throw new Error("Account not created")
+
+      // Create API key
+      const { apiKey } = await service.createApiKey({
+        accountId: account.id,
+        name: "Test Key",
+      })
+
+      // Authenticate with the key
+      const authenticatedAccount = await service.authenticateApiKey(apiKey)
+
+      expect(authenticatedAccount.address).toBe(TEST_ACCOUNT)
+      expect(authenticatedAccount.id).toBe(account.id)
+    })
+
+    it("throws 401 when API key is disabled", async () => {
+      // Create account
+      await service.createAccount({ address: TEST_ACCOUNT })
+
+      const account = await testDB.db
+        .prepare("SELECT id FROM accounts WHERE address = ?")
+        .bind(TEST_ACCOUNT)
+        .first<{ id: number }>()
+      if (!account) throw new Error("Account not created")
+
+      // Create and then disable API key
+      const { apiKey, id } = await service.createApiKey({
+        accountId: account.id,
+        name: "Test Key",
+      })
+
+      await service.updateApiKey({
+        accountId: account.id,
+        keyId: id,
+        enabled: false,
+      })
+
+      // Try to authenticate with disabled key
+      try {
+        await service.authenticateApiKey(apiKey)
+        expect.unreachable("Should have thrown HTTPError")
+      } catch (error) {
+        expect(error).toBeInstanceOf(HTTPError)
+        expect((error as HTTPError).code).toBe(ErrorCode.INVALID_API_KEY)
+        expect((error as HTTPError).status).toBe(401)
+      }
+    })
 
     it("throws 401 when API key is invalid", async () => {
       try {
