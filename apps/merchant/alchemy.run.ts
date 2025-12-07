@@ -45,7 +45,7 @@ const { GH_ENVIRONMENT, PUBLIC_APP_NAME } = resolveStageConfig(app.stage)
 const compatibilityFlags = ["nodejs_compat", "disallow_importable_env"]
 
 // -----------------------------------------------------------------------------
-// DNS , DOMAINS & WAF Rules
+// DOMAINS &  WAF/Rules
 // -----------------------------------------------------------------------------
 
 let domains: { domainName: string }[] = []
