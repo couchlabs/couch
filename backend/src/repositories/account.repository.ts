@@ -67,26 +67,27 @@ export class AccountRepository {
   }
 
   /**
+   * DEPRECATED: Will be removed in Phase 8
    * Sets API key for an account (atomic operation)
    * Deletes any existing keys and inserts the new one
    * Works for both initial creation and rotation
    */
-  async setApiKey(params: SetApiKeyParams): Promise<void> {
-    await this.db.batch([
-      // Delete existing API key for this account (if any)
-      this.db
-        .delete(schema.apiKeys)
-        .where(eq(schema.apiKeys.accountId, params.accountId)),
+  // async setApiKey(params: SetApiKeyParams): Promise<void> {
+  //   await this.db.batch([
+  //     // Delete existing API key for this account (if any)
+  //     this.db
+  //       .delete(schema.apiKeys)
+  //       .where(eq(schema.apiKeys.accountId, params.accountId)),
 
-      // Insert new API key
-      this.db
-        .insert(schema.apiKeys)
-        .values({
-          keyHash: params.keyHash,
-          accountId: params.accountId,
-        }),
-    ])
-  }
+  //     // Insert new API key
+  //     this.db
+  //       .insert(schema.apiKeys)
+  //       .values({
+  //         keyHash: params.keyHash,
+  //         accountId: params.accountId,
+  //       }),
+  //   ])
+  // }
 
   /**
    * Gets account by API key hash

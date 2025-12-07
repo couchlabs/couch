@@ -49,12 +49,24 @@ export const accounts = sqliteTable("accounts", {
 export const apiKeys = sqliteTable(
   "api_keys",
   {
-    keyHash: text("key_hash").primaryKey(),
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    keyHash: text("key_hash").notNull().unique(),
+    // Account that owns this apikey
     accountId: integer("account_id")
       .notNull()
       .references(() => accounts.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    prefix: text("prefix").notNull().default("ck_"),
+    start: text("start").notNull(), // First 6 chars for UI preview
+    enabled: integer("enabled", { mode: "boolean" }).notNull().default(true),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    lastUsedAt: text("last_used_at"),
+    expiresAt: text("expires_at"),
   },
-  (table) => [index("idx_api_keys_account").on(table.accountId)],
+  (table) => [
+    index("idx_api_keys_hash").on(table.keyHash),
+    index("idx_api_keys_account").on(table.accountId),
+  ],
 )
 
 // Webhooks - single webhook per account (HTTPS URL for event delivery, secret for HMAC verification)
@@ -223,6 +235,8 @@ export type Account = Omit<AccountRow, "address"> & {
   address: Address
 }
 
-export type ApiKey = ApiKeyRow
+export type ApiKey = Omit<ApiKeyRow, never> & {
+  enabled: boolean // Drizzle's mode: "boolean" makes this boolean not number
+}
 
 export type Webhook = WebhookRow
