@@ -1,6 +1,6 @@
 import path from "node:path"
 import alchemy from "alchemy"
-import { Vite } from "alchemy/cloudflare"
+import { Ruleset, Vite } from "alchemy/cloudflare"
 import { CloudflareStateStore, FileSystemStateStore } from "alchemy/state"
 import { rpc } from "backend/alchemy"
 import { resolveStageConfig } from "@/constants/env.constants"
@@ -44,10 +44,42 @@ const { GH_ENVIRONMENT, PUBLIC_APP_NAME } = resolveStageConfig(app.stage)
 
 const compatibilityFlags = ["nodejs_compat", "disallow_importable_env"]
 
+// -----------------------------------------------------------------------------
+// DNS , DOMAINS & WAF Rules
+// -----------------------------------------------------------------------------
+
 let domains: { domainName: string }[] = []
 if (GH_ENVIRONMENT === "staging") {
   domains = [{ domainName: "app.staging.cou.ch" }]
+} else if (GH_ENVIRONMENT === "prod") {
+  domains = [{ domainName: "app.cou.ch" }]
 }
+
+const API_PROTECTION_RULESET_NAME = "api-protection"
+const apiProtection = await Ruleset(API_PROTECTION_RULESET_NAME, {
+  zone: "cou.ch",
+  phase: "http_request_firewall_custom",
+  name: "API Protection for couch-merchant website",
+  description:
+    "Block non-browser requests to couch-merchant website API endpoints",
+  rules: [
+    {
+      description: "Block requests to /api/* without valid Origin header",
+      expression: `(
+        http.request.uri.path matches "^/api/.*"
+        and not (
+          http.request.headers["origin"][0] eq "https://app.cou.ch" or
+          http.request.headers["origin"][0] eq "https://app.staging.cou.ch" or
+          http.request.headers["origin"][0] eq "http://localhost:8001" or
+          http.request.headers["origin"][0] eq "http://127.0.0.1:8001" or
+          http.request.headers["origin"][0] matches "^https://couch-merchant-pr-[0-9]+-website\\.couchlabs\\.workers\\.dev$" or
+          http.request.headers["sec-fetch-site"][0] eq "same-origin"
+        )
+      )`,
+      action: "block",
+    },
+  ],
+})
 
 // -----------------------------------------------------------------------------
 // Web App
@@ -80,5 +112,8 @@ export const website = await Vite(WEBSITE_NAME, {
 })
 
 if (app.local) {
-  console.log({ [WEBSITE_NAME]: website })
+  console.log({
+    [WEBSITE_NAME]: website,
+    [API_PROTECTION_RULESET_NAME]: apiProtection,
+  })
 }
