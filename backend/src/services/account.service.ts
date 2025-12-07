@@ -1,5 +1,10 @@
 import { getOrCreateSubscriptionOwnerWallet } from "@base-org/account/node"
 import { type Address, getAddress, isAddress } from "viem"
+import {
+  API_KEY_NAME_MAX_LENGTH,
+  API_KEY_PREFIX,
+  API_KEY_START_CHARS,
+} from "@/constants/account.constants"
 import { ErrorCode, HTTPError } from "@/errors/http.errors"
 import { logger } from "@/lib/logger"
 import { getSubscriptionOwnerWalletName } from "@/lib/subscription-owner-wallet"
@@ -38,37 +43,49 @@ export class AccountService {
   }
 
   /**
-   * DEPRECATED: Will be replaced with generateApiKeyWithMetadata() in Phase 3
-   * Generates a new API key with prefix ck_
-   * Returns both the full key and the hash of the secret part
+   * Wait for all pending background operations to complete
+   * Useful for cleanup in tests
    */
-  // private async generateApiKey(): Promise<{
-  //   apiKey: string
-  //   keyHash: string
-  // }> {
-  //   const prefix = "ck_"
-  //   const secretPart = crypto.randomUUID().replace(/-/g, "")
-  //   const apiKey = `${prefix}${secretPart}`
+  async waitForPendingUpdates(): Promise<void> {
+    await this.accountRepository.waitForPendingUpdates()
+  }
 
-  //   // Hash only the secret part
-  //   const encoder = new TextEncoder()
-  //   const data = encoder.encode(secretPart)
-  //   const hashBuffer = await crypto.subtle.digest("SHA-256", data)
-  //   const hashArray = Array.from(new Uint8Array(hashBuffer))
-  //   const keyHash = hashArray
-  //     .map((b) => b.toString(16).padStart(2, "0"))
-  //     .join("")
+  /**
+   * Generates a new API key with metadata for storage
+   * Returns the full key (for one-time display) and metadata
+   */
+  private async generateApiKeyWithMetadata(): Promise<{
+    apiKey: string
+    keyHash: string
+    start: string
+    prefix: string
+  }> {
+    const prefix = API_KEY_PREFIX
+    const secretPart = crypto.randomUUID().replace(/-/g, "")
+    const apiKey = `${prefix}${secretPart}`
+    const start = secretPart.slice(0, API_KEY_START_CHARS)
 
-  //   return { apiKey, keyHash }
-  // }
+    // Hash only the secret part
+    const encoder = new TextEncoder()
+    const data = encoder.encode(secretPart)
+    const hashBuffer = await crypto.subtle.digest("SHA-256", data)
+    const hashArray = Array.from(new Uint8Array(hashBuffer))
+    const keyHash = hashArray
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join("")
+
+    return { apiKey, keyHash, start, prefix }
+  }
 
   /**
    * Hashes an API key for authentication
    * Strips the prefix and hashes only the secret part
    */
   private async hashApiKey(apiKey: string): Promise<string> {
-    // Strip the "ck_" prefix before hashing
-    const secretPart = apiKey.startsWith("ck_") ? apiKey.slice(3) : apiKey
+    // Strip the prefix before hashing
+    const secretPart = apiKey.startsWith(API_KEY_PREFIX)
+      ? apiKey.slice(API_KEY_PREFIX.length)
+      : apiKey
 
     const encoder = new TextEncoder()
     const data = encoder.encode(secretPart)
@@ -195,6 +212,202 @@ export class AccountService {
 
   //   return { apiKey, subscriptionOwnerWalletAddress: wallet.address as Address }
   // }
+
+  /**
+   * Creates a new API key for an account
+   * Returns the full key (one-time reveal) and metadata
+   * If no name is provided, generates "API Key N" where N is the count
+   */
+  async createApiKey(params: { accountId: number; name?: string }): Promise<{
+    id: number
+    apiKey: string
+    name: string
+    prefix: string
+    start: string
+    enabled: boolean
+    createdAt: string
+  }> {
+    const log = logger.with({ accountId: params.accountId })
+
+    // Validate name if provided
+    if (params.name !== undefined && params.name.trim().length === 0) {
+      throw new HTTPError(
+        400,
+        ErrorCode.INVALID_FORMAT,
+        "API key name cannot be empty",
+      )
+    }
+    if (params.name && params.name.length > API_KEY_NAME_MAX_LENGTH) {
+      throw new HTTPError(
+        400,
+        ErrorCode.INVALID_FORMAT,
+        `API key name too long (max ${API_KEY_NAME_MAX_LENGTH} characters)`,
+      )
+    }
+
+    // Generate default name if not provided
+    let name: string
+    if (params.name) {
+      name = params.name.trim()
+    } else {
+      // Get current key count and generate "API Key N"
+      const existingKeys = await this.accountRepository.listApiKeys({
+        accountId: params.accountId,
+      })
+      const keyCount = existingKeys.length + 1
+      name = `API Key ${keyCount}`
+    }
+
+    log.info("Creating new API key", { name })
+
+    // Generate key with metadata
+    const { apiKey, keyHash, start, prefix } =
+      await this.generateApiKeyWithMetadata()
+
+    // Store in database
+    const createdKey = await this.accountRepository.createApiKey({
+      accountId: params.accountId,
+      keyHash,
+      name,
+      prefix,
+      start,
+      enabled: true,
+    })
+
+    log.info("API key created successfully", { keyId: createdKey.id })
+
+    return {
+      id: createdKey.id,
+      apiKey, // ONLY time we return the full key
+      name: createdKey.name,
+      prefix: createdKey.prefix,
+      start: createdKey.start,
+      enabled: createdKey.enabled,
+      createdAt: createdKey.createdAt,
+    }
+  }
+
+  /**
+   * Lists all API keys for an account (no secrets)
+   */
+  async listApiKeys(params: { accountId: number }): Promise<
+    Array<{
+      id: number
+      name: string
+      prefix: string
+      start: string
+      enabled: boolean
+      createdAt: string
+      lastUsedAt?: string
+    }>
+  > {
+    const keys = await this.accountRepository.listApiKeys(params)
+
+    // Map to safe response (exclude keyHash)
+    return keys.map((key) => ({
+      id: key.id,
+      name: key.name,
+      prefix: key.prefix,
+      start: key.start,
+      enabled: key.enabled,
+      createdAt: key.createdAt,
+      lastUsedAt: key.lastUsedAt ?? undefined,
+    }))
+  }
+
+  /**
+   * Updates an API key (name and/or enabled status)
+   */
+  async updateApiKey(params: {
+    accountId: number
+    keyId: number
+    name?: string
+    enabled?: boolean
+  }): Promise<{
+    id: number
+    name: string
+    prefix: string
+    start: string
+    enabled: boolean
+    createdAt: string
+    lastUsedAt?: string
+  }> {
+    const log = logger.with({
+      accountId: params.accountId,
+      keyId: params.keyId,
+    })
+
+    // Validate name if provided
+    if (params.name !== undefined) {
+      if (params.name.trim().length === 0) {
+        throw new HTTPError(
+          400,
+          ErrorCode.INVALID_FORMAT,
+          "API key name cannot be empty",
+        )
+      }
+      if (params.name.length > API_KEY_NAME_MAX_LENGTH) {
+        throw new HTTPError(
+          400,
+          ErrorCode.INVALID_FORMAT,
+          `API key name too long (max ${API_KEY_NAME_MAX_LENGTH} characters)`,
+        )
+      }
+    }
+
+    log.info("Updating API key", { name: params.name, enabled: params.enabled })
+
+    const updatedKey = await this.accountRepository.updateApiKey({
+      id: params.keyId,
+      accountId: params.accountId,
+      name: params.name?.trim(),
+      enabled: params.enabled,
+    })
+
+    if (!updatedKey) {
+      throw new HTTPError(404, ErrorCode.INVALID_REQUEST, "API key not found")
+    }
+
+    log.info("API key updated successfully")
+
+    return {
+      id: updatedKey.id,
+      name: updatedKey.name,
+      prefix: updatedKey.prefix,
+      start: updatedKey.start,
+      enabled: updatedKey.enabled,
+      createdAt: updatedKey.createdAt,
+      lastUsedAt: updatedKey.lastUsedAt ?? undefined,
+    }
+  }
+
+  /**
+   * Deletes an API key (hard delete)
+   */
+  async deleteApiKey(params: {
+    accountId: number
+    keyId: number
+  }): Promise<{ success: boolean }> {
+    const log = logger.with({
+      accountId: params.accountId,
+      keyId: params.keyId,
+    })
+
+    log.info("Deleting API key")
+
+    const deleted = await this.accountRepository.deleteApiKey({
+      id: params.keyId,
+      accountId: params.accountId,
+    })
+
+    if (!deleted) {
+      throw new HTTPError(404, ErrorCode.INVALID_REQUEST, "API key not found")
+    }
+
+    log.info("API key deleted successfully")
+
+    return { success: true }
+  }
 
   /**
    * Authenticates a request by validating the API key

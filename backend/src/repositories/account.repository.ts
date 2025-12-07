@@ -30,6 +30,7 @@ export interface GetApiKeyParams {
 
 export class AccountRepository {
   private db: ReturnType<typeof drizzle<typeof schema>>
+  private pendingUpdates: Set<Promise<void>> = new Set()
 
   constructor(deps: AccountRepositoryDeps) {
     this.db = drizzle(deps.DB, {
@@ -39,6 +40,14 @@ export class AccountRepository {
           ? new DrizzleLogger("account.repository")
           : undefined,
     })
+  }
+
+  /**
+   * Wait for all pending background operations to complete
+   * Useful for cleanup in tests
+   */
+  async waitForPendingUpdates(): Promise<void> {
+    await Promise.all(this.pendingUpdates)
   }
 
   /**
@@ -113,7 +122,12 @@ export class AccountRepository {
     }
 
     // Update last used timestamp (async, don't block)
-    this.updateLastUsed(params.keyHash).catch(console.error)
+    const updatePromise = this.updateLastUsed(params.keyHash)
+      .catch(console.error)
+      .finally(() => {
+        this.pendingUpdates.delete(updatePromise)
+      })
+    this.pendingUpdates.add(updatePromise)
 
     return this.toAccountDomain(result)
   }
