@@ -55,26 +55,18 @@ if (GH_ENVIRONMENT === "staging") {
   domains = [{ domainName: "app.cou.ch" }]
 }
 
-const API_PROTECTION_RULESET_NAME = "api-protection"
-const apiProtection = await Ruleset(API_PROTECTION_RULESET_NAME, {
+const WAF_RULE_NAME = "api-protection"
+const wafRuleSet = await Ruleset(WAF_RULE_NAME, {
   zone: "cou.ch",
   phase: "http_request_firewall_custom",
-  name: "API Protection for couch-merchant website",
-  description:
-    "Block non-browser requests to couch-merchant website API endpoints",
+  name: `API Protection for ${NAME_PREFIX}`,
+  description: `Block non-browser requests to ${NAME_PREFIX} API endpoints`,
   rules: [
     {
-      description: "Block requests to /api/* without valid Origin header",
+      description: `Block non-browser requests to ${NAME_PREFIX} API endpoints`,
       expression: `(
         starts_with(http.request.uri.path, "/api/")
-        and not (
-          http.request.headers["origin"][0] eq "https://app.cou.ch" or
-          http.request.headers["origin"][0] eq "https://app.staging.cou.ch" or
-          http.request.headers["origin"][0] eq "http://localhost:8001" or
-          http.request.headers["origin"][0] eq "http://127.0.0.1:8001" or
-          starts_with(http.request.headers["origin"][0], "https://couch-merchant-pr-") or
-          http.request.headers["sec-fetch-site"][0] eq "same-origin"
-        )
+        and not http.request.headers["sec-fetch-site"][0] eq "same-origin"
       )`,
       action: "block",
     },
@@ -114,6 +106,6 @@ export const website = await Vite(WEBSITE_NAME, {
 if (app.local) {
   console.log({
     [WEBSITE_NAME]: website,
-    [API_PROTECTION_RULESET_NAME]: apiProtection,
+    [WAF_RULE_NAME]: wafRuleSet,
   })
 }
