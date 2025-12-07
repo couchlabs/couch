@@ -1,6 +1,6 @@
 import type { D1Database } from "@cloudflare/workers-types"
 import * as schema from "@database/schema"
-import { eq } from "drizzle-orm"
+import { and, desc, eq, sql } from "drizzle-orm"
 import { drizzle } from "drizzle-orm/d1"
 import { type Address, getAddress } from "viem"
 import type { LoggingLevel } from "@/constants/env.constants"
@@ -91,12 +91,14 @@ export class AccountRepository {
 
   /**
    * Gets account by API key hash
+   * Checks that the key is enabled and updates last used timestamp
    */
   async getAccountByApiKey(params: GetApiKeyParams): Promise<Account | null> {
     const result = await this.db
       .select({
         id: schema.accounts.id,
         address: schema.accounts.address,
+        keyEnabled: schema.apiKeys.enabled,
       })
       .from(schema.apiKeys)
       .innerJoin(
@@ -106,11 +108,141 @@ export class AccountRepository {
       .where(eq(schema.apiKeys.keyHash, params.keyHash))
       .get()
 
-    if (!result) {
+    if (!result || !result.keyEnabled) {
       return null
     }
 
+    // Update last used timestamp (async, don't block)
+    this.updateLastUsed(params.keyHash).catch(console.error)
+
     return this.toAccountDomain(result)
+  }
+
+  /**
+   * Creates a new API key for an account
+   */
+  async createApiKey(params: {
+    accountId: number
+    keyHash: string
+    name: string
+    prefix: string
+    start: string
+    enabled?: boolean
+  }): Promise<schema.ApiKey> {
+    const result = await this.db
+      .insert(schema.apiKeys)
+      .values({
+        accountId: params.accountId,
+        keyHash: params.keyHash,
+        name: params.name,
+        prefix: params.prefix,
+        start: params.start,
+        enabled: params.enabled ?? true,
+      })
+      .returning()
+      .get()
+
+    return result as schema.ApiKey
+  }
+
+  /**
+   * Lists all API keys for an account
+   */
+  async listApiKeys(params: { accountId: number }): Promise<schema.ApiKey[]> {
+    const results = await this.db
+      .select()
+      .from(schema.apiKeys)
+      .where(eq(schema.apiKeys.accountId, params.accountId))
+      .orderBy(desc(schema.apiKeys.createdAt))
+      .all()
+
+    return results as schema.ApiKey[]
+  }
+
+  /**
+   * Updates an API key (name and/or enabled status)
+   */
+  async updateApiKey(params: {
+    id: number
+    accountId: number
+    name?: string
+    enabled?: boolean
+  }): Promise<schema.ApiKey | null> {
+    const updates: Partial<typeof schema.apiKeys.$inferInsert> = {}
+    if (params.name !== undefined) updates.name = params.name
+    if (params.enabled !== undefined) updates.enabled = params.enabled
+
+    if (Object.keys(updates).length === 0) {
+      // No updates, just return current key
+      return this.getApiKey({ id: params.id, accountId: params.accountId })
+    }
+
+    const result = await this.db
+      .update(schema.apiKeys)
+      .set(updates)
+      .where(
+        and(
+          eq(schema.apiKeys.id, params.id),
+          eq(schema.apiKeys.accountId, params.accountId),
+        ),
+      )
+      .returning()
+      .get()
+
+    return result ? (result as schema.ApiKey) : null
+  }
+
+  /**
+   * Deletes an API key (hard delete)
+   */
+  async deleteApiKey(params: {
+    id: number
+    accountId: number
+  }): Promise<boolean> {
+    const result = await this.db
+      .delete(schema.apiKeys)
+      .where(
+        and(
+          eq(schema.apiKeys.id, params.id),
+          eq(schema.apiKeys.accountId, params.accountId),
+        ),
+      )
+      .returning({ id: schema.apiKeys.id })
+      .get()
+
+    return result !== undefined
+  }
+
+  /**
+   * Gets a single API key by ID and account
+   */
+  async getApiKey(params: {
+    id: number
+    accountId: number
+  }): Promise<schema.ApiKey | null> {
+    const result = await this.db
+      .select()
+      .from(schema.apiKeys)
+      .where(
+        and(
+          eq(schema.apiKeys.id, params.id),
+          eq(schema.apiKeys.accountId, params.accountId),
+        ),
+      )
+      .get()
+
+    return result ? (result as schema.ApiKey) : null
+  }
+
+  /**
+   * Updates the last used timestamp for an API key
+   */
+  async updateLastUsed(keyHash: string): Promise<void> {
+    await this.db
+      .update(schema.apiKeys)
+      .set({ lastUsedAt: sql`CURRENT_TIMESTAMP` })
+      .where(eq(schema.apiKeys.keyHash, keyHash))
+      .run()
   }
 
   /**
