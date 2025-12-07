@@ -2,6 +2,7 @@ import { WorkerEntrypoint } from "cloudflare:workers"
 import type { Address } from "viem"
 import type { LoggingLevel } from "@/constants/env.constants"
 import { AccountRepository } from "@/repositories/account.repository"
+import type { ApiKeyResponse, CreateApiKeyResponse } from "@/rpc/types"
 import { AccountService } from "@/services/account.service"
 
 interface BackendRPCEnv {
@@ -59,15 +60,7 @@ export class RPC extends WorkerEntrypoint<BackendRPCEnv> {
   async createApiKey(params: {
     accountAddress: Address
     name?: string
-  }): Promise<{
-    id: number
-    apiKey: string
-    name: string
-    prefix: string
-    start: string
-    enabled: boolean
-    createdAt: string
-  }> {
+  }): Promise<CreateApiKeyResponse> {
     const account = await this.getAccountByAddress(params.accountAddress)
 
     const accountService = new AccountService({
@@ -87,17 +80,9 @@ export class RPC extends WorkerEntrypoint<BackendRPCEnv> {
   /**
    * Lists all API keys for an account (no secrets)
    */
-  async listApiKeys(params: { accountAddress: Address }): Promise<
-    Array<{
-      id: number
-      name: string
-      prefix: string
-      start: string
-      enabled: boolean
-      createdAt: string
-      lastUsedAt?: string
-    }>
-  > {
+  async listApiKeys(params: {
+    accountAddress: Address
+  }): Promise<ApiKeyResponse[]> {
     const account = await this.getAccountByAddress(params.accountAddress)
 
     const accountService = new AccountService({
@@ -119,15 +104,7 @@ export class RPC extends WorkerEntrypoint<BackendRPCEnv> {
     keyId: number
     name?: string
     enabled?: boolean
-  }): Promise<{
-    id: number
-    name: string
-    prefix: string
-    start: string
-    enabled: boolean
-    createdAt: string
-    lastUsedAt?: string
-  }> {
+  }): Promise<ApiKeyResponse> {
     const account = await this.getAccountByAddress(params.accountAddress)
 
     const accountService = new AccountService({
