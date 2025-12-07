@@ -25,7 +25,8 @@
     "types": ["@cloudflare/workers-types", "@types/node"],
     "paths": {
       "@/*": ["./src/*", "../../backend/src/*"],
-      "@public/*": ["./public/*"]
+      "@public/*": ["./public/*"],
+      "@database/*": ["../../backend/database/*"]
     }
   }
 }
