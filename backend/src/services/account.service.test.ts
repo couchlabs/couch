@@ -191,89 +191,17 @@ describe("AccountService", () => {
     })
   })
 
-  describe("rotateApiKey", () => {
-    it("rotates API key successfully for existing account", async () => {
-      // Create account first (no API key returned)
-      await service.createAccount({
-        address: TEST_ACCOUNT,
-      })
-
-      // Get account ID from database
-      const account = await testDB.db
-        .prepare("SELECT id FROM accounts WHERE address = ?")
-        .bind(TEST_ACCOUNT)
-        .first<{ id: number }>()
-      if (!account) {
-        throw new Error("Test account not found in database")
-      }
-
-      const { apiKey: rotatedKey, subscriptionOwnerWalletAddress } =
-        await service.rotateApiKey(account.id)
-
-      // Should return new API key
-      expect(rotatedKey).toBeDefined()
-      expect(rotatedKey).toMatch(/^ck_[a-f0-9]{32}$/)
-      expect(subscriptionOwnerWalletAddress).toBeDefined()
-
-      // Verify only one key exists
-      const keyCount = await testDB.db
-        .prepare("SELECT COUNT(*) as count FROM api_keys WHERE account_id = ?")
-        .bind(account.id)
-        .first<{ count: number }>()
-
-      expect(keyCount?.count).toBe(1)
-
-      // Verify new key works
-      const authenticatedAccount = await service.authenticateApiKey(rotatedKey)
-      expect(authenticatedAccount.address).toBe(TEST_ACCOUNT)
-    })
-
-    it("generates different keys on multiple rotations", async () => {
-      await service.createAccount({
-        address: TEST_ACCOUNT,
-      })
-
-      // Get account ID from database
-      const account = await testDB.db
-        .prepare("SELECT id FROM accounts WHERE address = ?")
-        .bind(TEST_ACCOUNT)
-        .first<{ id: number }>()
-      if (!account) {
-        throw new Error("Test account not found in database")
-      }
-
-      const keys = new Set<string>()
-      for (let i = 0; i < 5; i++) {
-        const { apiKey } = await service.rotateApiKey(account.id)
-        keys.add(apiKey)
-      }
-
-      expect(keys.size).toBe(5)
-    })
-  })
+  // DEPRECATED: Tests for rotateApiKey removed in Phase 1, will be deleted in Phase 8
+  // describe("rotateApiKey", () => {
+  //   it("rotates API key successfully for existing account", async () => {
+  //     ...
+  //   })
+  // })
 
   describe("authenticateApiKey", () => {
-    it("authenticates valid API key and returns account", async () => {
-      // Create account
-      await service.createAccount({
-        address: TEST_ACCOUNT,
-      })
-
-      // Get account ID and rotate to get an API key
-      const accountRecord = await testDB.db
-        .prepare("SELECT id FROM accounts WHERE address = ?")
-        .bind(TEST_ACCOUNT)
-        .first<{ id: number }>()
-      if (!accountRecord) throw new Error("Account not created")
-
-      const { apiKey } = await service.rotateApiKey(accountRecord.id)
-
-      const account = await service.authenticateApiKey(apiKey)
-
-      expect(account.address).toBe(TEST_ACCOUNT)
-      expect(account.id).toBeDefined()
-      expect(typeof account.id).toBe("number")
-    })
+    // DEPRECATED: Tests using rotateApiKey temporarily disabled, will be rewritten with new CRUD methods
+    // it("authenticates valid API key and returns account", async () => { ... })
+    // it("authenticates key after rotation", async () => { ... })
 
     it("throws 401 when API key is invalid", async () => {
       try {
@@ -284,27 +212,6 @@ describe("AccountService", () => {
         expect((error as HTTPError).code).toBe(ErrorCode.INVALID_API_KEY)
         expect((error as HTTPError).status).toBe(401)
       }
-    })
-
-    it("authenticates key after rotation", async () => {
-      await service.createAccount({
-        address: TEST_ACCOUNT,
-      })
-
-      // Get account ID from database
-      const accountRecord = await testDB.db
-        .prepare("SELECT id FROM accounts WHERE address = ?")
-        .bind(TEST_ACCOUNT)
-        .first<{ id: number }>()
-      if (!accountRecord) {
-        throw new Error("Test account not found in database")
-      }
-
-      const { apiKey: newKey } = await service.rotateApiKey(accountRecord.id)
-
-      const account = await service.authenticateApiKey(newKey)
-      expect(account.address).toBe(TEST_ACCOUNT)
-      expect(account.id).toBeDefined()
     })
   })
 

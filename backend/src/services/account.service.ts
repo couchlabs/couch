@@ -38,28 +38,29 @@ export class AccountService {
   }
 
   /**
+   * DEPRECATED: Will be replaced with generateApiKeyWithMetadata() in Phase 3
    * Generates a new API key with prefix ck_
    * Returns both the full key and the hash of the secret part
    */
-  private async generateApiKey(): Promise<{
-    apiKey: string
-    keyHash: string
-  }> {
-    const prefix = "ck_"
-    const secretPart = crypto.randomUUID().replace(/-/g, "")
-    const apiKey = `${prefix}${secretPart}`
+  // private async generateApiKey(): Promise<{
+  //   apiKey: string
+  //   keyHash: string
+  // }> {
+  //   const prefix = "ck_"
+  //   const secretPart = crypto.randomUUID().replace(/-/g, "")
+  //   const apiKey = `${prefix}${secretPart}`
 
-    // Hash only the secret part
-    const encoder = new TextEncoder()
-    const data = encoder.encode(secretPart)
-    const hashBuffer = await crypto.subtle.digest("SHA-256", data)
-    const hashArray = Array.from(new Uint8Array(hashBuffer))
-    const keyHash = hashArray
-      .map((b) => b.toString(16).padStart(2, "0"))
-      .join("")
+  //   // Hash only the secret part
+  //   const encoder = new TextEncoder()
+  //   const data = encoder.encode(secretPart)
+  //   const hashBuffer = await crypto.subtle.digest("SHA-256", data)
+  //   const hashArray = Array.from(new Uint8Array(hashBuffer))
+  //   const keyHash = hashArray
+  //     .map((b) => b.toString(16).padStart(2, "0"))
+  //     .join("")
 
-    return { apiKey, keyHash }
-  }
+  //   return { apiKey, keyHash }
+  // }
 
   /**
    * Hashes an API key for authentication
@@ -166,33 +167,34 @@ export class AccountService {
   }
 
   /**
+   * DEPRECATED: Will be removed in Phase 8
    * Rotates the API key for an authenticated account
    */
-  async rotateApiKey(accountId: number): Promise<RotateApiKeyResult> {
-    const log = logger.with({ accountId })
+  // async rotateApiKey(accountId: number): Promise<RotateApiKeyResult> {
+  //   const log = logger.with({ accountId })
 
-    log.info("Rotating account API key")
+  //   log.info("Rotating account API key")
 
-    const { apiKey, keyHash } = await this.generateApiKey()
+  //   const { apiKey, keyHash } = await this.generateApiKey()
 
-    // Set API key (atomic delete + insert)
-    await this.accountRepository.setApiKey({
-      accountId,
-      keyHash,
-    })
+  //   // Set API key (atomic delete + insert)
+  //   await this.accountRepository.setApiKey({
+  //     accountId,
+  //     keyHash,
+  //   })
 
-    // Get wallet address for this account
-    const wallet = await getOrCreateSubscriptionOwnerWallet({
-      cdpApiKeyId: this.env.CDP_API_KEY_ID,
-      cdpApiKeySecret: this.env.CDP_API_KEY_SECRET,
-      cdpWalletSecret: this.env.CDP_WALLET_SECRET,
-      walletName: getSubscriptionOwnerWalletName(accountId),
-    })
+  //   // Get wallet address for this account
+  //   const wallet = await getOrCreateSubscriptionOwnerWallet({
+  //     cdpApiKeyId: this.env.CDP_API_KEY_ID,
+  //     cdpApiKeySecret: this.env.CDP_API_KEY_SECRET,
+  //     cdpWalletSecret: this.env.CDP_WALLET_SECRET,
+  //     walletName: getSubscriptionOwnerWalletName(accountId),
+  //   })
 
-    log.info("Account API key rotated successfully")
+  //   log.info("Account API key rotated successfully")
 
-    return { apiKey, subscriptionOwnerWalletAddress: wallet.address as Address }
-  }
+  //   return { apiKey, subscriptionOwnerWalletAddress: wallet.address as Address }
+  // }
 
   /**
    * Authenticates a request by validating the API key
