@@ -66,13 +66,13 @@ const apiProtection = await Ruleset(API_PROTECTION_RULESET_NAME, {
     {
       description: "Block requests to /api/* without valid Origin header",
       expression: `(
-        http.request.uri.path matches "^/api/.*"
+        starts_with(http.request.uri.path, "/api/")
         and not (
           http.request.headers["origin"][0] eq "https://app.cou.ch" or
           http.request.headers["origin"][0] eq "https://app.staging.cou.ch" or
           http.request.headers["origin"][0] eq "http://localhost:8001" or
           http.request.headers["origin"][0] eq "http://127.0.0.1:8001" or
-          http.request.headers["origin"][0] matches "^https://couch-merchant-pr-[0-9]+-website\\.couchlabs\\.workers\\.dev$" or
+          starts_with(http.request.headers["origin"][0], "https://couch-merchant-pr-") or
           http.request.headers["sec-fetch-site"][0] eq "same-origin"
         )
       )`,
