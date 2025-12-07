@@ -197,13 +197,6 @@ describe("AccountService", () => {
     })
   })
 
-  // DEPRECATED: Tests for rotateApiKey removed in Phase 1, will be deleted in Phase 8
-  // describe("rotateApiKey", () => {
-  //   it("rotates API key successfully for existing account", async () => {
-  //     ...
-  //   })
-  // })
-
   describe("API Key CRUD Operations", () => {
     describe("createApiKey", () => {
       it("creates a new API key with valid name", async () => {
