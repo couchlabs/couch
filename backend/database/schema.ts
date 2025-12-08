@@ -5,6 +5,7 @@ import {
   integer,
   sqliteTable,
   text,
+  uniqueIndex,
 } from "drizzle-orm/sqlite-core"
 import type { Address, Hash } from "viem"
 import { API_KEY_PREFIX } from "@/constants/account.constants"
@@ -70,14 +71,27 @@ export const apiKeys = sqliteTable(
   ],
 )
 
-// Webhooks - single webhook per account (HTTPS URL for event delivery, secret for HMAC verification)
-export const webhooks = sqliteTable("webhooks", {
-  accountId: integer("account_id")
-    .primaryKey()
-    .references(() => accounts.id, { onDelete: "cascade" }),
-  url: text("url").notNull(),
-  secret: text("secret").notNull(),
-})
+// Webhooks - event delivery configuration with HMAC verification
+export const webhooks = sqliteTable(
+  "webhooks",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    accountId: integer("account_id")
+      .notNull()
+      .references(() => accounts.id, { onDelete: "cascade" }),
+    url: text("url").notNull(),
+    secret: text("secret").notNull(),
+    enabled: integer("enabled", { mode: "boolean" }).notNull().default(true),
+    deletedAt: text("deleted_at"),
+    createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
+    lastUsedAt: text("last_used_at"),
+  },
+  (table) => [
+    index("idx_webhooks_account").on(table.accountId),
+    // V1: Enforce single webhook per account
+    uniqueIndex("idx_webhooks_account_unique").on(table.accountId),
+  ],
+)
 
 // =============================================================================
 // SUBSCRIPTION TABLES
@@ -240,4 +254,6 @@ export type ApiKey = Omit<ApiKeyRow, never> & {
   enabled: boolean // Drizzle's mode: "boolean" makes this boolean not number
 }
 
-export type Webhook = WebhookRow
+export type Webhook = Omit<WebhookRow, never> & {
+  enabled: boolean
+}
