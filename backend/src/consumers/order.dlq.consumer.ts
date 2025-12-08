@@ -1,6 +1,6 @@
-import type { orderDLQ } from "@alchemy.run"
 import { createLogger } from "@/lib/logger"
 import type { WorkerEnv } from "@/types/order.dlq.consumer.env"
+import type { orderDLQ } from "../../alchemy.run"
 
 const logger = createLogger("order.dlq.consumer")
 
