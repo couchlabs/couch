@@ -417,6 +417,213 @@ describe("WebhookService", () => {
     })
   })
 
+  describe("getWebhook", () => {
+    it("returns webhook configuration with secret preview", async () => {
+      await testDB.db
+        .prepare(
+          "INSERT INTO webhooks (account_id, url, secret) VALUES (?, ?, ?)",
+        )
+        .bind(testAccountId, TEST_WEBHOOK_URL, "whsec_testsecret123456")
+        .run()
+
+      const result = await service.getWebhook({ accountId: testAccountId })
+
+      expect(result).not.toBeNull()
+      expect(result?.url).toBe(TEST_WEBHOOK_URL)
+      expect(result?.secretPreview).toBe("whsec_...")
+      expect(result?.enabled).toBe(true)
+      expect(result?.createdAt).toBeDefined()
+    })
+
+    it("returns null when no webhook configured", async () => {
+      const result = await service.getWebhook({ accountId: testAccountId })
+      expect(result).toBeNull()
+    })
+
+    it("excludes soft-deleted webhooks", async () => {
+      await testDB.db
+        .prepare(
+          "INSERT INTO webhooks (account_id, url, secret, deleted_at) VALUES (?, ?, ?, ?)",
+        )
+        .bind(
+          testAccountId,
+          TEST_WEBHOOK_URL,
+          "whsec_testsecret",
+          new Date().toISOString(),
+        )
+        .run()
+
+      const result = await service.getWebhook({ accountId: testAccountId })
+      expect(result).toBeNull()
+    })
+  })
+
+  describe("updateWebhookUrl", () => {
+    it("updates URL while keeping existing secret", async () => {
+      const originalSecret =
+        "whsec_originalsecret123456789012345678901234567890123456"
+      await testDB.db
+        .prepare(
+          "INSERT INTO webhooks (account_id, url, secret) VALUES (?, ?, ?)",
+        )
+        .bind(testAccountId, "https://example.com/old", originalSecret)
+        .run()
+
+      const result = await service.updateWebhookUrl({
+        accountId: testAccountId,
+        url: TEST_WEBHOOK_URL,
+      })
+
+      expect(result.url).toBe(TEST_WEBHOOK_URL)
+
+      const webhook = await testDB.db
+        .prepare("SELECT * FROM webhooks WHERE account_id = ?")
+        .bind(testAccountId)
+        .first<{ url: string; secret: string }>()
+
+      expect(webhook?.url).toBe(TEST_WEBHOOK_URL)
+      expect(webhook?.secret).toBe(originalSecret)
+    })
+
+    it("throws error when webhook not found", async () => {
+      await expect(
+        service.updateWebhookUrl({
+          accountId: testAccountId,
+          url: TEST_WEBHOOK_URL,
+        }),
+      ).rejects.toThrow(HTTPError)
+
+      try {
+        await service.updateWebhookUrl({
+          accountId: testAccountId,
+          url: TEST_WEBHOOK_URL,
+        })
+      } catch (error) {
+        expect(error).toBeInstanceOf(HTTPError)
+        expect((error as HTTPError).code).toBe(ErrorCode.NOT_FOUND)
+      }
+    })
+
+    it("validates new URL format", async () => {
+      await testDB.db
+        .prepare(
+          "INSERT INTO webhooks (account_id, url, secret) VALUES (?, ?, ?)",
+        )
+        .bind(testAccountId, TEST_WEBHOOK_URL, "whsec_testsecret")
+        .run()
+
+      await expect(
+        service.updateWebhookUrl({
+          accountId: testAccountId,
+          url: "invalid-url",
+        }),
+      ).rejects.toThrow(HTTPError)
+    })
+  })
+
+  describe("rotateWebhookSecret", () => {
+    it("generates new secret while keeping existing URL", async () => {
+      const originalSecret =
+        "whsec_originalsecret123456789012345678901234567890123456"
+      await testDB.db
+        .prepare(
+          "INSERT INTO webhooks (account_id, url, secret) VALUES (?, ?, ?)",
+        )
+        .bind(testAccountId, TEST_WEBHOOK_URL, originalSecret)
+        .run()
+
+      const result = await service.rotateWebhookSecret({
+        accountId: testAccountId,
+      })
+
+      expect(result.secret).toMatch(/^whsec_[a-f0-9]{64}$/)
+      expect(result.secret).not.toBe(originalSecret)
+
+      const webhook = await testDB.db
+        .prepare("SELECT * FROM webhooks WHERE account_id = ?")
+        .bind(testAccountId)
+        .first<{ url: string; secret: string }>()
+
+      expect(webhook?.url).toBe(TEST_WEBHOOK_URL)
+      expect(webhook?.secret).toBe(result.secret)
+    })
+
+    it("throws error when webhook not found", async () => {
+      await expect(
+        service.rotateWebhookSecret({
+          accountId: testAccountId,
+        }),
+      ).rejects.toThrow(HTTPError)
+
+      try {
+        await service.rotateWebhookSecret({
+          accountId: testAccountId,
+        })
+      } catch (error) {
+        expect(error).toBeInstanceOf(HTTPError)
+        expect((error as HTTPError).code).toBe(ErrorCode.NOT_FOUND)
+      }
+    })
+  })
+
+  describe("deleteWebhook", () => {
+    it("soft deletes webhook by setting deletedAt", async () => {
+      await testDB.db
+        .prepare(
+          "INSERT INTO webhooks (account_id, url, secret) VALUES (?, ?, ?)",
+        )
+        .bind(testAccountId, TEST_WEBHOOK_URL, "whsec_testsecret")
+        .run()
+
+      const result = await service.deleteWebhook({ accountId: testAccountId })
+      expect(result.success).toBe(true)
+
+      const webhook = await testDB.db
+        .prepare("SELECT * FROM webhooks WHERE account_id = ?")
+        .bind(testAccountId)
+        .first<{ deleted_at: string | null }>()
+
+      expect(webhook?.deleted_at).not.toBeNull()
+    })
+
+    it("throws error when webhook not found", async () => {
+      await expect(
+        service.deleteWebhook({
+          accountId: testAccountId,
+        }),
+      ).rejects.toThrow(HTTPError)
+
+      try {
+        await service.deleteWebhook({
+          accountId: testAccountId,
+        })
+      } catch (error) {
+        expect(error).toBeInstanceOf(HTTPError)
+        expect((error as HTTPError).code).toBe(ErrorCode.NOT_FOUND)
+      }
+    })
+
+    it("throws error when webhook already deleted", async () => {
+      await testDB.db
+        .prepare(
+          "INSERT INTO webhooks (account_id, url, secret, deleted_at) VALUES (?, ?, ?, ?)",
+        )
+        .bind(
+          testAccountId,
+          TEST_WEBHOOK_URL,
+          "whsec_testsecret",
+          new Date().toISOString(),
+        )
+        .run()
+
+      await expect(
+        service.deleteWebhook({
+          accountId: testAccountId,
+        }),
+      ).rejects.toThrow(HTTPError)
+    })
+  })
+
   describe("emitSubscriptionCanceled", () => {
     it("emits subscription.updated webhook with canceled status", async () => {
       // Register webhook for the account
