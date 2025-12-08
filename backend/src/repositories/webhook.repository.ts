@@ -1,6 +1,6 @@
 import type { D1Database } from "@cloudflare/workers-types"
 import * as schema from "@database/schema"
-import { and, desc, eq, isNull } from "drizzle-orm"
+import { and, eq, isNull } from "drizzle-orm"
 import { drizzle } from "drizzle-orm/d1"
 import type { LoggingLevel } from "@/constants/env.constants"
 import { DrizzleLogger } from "@/lib/logger"
@@ -54,8 +54,9 @@ export class WebhookRepository {
   }
 
   /**
-   * Creates or updates a webhook for an account (upsert)
-   * Only one webhook per account in v1
+   * Creates a new webhook for an account
+   * If an active webhook exists, this will fail (unique constraint)
+   * Caller should delete existing webhook first if they want to replace it
    */
   async createOrUpdateWebhook(
     params: CreateOrUpdateWebhookParams,
@@ -67,13 +68,31 @@ export class WebhookRepository {
         url: params.url,
         secret: params.secret,
       })
-      .onConflictDoUpdate({
-        target: schema.webhooks.accountId,
-        set: {
-          url: params.url,
-          secret: params.secret,
-        },
-      })
+      .run()
+  }
+
+  /**
+   * Updates an existing webhook's URL and/or secret
+   * Only updates non-deleted webhooks
+   */
+  async updateWebhook(params: {
+    accountId: number
+    url?: string
+    secret?: string
+  }): Promise<void> {
+    const updates: Partial<typeof schema.webhooks.$inferInsert> = {}
+    if (params.url !== undefined) updates.url = params.url
+    if (params.secret !== undefined) updates.secret = params.secret
+
+    await this.db
+      .update(schema.webhooks)
+      .set(updates)
+      .where(
+        and(
+          eq(schema.webhooks.accountId, params.accountId),
+          isNull(schema.webhooks.deletedAt),
+        ),
+      )
       .run()
   }
 
@@ -106,7 +125,10 @@ export class WebhookRepository {
   async deleteWebhook(params: { accountId: number }): Promise<boolean> {
     const result = await this.db
       .update(schema.webhooks)
-      .set({ deletedAt: new Date().toISOString() })
+      .set({
+        deletedAt: new Date().toISOString(),
+        enabled: false,
+      })
       .where(
         and(
           eq(schema.webhooks.accountId, params.accountId),
@@ -117,24 +139,5 @@ export class WebhookRepository {
       .get()
 
     return result !== undefined
-  }
-
-  /**
-   * Lists all active webhooks for an account (excludes soft-deleted)
-   */
-  async listWebhooks(params: { accountId: number }): Promise<Webhook[]> {
-    const results = await this.db
-      .select()
-      .from(schema.webhooks)
-      .where(
-        and(
-          eq(schema.webhooks.accountId, params.accountId),
-          isNull(schema.webhooks.deletedAt),
-        ),
-      )
-      .orderBy(desc(schema.webhooks.createdAt))
-      .all()
-
-    return results.map((row) => this.toWebhookDomain(row))
   }
 }

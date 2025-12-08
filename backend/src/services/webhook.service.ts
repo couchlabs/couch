@@ -6,7 +6,6 @@ import {
   SubscriptionStatus,
 } from "@/constants/subscription.constants"
 import {
-  MAX_WEBHOOKS_PER_ACCOUNT,
   WEBHOOK_SECRET_BYTES,
   WEBHOOK_SECRET_PREFIX,
   WEBHOOK_SECRET_PREVIEW_CHARS,
@@ -262,21 +261,6 @@ export class WebhookService {
   }
 
   /**
-   * Checks if account has reached webhook limit
-   */
-  private async checkWebhookLimit(accountId: number): Promise<void> {
-    const webhooks = await this.webhookRepository.listWebhooks({ accountId })
-
-    if (webhooks.length >= MAX_WEBHOOKS_PER_ACCOUNT) {
-      throw new HTTPError(
-        400,
-        ErrorCode.INVALID_REQUEST,
-        `Maximum of ${MAX_WEBHOOKS_PER_ACCOUNT} webhook(s) allowed per account`,
-      )
-    }
-  }
-
-  /**
    * Sets or updates the webhook URL for an account
    * Generates a new secret each time
    */
@@ -289,10 +273,18 @@ export class WebhookService {
     // Validate URL format
     this.validateWebhookUrl(url)
 
+    // Check if webhook already exists - if so, soft delete it first
+    // This preserves audit trail by keeping old webhook in database
+    const existing = await this.webhookRepository.getWebhook({ accountId })
+    if (existing) {
+      log.info("Soft deleting existing webhook before creating new one")
+      await this.webhookRepository.deleteWebhook({ accountId })
+    }
+
     // Generate new secret for this webhook
     const secret = this.generateWebhookSecret()
 
-    // Create or update webhook
+    // Create new webhook
     await this.webhookRepository.createOrUpdateWebhook({
       accountId,
       url,
@@ -317,10 +309,14 @@ export class WebhookService {
       return null
     }
 
+    // Extract secret part after prefix for preview (like API keys)
+    const secretPart = webhook.secret.slice(WEBHOOK_SECRET_PREFIX.length)
+    const preview = secretPart.slice(0, WEBHOOK_SECRET_PREVIEW_CHARS)
+
     return {
       id: webhook.id,
       url: webhook.url,
-      secretPreview: `${webhook.secret.slice(0, WEBHOOK_SECRET_PREVIEW_CHARS)}...`,
+      secretPreview: `${WEBHOOK_SECRET_PREFIX}${preview}...`,
       enabled: webhook.enabled,
       createdAt: webhook.createdAt,
       lastUsedAt: webhook.lastUsedAt ?? undefined,
@@ -345,10 +341,9 @@ export class WebhookService {
 
     log.info("Updating webhook URL", { oldUrl: existing.url, newUrl: url })
 
-    await this.webhookRepository.createOrUpdateWebhook({
+    await this.webhookRepository.updateWebhook({
       accountId,
       url,
-      secret: existing.secret,
     })
 
     return { url }
@@ -372,9 +367,8 @@ export class WebhookService {
 
     log.info("Rotating webhook secret", { url: existing.url })
 
-    await this.webhookRepository.createOrUpdateWebhook({
+    await this.webhookRepository.updateWebhook({
       accountId,
-      url: existing.url,
       secret: newSecret,
     })
 
@@ -595,6 +589,12 @@ export class WebhookService {
       })
 
       if (!webhook) {
+        return
+      }
+
+      // Don't send to disabled webhooks
+      if (!webhook.enabled) {
+        log.info("Webhook disabled, skipping event delivery")
         return
       }
 

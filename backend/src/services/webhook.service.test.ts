@@ -82,14 +82,14 @@ describe("WebhookService", () => {
       expect(webhook?.secret).toBe(result.secret)
     })
 
-    it("updates existing webhook URL and generates new secret", async () => {
+    it("creates new webhook row when replacing existing (audit trail)", async () => {
       // Set initial webhook
       const result1 = await service.setWebhook({
         accountId: testAccountId,
         url: "https://example.com/old",
       })
 
-      // Update to new URL
+      // Replace with new URL (soft deletes old, creates new)
       const result2 = await service.setWebhook({
         accountId: testAccountId,
         url: TEST_WEBHOOK_URL,
@@ -98,13 +98,17 @@ describe("WebhookService", () => {
       expect(result2.url).toBe(TEST_WEBHOOK_URL)
       expect(result2.secret).not.toBe(result1.secret) // New secret generated
 
-      // Verify only one webhook exists
-      const count = await testDB.db
-        .prepare("SELECT COUNT(*) as count FROM webhooks WHERE account_id = ?")
+      // Verify 2 webhook rows exist - old deleted one + new active one
+      const allWebhooks = await testDB.db
+        .prepare("SELECT * FROM webhooks WHERE account_id = ? ORDER BY id")
         .bind(testAccountId)
-        .first<{ count: number }>()
+        .all<{ deleted_at: string | null; url: string }>()
 
-      expect(count?.count).toBe(1)
+      expect(allWebhooks.results).toHaveLength(2)
+      expect(allWebhooks.results[0].deleted_at).not.toBeNull() // Old one deleted
+      expect(allWebhooks.results[0].url).toBe("https://example.com/old")
+      expect(allWebhooks.results[1].deleted_at).toBeNull() // New one active
+      expect(allWebhooks.results[1].url).toBe(TEST_WEBHOOK_URL)
     })
 
     it("throws error for invalid webhook URL format", async () => {
@@ -207,6 +211,40 @@ describe("WebhookService", () => {
       ).resolves.toBeUndefined()
 
       // Queue should not be called
+      expect(mockQueueSend).not.toHaveBeenCalled()
+    })
+
+    it("does not send webhook when webhook is disabled", async () => {
+      // Set up webhook with enabled=false
+      await testDB.db
+        .prepare(
+          "INSERT INTO webhooks (account_id, url, secret, enabled) VALUES (?, ?, ?, ?)",
+        )
+        .bind(testAccountId, TEST_WEBHOOK_URL, "whsec_testsecret", 0)
+        .run()
+
+      const activationResult: ActivationResult = {
+        subscriptionId: TEST_SUBSCRIPTION_ID,
+        accountId: testAccountId,
+        provider: Provider.BASE,
+        testnet: true,
+        transaction: { hash: "0xtxhash" as Hash, amount: "500000" },
+        order: {
+          id: 1,
+          number: 1,
+          dueAt: "2025-01-01T00:00:00Z",
+          periodInSeconds: 2592000,
+        },
+        nextOrder: {
+          date: "2025-02-01T00:00:00Z",
+          amount: "1000000",
+          periodInSeconds: 2592000,
+        },
+      }
+
+      await service.emitSubscriptionActivated(activationResult)
+
+      // Queue should not be called because webhook is disabled
       expect(mockQueueSend).not.toHaveBeenCalled()
     })
   })
@@ -430,7 +468,7 @@ describe("WebhookService", () => {
 
       expect(result).not.toBeNull()
       expect(result?.url).toBe(TEST_WEBHOOK_URL)
-      expect(result?.secretPreview).toBe("whsec_...")
+      expect(result?.secretPreview).toBe("whsec_testse...")
       expect(result?.enabled).toBe(true)
       expect(result?.createdAt).toBeDefined()
     })
@@ -567,7 +605,7 @@ describe("WebhookService", () => {
   })
 
   describe("deleteWebhook", () => {
-    it("soft deletes webhook by setting deletedAt", async () => {
+    it("soft deletes webhook by setting deletedAt and enabled=false", async () => {
       await testDB.db
         .prepare(
           "INSERT INTO webhooks (account_id, url, secret) VALUES (?, ?, ?)",
@@ -581,9 +619,10 @@ describe("WebhookService", () => {
       const webhook = await testDB.db
         .prepare("SELECT * FROM webhooks WHERE account_id = ?")
         .bind(testAccountId)
-        .first<{ deleted_at: string | null }>()
+        .first<{ deleted_at: string | null; enabled: number }>()
 
       expect(webhook?.deleted_at).not.toBeNull()
+      expect(webhook?.enabled).toBe(0)
     })
 
     it("throws error when webhook not found", async () => {
@@ -621,6 +660,59 @@ describe("WebhookService", () => {
           accountId: testAccountId,
         }),
       ).rejects.toThrow(HTTPError)
+    })
+
+    it("can recreate webhook after deletion (creates new row)", async () => {
+      // Create and delete webhook
+      await testDB.db
+        .prepare(
+          "INSERT INTO webhooks (account_id, url, secret, deleted_at, enabled) VALUES (?, ?, ?, ?, ?)",
+        )
+        .bind(
+          testAccountId,
+          TEST_WEBHOOK_URL,
+          "whsec_testsecret",
+          new Date().toISOString(),
+          0,
+        )
+        .run()
+
+      // Recreate webhook (should create new row, keeping old deleted one)
+      const newUrl = "https://new-webhook.com"
+      const result = await service.setWebhook({
+        accountId: testAccountId,
+        url: newUrl,
+      })
+
+      expect(result.url).toBe(newUrl)
+      expect(result.secret).toMatch(/^whsec_[a-f0-9]{64}$/)
+
+      // Verify new webhook can be fetched
+      const webhook = await service.getWebhook({ accountId: testAccountId })
+      expect(webhook).not.toBeNull()
+      expect(webhook?.url).toBe(newUrl)
+      expect(webhook?.enabled).toBe(true)
+
+      // Verify we have 2 rows in database - old deleted one + new active one
+      const allWebhooks = await testDB.db
+        .prepare("SELECT * FROM webhooks WHERE account_id = ? ORDER BY id")
+        .bind(testAccountId)
+        .all<{
+          id: number
+          deleted_at: string | null
+          enabled: number
+          url: string
+        }>()
+
+      expect(allWebhooks.results).toHaveLength(2)
+      // First row: old deleted webhook
+      expect(allWebhooks.results[0].deleted_at).not.toBeNull()
+      expect(allWebhooks.results[0].enabled).toBe(0)
+      expect(allWebhooks.results[0].url).toBe(TEST_WEBHOOK_URL)
+      // Second row: new active webhook
+      expect(allWebhooks.results[1].deleted_at).toBeNull()
+      expect(allWebhooks.results[1].enabled).toBe(1)
+      expect(allWebhooks.results[1].url).toBe(newUrl)
     })
   })
 
