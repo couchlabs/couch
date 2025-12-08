@@ -6,6 +6,12 @@ import {
   OrderType,
   SubscriptionStatus,
 } from "@/constants/subscription.constants"
+import {
+  MAX_WEBHOOKS_PER_ACCOUNT,
+  WEBHOOK_SECRET_BYTES,
+  WEBHOOK_SECRET_PREFIX,
+  WEBHOOK_SECRET_PREVIEW_CHARS,
+} from "@/constants/webhook.constants"
 import { ErrorCode, HTTPError } from "@/errors/http.errors"
 import { getErrorMessage, isExposableError } from "@/errors/subscription.errors"
 import { createLogger } from "@/lib/logger"
@@ -100,6 +106,44 @@ export interface WebhookResult {
   secret: string
 }
 
+export interface GetWebhookParams {
+  accountId: number
+}
+
+export interface WebhookResponse {
+  id: number
+  url: string
+  secretPreview: string
+  enabled: boolean
+  createdAt: string
+  lastUsedAt?: string
+}
+
+export interface UpdateWebhookUrlParams {
+  accountId: number
+  url: string
+}
+
+export interface UpdateWebhookUrlResult {
+  url: string
+}
+
+export interface RotateWebhookSecretParams {
+  accountId: number
+}
+
+export interface RotateWebhookSecretResult {
+  secret: string
+}
+
+export interface DeleteWebhookParams {
+  accountId: number
+}
+
+export interface DeleteWebhookResult {
+  success: boolean
+}
+
 /**
  * Parameters for webhook events
  * subscriptionAmount and subscriptionPeriodInSeconds are REQUIRED - they represent immutable subscription terms
@@ -150,15 +194,14 @@ export class WebhookService {
 
   /**
    * Generates a secure webhook secret for HMAC signing
-   * Format: whsec_ prefix + 32 bytes hex (following industry standards like Stripe)
    */
   private generateWebhookSecret(): string {
-    const bytes = new Uint8Array(32)
+    const bytes = new Uint8Array(WEBHOOK_SECRET_BYTES)
     crypto.getRandomValues(bytes)
     const hex = Array.from(bytes)
       .map((b) => b.toString(16).padStart(2, "0"))
       .join("")
-    return `whsec_${hex}`
+    return `${WEBHOOK_SECRET_PREFIX}${hex}`
   }
 
   /**
@@ -219,6 +262,21 @@ export class WebhookService {
   }
 
   /**
+   * Checks if account has reached webhook limit
+   */
+  private async checkWebhookLimit(accountId: number): Promise<void> {
+    const webhooks = await this.webhookRepository.listWebhooks({ accountId })
+
+    if (webhooks.length >= MAX_WEBHOOKS_PER_ACCOUNT) {
+      throw new HTTPError(
+        400,
+        ErrorCode.INVALID_REQUEST,
+        `Maximum of ${MAX_WEBHOOKS_PER_ACCOUNT} webhook(s) allowed per account`,
+      )
+    }
+  }
+
+  /**
    * Sets or updates the webhook URL for an account
    * Generates a new secret each time
    */
@@ -243,6 +301,109 @@ export class WebhookService {
 
     log.info("Webhook URL set successfully")
     return { url, secret }
+  }
+
+  /**
+   * Gets webhook configuration for an account (safe for external use)
+   */
+  async getWebhook(params: GetWebhookParams): Promise<WebhookResponse | null> {
+    const { accountId } = params
+    const log = logger.with({ accountId })
+
+    const webhook = await this.webhookRepository.getWebhook({ accountId })
+
+    if (!webhook) {
+      log.info("No webhook configured")
+      return null
+    }
+
+    return {
+      id: webhook.id,
+      url: webhook.url,
+      secretPreview: `${webhook.secret.slice(0, WEBHOOK_SECRET_PREVIEW_CHARS)}...`,
+      enabled: webhook.enabled,
+      createdAt: webhook.createdAt,
+      lastUsedAt: webhook.lastUsedAt ?? undefined,
+    }
+  }
+
+  /**
+   * Updates webhook URL WITHOUT changing the secret
+   */
+  async updateWebhookUrl(
+    params: UpdateWebhookUrlParams,
+  ): Promise<UpdateWebhookUrlResult> {
+    const { accountId, url } = params
+    const log = logger.with({ accountId })
+
+    const existing = await this.webhookRepository.getWebhook({ accountId })
+    if (!existing) {
+      throw new HTTPError(404, ErrorCode.NOT_FOUND, "Webhook not found")
+    }
+
+    this.validateWebhookUrl(url)
+
+    log.info("Updating webhook URL", { oldUrl: existing.url, newUrl: url })
+
+    await this.webhookRepository.createOrUpdateWebhook({
+      accountId,
+      url,
+      secret: existing.secret,
+    })
+
+    return { url }
+  }
+
+  /**
+   * Rotates webhook secret WITHOUT changing URL
+   */
+  async rotateWebhookSecret(
+    params: RotateWebhookSecretParams,
+  ): Promise<RotateWebhookSecretResult> {
+    const { accountId } = params
+    const log = logger.with({ accountId })
+
+    const existing = await this.webhookRepository.getWebhook({ accountId })
+    if (!existing) {
+      throw new HTTPError(404, ErrorCode.NOT_FOUND, "Webhook not found")
+    }
+
+    const newSecret = this.generateWebhookSecret()
+
+    log.info("Rotating webhook secret", { url: existing.url })
+
+    await this.webhookRepository.createOrUpdateWebhook({
+      accountId,
+      url: existing.url,
+      secret: newSecret,
+    })
+
+    return { secret: newSecret }
+  }
+
+  /**
+   * Soft deletes the webhook configuration for an account
+   */
+  async deleteWebhook(
+    params: DeleteWebhookParams,
+  ): Promise<DeleteWebhookResult> {
+    const { accountId } = params
+    const log = logger.with({ accountId })
+
+    log.info("Soft deleting webhook configuration")
+
+    const deleted = await this.webhookRepository.deleteWebhook({ accountId })
+
+    if (!deleted) {
+      throw new HTTPError(
+        404,
+        ErrorCode.NOT_FOUND,
+        "Webhook not found or already deleted",
+      )
+    }
+
+    log.info("Webhook soft deleted successfully")
+    return { success: true }
   }
 
   /**
