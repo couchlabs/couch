@@ -1,6 +1,6 @@
 import type { D1Database } from "@cloudflare/workers-types"
 import * as schema from "@database/schema"
-import { eq } from "drizzle-orm"
+import { and, desc, eq, isNull } from "drizzle-orm"
 import { drizzle } from "drizzle-orm/d1"
 import type { LoggingLevel } from "@/constants/env.constants"
 import { DrizzleLogger } from "@/lib/logger"
@@ -85,7 +85,12 @@ export class WebhookRepository {
     const result = await this.db
       .select()
       .from(schema.webhooks)
-      .where(eq(schema.webhooks.accountId, params.accountId))
+      .where(
+        and(
+          eq(schema.webhooks.accountId, params.accountId),
+          isNull(schema.webhooks.deletedAt),
+        ),
+      )
       .get()
 
     if (!result) {
@@ -93,5 +98,43 @@ export class WebhookRepository {
     }
 
     return this.toWebhookDomain(result)
+  }
+
+  /**
+   * Soft deletes a webhook for an account (sets deletedAt timestamp)
+   */
+  async deleteWebhook(params: { accountId: number }): Promise<boolean> {
+    const result = await this.db
+      .update(schema.webhooks)
+      .set({ deletedAt: new Date().toISOString() })
+      .where(
+        and(
+          eq(schema.webhooks.accountId, params.accountId),
+          isNull(schema.webhooks.deletedAt),
+        ),
+      )
+      .returning({ id: schema.webhooks.id })
+      .get()
+
+    return result !== undefined
+  }
+
+  /**
+   * Lists all active webhooks for an account (excludes soft-deleted)
+   */
+  async listWebhooks(params: { accountId: number }): Promise<Webhook[]> {
+    const results = await this.db
+      .select()
+      .from(schema.webhooks)
+      .where(
+        and(
+          eq(schema.webhooks.accountId, params.accountId),
+          isNull(schema.webhooks.deletedAt),
+        ),
+      )
+      .orderBy(desc(schema.webhooks.createdAt))
+      .all()
+
+    return results.map((row) => this.toWebhookDomain(row))
   }
 }
