@@ -138,6 +138,132 @@ app.delete("/api/keys/:id", async (c) => {
   }
 })
 
+// POST /api/webhook - Create/update webhook
+app.post("/api/webhook", async (c) => {
+  const { address, url } = await c.req.json<{
+    address?: string
+    url?: string
+  }>()
+
+  if (!address || !isAddress(address)) {
+    return c.json({ error: "Invalid address" }, 400)
+  }
+
+  if (!url || typeof url !== "string" || url.trim().length === 0) {
+    return c.json({ error: "Invalid URL" }, 400)
+  }
+
+  try {
+    const result = await c.env.COUCH_BACKEND_RPC.createWebhook({
+      accountAddress: address,
+      url: url.trim(),
+    })
+    return c.json(result)
+  } catch (error) {
+    console.error("Create webhook error:", error)
+    if (error instanceof Error && error.message.includes("Invalid")) {
+      return c.json({ error: error.message }, 400)
+    }
+    return c.json({ error: "Internal error" }, 500)
+  }
+})
+
+// GET /api/webhook?address=0x... - Get webhook configuration
+app.get("/api/webhook", async (c) => {
+  const address = c.req.query("address")
+
+  if (!address || !isAddress(address)) {
+    return c.json({ error: "Invalid address" }, 400)
+  }
+
+  try {
+    const result = await c.env.COUCH_BACKEND_RPC.getWebhook({
+      accountAddress: address,
+    })
+    return c.json(result)
+  } catch (error) {
+    console.error("Get webhook error:", error)
+    return c.json({ error: "Internal error" }, 500)
+  }
+})
+
+// PATCH /api/webhook/url - Update webhook URL only
+app.patch("/api/webhook/url", async (c) => {
+  const { address, url } = await c.req.json<{
+    address?: string
+    url?: string
+  }>()
+
+  if (!address || !isAddress(address)) {
+    return c.json({ error: "Invalid address" }, 400)
+  }
+
+  if (!url || typeof url !== "string" || url.trim().length === 0) {
+    return c.json({ error: "Invalid URL" }, 400)
+  }
+
+  try {
+    const result = await c.env.COUCH_BACKEND_RPC.updateWebhookUrl({
+      accountAddress: address,
+      url: url.trim(),
+    })
+    return c.json(result)
+  } catch (error) {
+    console.error("Update webhook URL error:", error)
+    if (error instanceof Error && error.message.includes("not found")) {
+      return c.json({ error: "Webhook not found" }, 404)
+    }
+    if (error instanceof Error && error.message.includes("Invalid")) {
+      return c.json({ error: error.message }, 400)
+    }
+    return c.json({ error: "Internal error" }, 500)
+  }
+})
+
+// POST /api/webhook/rotate - Rotate webhook secret only
+app.post("/api/webhook/rotate", async (c) => {
+  const { address } = await c.req.json<{ address?: string }>()
+
+  if (!address || !isAddress(address)) {
+    return c.json({ error: "Invalid address" }, 400)
+  }
+
+  try {
+    const result = await c.env.COUCH_BACKEND_RPC.rotateWebhookSecret({
+      accountAddress: address,
+    })
+    return c.json(result)
+  } catch (error) {
+    console.error("Rotate webhook secret error:", error)
+    if (error instanceof Error && error.message.includes("not found")) {
+      return c.json({ error: "Webhook not found" }, 404)
+    }
+    return c.json({ error: "Internal error" }, 500)
+  }
+})
+
+// DELETE /api/webhook?address=0x... - Delete webhook
+app.delete("/api/webhook", async (c) => {
+  const address = c.req.query("address")
+
+  if (!address || !isAddress(address)) {
+    return c.json({ error: "Invalid address" }, 400)
+  }
+
+  try {
+    const result = await c.env.COUCH_BACKEND_RPC.deleteWebhook({
+      accountAddress: address,
+    })
+    return c.json(result)
+  } catch (error) {
+    console.error("Delete webhook error:", error)
+    if (error instanceof Error && error.message.includes("not found")) {
+      return c.json({ error: "Webhook not found" }, 404)
+    }
+    return c.json({ error: "Internal error" }, 500)
+  }
+})
+
 // 404 for everything else
 app.notFound((c) => {
   return c.json({ error: "Not found" }, 404)
