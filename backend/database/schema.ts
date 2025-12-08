@@ -88,8 +88,10 @@ export const webhooks = sqliteTable(
   },
   (table) => [
     index("idx_webhooks_account").on(table.accountId),
-    // V1: Enforce single webhook per account
-    uniqueIndex("idx_webhooks_account_unique").on(table.accountId),
+    // V1: Enforce single active webhook per account (allows soft-deleted webhooks to remain)
+    uniqueIndex("idx_webhooks_account_active_unique")
+      .on(table.accountId)
+      .where(sql`${table.deletedAt} IS NULL`),
   ],
 )
 
