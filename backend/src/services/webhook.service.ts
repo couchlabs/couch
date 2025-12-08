@@ -1,4 +1,3 @@
-import type { WebhookQueueMessage } from "@alchemy.run"
 import type { D1Database, Queue } from "@cloudflare/workers-types"
 import type { Hash } from "viem"
 import type { LoggingLevel } from "@/constants/env.constants"
@@ -17,6 +16,7 @@ import { getErrorMessage, isExposableError } from "@/errors/subscription.errors"
 import { createLogger } from "@/lib/logger"
 import { WebhookRepository } from "@/repositories/webhook.repository"
 import type { ActivationResult } from "@/services/subscription.service"
+import type { WebhookQueueMessage } from "../../alchemy.run"
 
 export interface WebhookServiceDeps {
   DB: D1Database

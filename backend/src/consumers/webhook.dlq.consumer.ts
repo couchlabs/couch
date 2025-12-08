@@ -1,6 +1,6 @@
-import type { webhookDLQ } from "@alchemy.run"
 import { createLogger } from "@/lib/logger"
 import type { WorkerEnv } from "@/types/webhook.dlq.consumer.env"
+import type { webhookDLQ } from "../../alchemy.run"
 
 const logger = createLogger("webhook.dlq.consumer")
 

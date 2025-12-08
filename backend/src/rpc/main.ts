@@ -1,9 +1,12 @@
 import { WorkerEntrypoint } from "cloudflare:workers"
+import type { Queue } from "@cloudflare/workers-types"
 import type { Address } from "viem"
 import type { LoggingLevel } from "@/constants/env.constants"
 import { AccountRepository } from "@/repositories/account.repository"
 import type { ApiKeyResponse, CreateApiKeyResponse } from "@/rpc/types"
 import { AccountService } from "@/services/account.service"
+import { WebhookService } from "@/services/webhook.service"
+import type { WebhookQueueMessage } from "../../alchemy.run"
 
 interface BackendRPCEnv {
   DB: D1Database
@@ -11,6 +14,7 @@ interface BackendRPCEnv {
   CDP_API_KEY_ID: string
   CDP_API_KEY_SECRET: string
   CDP_WALLET_SECRET: string
+  WEBHOOK_QUEUE: Queue<WebhookQueueMessage>
 }
 
 export class RPC extends WorkerEntrypoint<BackendRPCEnv> {
@@ -143,6 +147,111 @@ export class RPC extends WorkerEntrypoint<BackendRPCEnv> {
     return accountService.deleteApiKey({
       accountId: account.id,
       keyId: params.keyId,
+    })
+  }
+
+  /**
+   * Creates or updates a webhook for an account
+   * Returns the webhook secret for HMAC verification
+   */
+  async createWebhook(params: {
+    accountAddress: Address
+    url: string
+  }): Promise<{ url: string; secret: string }> {
+    const account = await this.getAccountByAddress(params.accountAddress)
+
+    const webhookService = new WebhookService({
+      DB: this.env.DB,
+      LOGGING: this.env.LOGGING,
+      WEBHOOK_QUEUE: this.env.WEBHOOK_QUEUE,
+    })
+
+    return webhookService.setWebhook({
+      accountId: account.id,
+      url: params.url,
+    })
+  }
+
+  /**
+   * Gets webhook configuration for an account (safe - secret preview only)
+   */
+  async getWebhook(params: { accountAddress: Address }): Promise<{
+    id: number
+    url: string
+    secretPreview: string
+    enabled: boolean
+    createdAt: string
+    lastUsedAt?: string
+  } | null> {
+    const account = await this.getAccountByAddress(params.accountAddress)
+
+    const webhookService = new WebhookService({
+      DB: this.env.DB,
+      LOGGING: this.env.LOGGING,
+      WEBHOOK_QUEUE: this.env.WEBHOOK_QUEUE,
+    })
+
+    return webhookService.getWebhook({
+      accountId: account.id,
+    })
+  }
+
+  /**
+   * Updates webhook URL only (keeps existing secret)
+   */
+  async updateWebhookUrl(params: {
+    accountAddress: Address
+    url: string
+  }): Promise<{ url: string }> {
+    const account = await this.getAccountByAddress(params.accountAddress)
+
+    const webhookService = new WebhookService({
+      DB: this.env.DB,
+      LOGGING: this.env.LOGGING,
+      WEBHOOK_QUEUE: this.env.WEBHOOK_QUEUE,
+    })
+
+    return webhookService.updateWebhookUrl({
+      accountId: account.id,
+      url: params.url,
+    })
+  }
+
+  /**
+   * Rotates webhook secret only (keeps existing URL)
+   */
+  async rotateWebhookSecret(params: {
+    accountAddress: Address
+  }): Promise<{ secret: string }> {
+    const account = await this.getAccountByAddress(params.accountAddress)
+
+    const webhookService = new WebhookService({
+      DB: this.env.DB,
+      LOGGING: this.env.LOGGING,
+      WEBHOOK_QUEUE: this.env.WEBHOOK_QUEUE,
+    })
+
+    return webhookService.rotateWebhookSecret({
+      accountId: account.id,
+    })
+  }
+
+  /**
+   * Soft deletes webhook configuration
+   */
+  async deleteWebhook(params: {
+    accountAddress: Address
+  }): Promise<{ success: boolean }> {
+    const account = await this.getAccountByAddress(params.accountAddress)
+
+    const webhookService = new WebhookService({
+      DB: this.env.DB,
+      LOGGING: this.env.LOGGING,
+      WEBHOOK_QUEUE: this.env.WEBHOOK_QUEUE,
+    })
+
+    return webhookService.deleteWebhook({
+      accountId: account.id,
     })
   }
 }

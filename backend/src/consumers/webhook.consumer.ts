@@ -1,6 +1,6 @@
-import type { WebhookQueueMessage } from "@alchemy.run"
 import { createLogger } from "@/lib/logger"
 import type { WorkerEnv } from "@/types/webhook.consumer.env"
+import type { WebhookQueueMessage } from "../../alchemy.run"
 
 const logger = createLogger("webhook.consumer")
 
