@@ -42,9 +42,14 @@ export class WebhookRepository {
    */
   private toWebhookDomain(row: schema.WebhookRow): Webhook {
     return {
+      id: row.id,
       accountId: row.accountId,
       url: row.url,
       secret: row.secret,
+      enabled: row.enabled,
+      deletedAt: row.deletedAt,
+      createdAt: row.createdAt,
+      lastUsedAt: row.lastUsedAt,
     }
   }
 
