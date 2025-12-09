@@ -339,7 +339,7 @@ export function SubscriptionList() {
                     <div className="space-y-3">
                       {subscriptionDetail.orders.map((order) => (
                         <div
-                          key={order.id}
+                          key={order.orderNumber}
                           className="p-3 bg-gray-50 border border-gray-200 rounded"
                         >
                           <div className="flex items-start justify-between mb-2">

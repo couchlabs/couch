@@ -1,25 +1,123 @@
 import { WorkerEntrypoint } from "cloudflare:workers"
 import type { Address, Hash } from "viem"
-import { AccountRepository } from "@/repositories/account.repository"
 import type {
-  ApiKeyResponse,
-  CreateApiKeyResponse,
-  OrderResponse,
-  SubscriptionDetailResponse,
-  SubscriptionResponse,
-} from "@/rpc/types"
+  OrderStatus,
+  OrderType,
+  SubscriptionStatus,
+} from "@/constants/subscription.constants"
+import type { Provider } from "@/providers/provider.interface"
+import {
+  type Account,
+  AccountRepository,
+} from "@/repositories/account.repository"
 import { AccountService } from "@/services/account.service"
 import { SubscriptionService } from "@/services/subscription.service"
 import { WebhookService } from "@/services/webhook.service"
 import type { ApiWorkerEnv } from "@/types/api.env"
 
+// =============================================================================
+// RPC Response Types
+// These types define the contract between merchant worker and backend RPC
+// =============================================================================
+
+/**
+ * Account response (public view - no internal ID)
+ */
+export interface AccountResponse {
+  address: Address
+  subscriptionOwnerAddress: Address | null
+  createdAt: string
+}
+
+/**
+ * API Key response (safe for client - no secrets)
+ */
+export interface ApiKeyResponse {
+  id: number
+  name: string
+  prefix: string
+  start: string
+  enabled: boolean
+  createdAt: string
+  lastUsedAt?: string
+}
+
+/**
+ * Create API Key response (includes full key one-time only)
+ */
+export interface CreateApiKeyResponse extends ApiKeyResponse {
+  apiKey: string // Full key - only returned on creation
+}
+
+/**
+ * Webhook response (public view - no internal ID)
+ */
+export interface WebhookResponse {
+  url: string
+  secretPreview: string
+  enabled: boolean
+  createdAt: string
+  lastUsedAt?: string
+}
+
+/**
+ * Create webhook response (includes full secret one-time only)
+ */
+export interface CreateWebhookResponse {
+  url: string
+  secret: string
+}
+
+/**
+ * Subscription response (list view)
+ */
+export interface SubscriptionResponse {
+  subscriptionId: Hash
+  status: SubscriptionStatus
+  beneficiaryAddress: Address
+  provider: Provider
+  testnet: boolean
+  createdAt: string
+  modifiedAt: string
+}
+
+/**
+ * Order response (no internal ID)
+ */
+export interface OrderResponse {
+  type: OrderType
+  dueAt: string
+  amount: string
+  status: OrderStatus
+  orderNumber: number
+  attempts: number
+  periodLengthInSeconds: number
+  transactionHash?: Hash
+  failureReason?: string
+  createdAt: string
+}
+
+/**
+ * Subscription detail response (includes orders)
+ */
+export interface SubscriptionDetailResponse {
+  subscription: SubscriptionResponse
+  orders: OrderResponse[]
+}
+
+/**
+ * Generic success response
+ */
+export interface SuccessResponse {
+  success: boolean
+}
+
 export class RPC extends WorkerEntrypoint<ApiWorkerEnv> {
   /**
    * Helper: Get account by address (throws if not found)
+   * Returns full Account for internal use (includes id for database operations)
    */
-  private async getAccountByAddress(
-    address: Address,
-  ): Promise<{ id: number; address: Address }> {
+  private async getAccountByAddress(address: Address): Promise<Account> {
     const accountRepo = new AccountRepository({
       DB: this.env.DB,
       LOGGING: this.env.LOGGING,
@@ -36,11 +134,11 @@ export class RPC extends WorkerEntrypoint<ApiWorkerEnv> {
   /**
    * Gets or creates an account for the given EVM address
    * Skips allowlist check - trusted internal caller (merchant app)
-   * Returns only success status - no sensitive data exposed
+   * Returns account data including subscription owner address
    */
   async getOrCreateAccount(params: {
     address: Address
-  }): Promise<{ success: boolean }> {
+  }): Promise<AccountResponse> {
     const accountService = new AccountService({
       DB: this.env.DB,
       LOGGING: this.env.LOGGING,
@@ -49,8 +147,15 @@ export class RPC extends WorkerEntrypoint<ApiWorkerEnv> {
       CDP_WALLET_SECRET: this.env.CDP_WALLET_SECRET,
     })
 
-    // Skip allowlist check - trusted internal caller
-    return accountService.getOrCreateAccount({ address: params.address })
+    const account = await accountService.getOrCreateAccount({
+      address: params.address,
+    })
+
+    return {
+      address: account.address,
+      subscriptionOwnerAddress: account.subscriptionOwnerAddress,
+      createdAt: account.createdAt,
+    }
   }
 
   /**
@@ -129,7 +234,7 @@ export class RPC extends WorkerEntrypoint<ApiWorkerEnv> {
   async deleteApiKey(params: {
     accountAddress: Address
     keyId: number
-  }): Promise<{ success: boolean }> {
+  }): Promise<SuccessResponse> {
     const account = await this.getAccountByAddress(params.accountAddress)
 
     const accountService = new AccountService({
@@ -153,7 +258,7 @@ export class RPC extends WorkerEntrypoint<ApiWorkerEnv> {
   async createWebhook(params: {
     accountAddress: Address
     url: string
-  }): Promise<{ url: string; secret: string }> {
+  }): Promise<CreateWebhookResponse> {
     const account = await this.getAccountByAddress(params.accountAddress)
 
     const webhookService = new WebhookService({
@@ -171,14 +276,9 @@ export class RPC extends WorkerEntrypoint<ApiWorkerEnv> {
   /**
    * Gets webhook configuration for an account (safe - secret preview only)
    */
-  async getWebhook(params: { accountAddress: Address }): Promise<{
-    id: number
-    url: string
-    secretPreview: string
-    enabled: boolean
-    createdAt: string
-    lastUsedAt?: string
-  } | null> {
+  async getWebhook(params: {
+    accountAddress: Address
+  }): Promise<WebhookResponse | null> {
     const account = await this.getAccountByAddress(params.accountAddress)
 
     const webhookService = new WebhookService({
@@ -187,9 +287,22 @@ export class RPC extends WorkerEntrypoint<ApiWorkerEnv> {
       WEBHOOK_QUEUE: this.env.WEBHOOK_QUEUE,
     })
 
-    return webhookService.getWebhook({
+    const webhook = await webhookService.getWebhook({
       accountId: account.id,
     })
+
+    if (!webhook) {
+      return null
+    }
+
+    // Strip internal ID from response
+    return {
+      url: webhook.url,
+      secretPreview: webhook.secretPreview,
+      enabled: webhook.enabled,
+      createdAt: webhook.createdAt,
+      lastUsedAt: webhook.lastUsedAt,
+    }
   }
 
   /**
@@ -237,7 +350,7 @@ export class RPC extends WorkerEntrypoint<ApiWorkerEnv> {
    */
   async deleteWebhook(params: {
     accountAddress: Address
-  }): Promise<{ success: boolean }> {
+  }): Promise<SuccessResponse> {
     const account = await this.getAccountByAddress(params.accountAddress)
 
     const webhookService = new WebhookService({
@@ -331,7 +444,6 @@ export class RPC extends WorkerEntrypoint<ApiWorkerEnv> {
     }
 
     const orders: OrderResponse[] = result.orders.map((order) => ({
-      id: order.id,
       type: order.type,
       dueAt: order.dueAt,
       amount: order.amount,
@@ -354,7 +466,7 @@ export class RPC extends WorkerEntrypoint<ApiWorkerEnv> {
   async revokeSubscription(params: {
     accountAddress: Address
     subscriptionId: Hash
-  }): Promise<{ success: boolean }> {
+  }): Promise<SuccessResponse> {
     const account = await this.getAccountByAddress(params.accountAddress)
 
     const subscriptionService = new SubscriptionService({

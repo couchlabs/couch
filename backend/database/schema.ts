@@ -41,6 +41,8 @@ const providerValues = Object.values(Provider)
 export const accounts = sqliteTable("accounts", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   address: text("address").unique().notNull(),
+  subscriptionOwnerAddress: text("subscription_owner_address"),
+  createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 })
 
 // API Keys - SHA-256 hash of the secret part (no prefix)
@@ -208,8 +210,12 @@ export type Order = Omit<OrderRow, "subscriptionId" | "transactionHash"> & {
   transactionHash?: Hash
 }
 
-export type Account = Omit<AccountRow, "address"> & {
+export type Account = Omit<
+  AccountRow,
+  "address" | "subscriptionOwnerAddress"
+> & {
   address: Address
+  subscriptionOwnerAddress: Address | null
 }
 
 export type ApiKey = Omit<ApiKeyRow, never> & {

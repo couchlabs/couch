@@ -19,7 +19,11 @@ export function useAccountSync() {
         throw new Error(`Account sync failed: ${response.statusText}`)
       }
 
-      return response.json() as Promise<{ success: boolean }>
+      return response.json() as Promise<{
+        address: `0x${string}`
+        subscriptionOwnerAddress: `0x${string}` | null
+        createdAt: string
+      }>
     },
   })
 

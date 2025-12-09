@@ -1,0 +1,1 @@
+ALTER TABLE `accounts` ADD `subscription_owner_address` text;
