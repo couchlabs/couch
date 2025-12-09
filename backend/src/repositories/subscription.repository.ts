@@ -1,6 +1,6 @@
 import type { D1Database } from "@cloudflare/workers-types"
 import * as schema from "@database/schema"
-import { and, eq, sql } from "drizzle-orm"
+import { and, desc, eq, sql } from "drizzle-orm"
 import { drizzle } from "drizzle-orm/d1"
 import type { Address, Hash } from "viem"
 import type { LoggingLevel } from "@/constants/env.constants"
@@ -102,6 +102,15 @@ export interface DueRetry {
   attempts: number
   provider: Provider
   testnet: boolean
+}
+
+export interface ListSubscriptionsParams {
+  accountId: number
+  testnet?: boolean
+}
+
+export interface GetSubscriptionOrdersParams {
+  subscriptionId: Hash
 }
 
 export interface SubscriptionRepositoryDeps {
@@ -237,6 +246,62 @@ export class SubscriptionRepository {
       subscriptionId: result.subscriptionId as Hash,
       beneficiaryAddress: result.beneficiaryAddress as Address,
     }
+  }
+
+  /**
+   * List all subscriptions for an account
+   * Optionally filter by testnet
+   */
+  async listSubscriptions(
+    params: ListSubscriptionsParams,
+  ): Promise<Subscription[]> {
+    const { accountId, testnet } = params
+
+    const conditions = [eq(schema.subscriptions.accountId, accountId)]
+
+    if (testnet !== undefined) {
+      conditions.push(eq(schema.subscriptions.testnet, testnet))
+    }
+
+    const results = await this.db
+      .select()
+      .from(schema.subscriptions)
+      .where(and(...conditions))
+      .orderBy(desc(schema.subscriptions.createdAt))
+      .all()
+
+    // Transform DB strings to domain types
+    return results.map((sub) => ({
+      ...sub,
+      subscriptionId: sub.subscriptionId as Hash,
+      beneficiaryAddress: sub.beneficiaryAddress as Address,
+    }))
+  }
+
+  /**
+   * Get all orders for a subscription
+   * Returns orders with transaction hash if payment was successful
+   */
+  async getSubscriptionOrders(
+    params: GetSubscriptionOrdersParams,
+  ): Promise<Order[]> {
+    const { subscriptionId } = params
+
+    const results = await this.db
+      .select()
+      .from(schema.orders)
+      .where(eq(schema.orders.subscriptionId, subscriptionId))
+      .orderBy(desc(schema.orders.createdAt))
+      .all()
+
+    // Transform DB strings to domain types
+    return results.map((order) => ({
+      ...order,
+      subscriptionId: order.subscriptionId as Hash,
+      transactionHash: order.transactionHash
+        ? (order.transactionHash as Hash)
+        : undefined,
+    }))
   }
 
   /**

@@ -497,4 +497,273 @@ describe("SubscriptionRepository", () => {
       expect(exists).toBe(true)
     })
   })
+
+  describe("listSubscriptions", () => {
+    it("returns empty array when no subscriptions exist", async () => {
+      const result = await repo.listSubscriptions({
+        accountId: testAccountId,
+      })
+
+      expect(result).toEqual([])
+    })
+
+    it("returns all subscriptions for an account", async () => {
+      // Create 3 subscriptions
+      await repo.createSubscription({
+        subscriptionId: "0x1111" as Hash,
+        accountId: testAccountId,
+        beneficiaryAddress: "0x5678" as Address,
+        provider: Provider.BASE,
+        testnet: false,
+      })
+
+      await repo.createSubscription({
+        subscriptionId: "0x2222" as Hash,
+        accountId: testAccountId,
+        beneficiaryAddress: "0x5678" as Address,
+        provider: Provider.BASE,
+        testnet: true,
+      })
+
+      await repo.createSubscription({
+        subscriptionId: "0x3333" as Hash,
+        accountId: testAccountId,
+        beneficiaryAddress: "0x5678" as Address,
+        provider: Provider.BASE,
+        testnet: false,
+      })
+
+      const result = await repo.listSubscriptions({
+        accountId: testAccountId,
+      })
+
+      expect(result).toHaveLength(3)
+      // All subscriptions should be returned
+      const ids = result.map((s) => s.subscriptionId)
+      expect(ids).toContain("0x1111" as Hash)
+      expect(ids).toContain("0x2222" as Hash)
+      expect(ids).toContain("0x3333" as Hash)
+    })
+
+    it("filters subscriptions by testnet flag", async () => {
+      // Create mainnet and testnet subscriptions
+      await repo.createSubscription({
+        subscriptionId: "0x1111" as Hash,
+        accountId: testAccountId,
+        beneficiaryAddress: "0x5678" as Address,
+        provider: Provider.BASE,
+        testnet: false,
+      })
+
+      await repo.createSubscription({
+        subscriptionId: "0x2222" as Hash,
+        accountId: testAccountId,
+        beneficiaryAddress: "0x5678" as Address,
+        provider: Provider.BASE,
+        testnet: true,
+      })
+
+      await repo.createSubscription({
+        subscriptionId: "0x3333" as Hash,
+        accountId: testAccountId,
+        beneficiaryAddress: "0x5678" as Address,
+        provider: Provider.BASE,
+        testnet: false,
+      })
+
+      // Filter for mainnet only
+      const mainnetResult = await repo.listSubscriptions({
+        accountId: testAccountId,
+        testnet: false,
+      })
+
+      expect(mainnetResult).toHaveLength(2)
+      const mainnetIds = mainnetResult.map((s) => s.subscriptionId)
+      expect(mainnetIds).toContain("0x3333" as Hash)
+      expect(mainnetIds).toContain("0x1111" as Hash)
+      expect(mainnetResult.every((s) => s.testnet === false)).toBe(true)
+
+      // Filter for testnet only
+      const testnetResult = await repo.listSubscriptions({
+        accountId: testAccountId,
+        testnet: true,
+      })
+
+      expect(testnetResult).toHaveLength(1)
+      expect(testnetResult[0].subscriptionId).toBe("0x2222" as Hash)
+      expect(testnetResult[0].testnet).toBe(true)
+    })
+
+    it("only returns subscriptions for the specified account", async () => {
+      // Get the existing test DB (from beforeEach hook)
+      const testDB = await createTestDB({
+        accounts: [TEST_ACCOUNT, "0xother" as Address],
+      })
+
+      const otherAccount = await testDB.db
+        .prepare("SELECT id FROM accounts WHERE address = ?")
+        .bind("0xother")
+        .first<{ id: number }>()
+
+      if (!otherAccount) throw new Error("Other account not created")
+
+      // Create a new repo with the same DB to ensure we can insert both accounts
+      const repo2 = new SubscriptionRepository({
+        DB: testDB.db,
+        LOGGING: "verbose",
+      })
+
+      // Create subscription for first account
+      await repo2.createSubscription({
+        subscriptionId: "0x1111" as Hash,
+        accountId: testAccountId,
+        beneficiaryAddress: "0x5678" as Address,
+        provider: Provider.BASE,
+        testnet: false,
+      })
+
+      // Create subscription for second account
+      await repo2.createSubscription({
+        subscriptionId: "0x2222" as Hash,
+        accountId: otherAccount.id,
+        beneficiaryAddress: "0x5678" as Address,
+        provider: Provider.BASE,
+        testnet: false,
+      })
+
+      // Query for first account should only return their subscription
+      const result = await repo2.listSubscriptions({
+        accountId: testAccountId,
+      })
+
+      expect(result).toHaveLength(1)
+      expect(result[0].subscriptionId).toBe("0x1111" as Hash)
+      expect(result[0].accountId).toBe(testAccountId)
+
+      await testDB.dispose()
+    })
+  })
+
+  describe("getSubscriptionOrders", () => {
+    it("returns empty array when no orders exist", async () => {
+      await repo.createSubscription({
+        subscriptionId: "0x1234" as Hash,
+        accountId: testAccountId,
+        beneficiaryAddress: "0x5678" as Address,
+        provider: Provider.BASE,
+        testnet: false,
+      })
+
+      const result = await repo.getSubscriptionOrders({
+        subscriptionId: "0x1234" as Hash,
+      })
+
+      expect(result).toEqual([])
+    })
+
+    it("returns all orders for a subscription", async () => {
+      // Create subscription with initial order
+      const createResult = await repo.createSubscriptionWithOrder({
+        subscriptionId: "0x1234" as Hash,
+        accountId: testAccountId,
+        beneficiaryAddress: "0x5678" as Address,
+        provider: Provider.BASE,
+        testnet: false,
+        order: {
+          subscriptionId: "0x1234" as Hash,
+          type: OrderType.INITIAL,
+          dueAt: "2025-01-01T00:00:00Z",
+          amount: "1000000",
+          periodInSeconds: 2592000,
+          status: OrderStatus.PAID,
+        },
+      })
+
+      if (!createResult.created)
+        throw new Error("Failed to create subscription")
+
+      // Create additional orders
+      await repo.createOrder({
+        subscriptionId: "0x1234" as Hash,
+        type: OrderType.RECURRING,
+        dueAt: "2025-02-01T00:00:00Z",
+        amount: "1000000",
+        periodInSeconds: 2592000,
+        status: OrderStatus.PENDING,
+      })
+
+      const orders = await repo.getSubscriptionOrders({
+        subscriptionId: "0x1234" as Hash,
+      })
+
+      expect(orders).toHaveLength(2)
+      // Both order types should be present
+      const types = orders.map((o) => o.type)
+      expect(types).toContain(OrderType.RECURRING)
+      expect(types).toContain(OrderType.INITIAL)
+    })
+
+    it("includes transaction hash for paid orders", async () => {
+      // Create subscription with order
+      const createResult = await repo.createSubscriptionWithOrder({
+        subscriptionId: "0x1234" as Hash,
+        accountId: testAccountId,
+        beneficiaryAddress: "0x5678" as Address,
+        provider: Provider.BASE,
+        testnet: false,
+        order: {
+          subscriptionId: "0x1234" as Hash,
+          type: OrderType.INITIAL,
+          dueAt: "2025-01-01T00:00:00Z",
+          amount: "1000000",
+          periodInSeconds: 2592000,
+          status: OrderStatus.PROCESSING,
+        },
+      })
+
+      if (!createResult.created)
+        throw new Error("Failed to create subscription")
+
+      // Update order with transaction hash
+      await repo.updateOrder({
+        id: createResult.orderId,
+        status: OrderStatus.PAID,
+        transactionHash: "0xABC123" as Hash,
+      })
+
+      const orders = await repo.getSubscriptionOrders({
+        subscriptionId: "0x1234" as Hash,
+      })
+
+      expect(orders).toHaveLength(1)
+      expect(orders[0].status).toBe(OrderStatus.PAID)
+      expect(orders[0].transactionHash).toBe("0xABC123" as Hash)
+    })
+
+    it("returns undefined transactionHash for unpaid orders", async () => {
+      await repo.createSubscriptionWithOrder({
+        subscriptionId: "0x1234" as Hash,
+        accountId: testAccountId,
+        beneficiaryAddress: "0x5678" as Address,
+        provider: Provider.BASE,
+        testnet: false,
+        order: {
+          subscriptionId: "0x1234" as Hash,
+          type: OrderType.INITIAL,
+          dueAt: "2025-01-01T00:00:00Z",
+          amount: "1000000",
+          periodInSeconds: 2592000,
+          status: OrderStatus.PENDING,
+        },
+      })
+
+      const result = await repo.getSubscriptionOrders({
+        subscriptionId: "0x1234" as Hash,
+      })
+
+      expect(result).toHaveLength(1)
+      expect(result[0].status).toBe(OrderStatus.PENDING)
+      expect(result[0].transactionHash).toBeUndefined()
+    })
+  })
 })
