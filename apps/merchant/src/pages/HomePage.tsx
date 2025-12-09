@@ -1,6 +1,7 @@
 import { useEvmAddress } from "@coinbase/cdp-hooks"
 import { AuthButton } from "@coinbase/cdp-react/components/AuthButton"
 import { ApiKeyManager } from "@/components/ApiKeyManager"
+import { SubscriptionList } from "@/components/SubscriptionList"
 import { WebhookManager } from "@/components/WebhookManager"
 import { useAccountSync } from "../hooks/useAccountSync"
 
@@ -45,8 +46,11 @@ export function HomePage() {
             <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
               <ApiKeyManager />
             </div>
-            <div className="bg-white rounded-lg shadow-sm p-6">
+            <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
               <WebhookManager />
+            </div>
+            <div className="bg-white rounded-lg shadow-sm p-6">
+              <SubscriptionList />
             </div>
           </>
         )}
