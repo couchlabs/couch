@@ -1,23 +1,19 @@
 import { WorkerEntrypoint } from "cloudflare:workers"
-import type { Queue } from "@cloudflare/workers-types"
-import type { Address } from "viem"
-import type { LoggingLevel } from "@/constants/env.constants"
+import type { Address, Hash } from "viem"
 import { AccountRepository } from "@/repositories/account.repository"
-import type { ApiKeyResponse, CreateApiKeyResponse } from "@/rpc/types"
+import type {
+  ApiKeyResponse,
+  CreateApiKeyResponse,
+  OrderResponse,
+  SubscriptionDetailResponse,
+  SubscriptionResponse,
+} from "@/rpc/types"
 import { AccountService } from "@/services/account.service"
+import { SubscriptionService } from "@/services/subscription.service"
 import { WebhookService } from "@/services/webhook.service"
-import type { WebhookQueueMessage } from "../../alchemy.run"
+import type { ApiWorkerEnv } from "@/types/api.env"
 
-interface BackendRPCEnv {
-  DB: D1Database
-  LOGGING: LoggingLevel
-  CDP_API_KEY_ID: string
-  CDP_API_KEY_SECRET: string
-  CDP_WALLET_SECRET: string
-  WEBHOOK_QUEUE: Queue<WebhookQueueMessage>
-}
-
-export class RPC extends WorkerEntrypoint<BackendRPCEnv> {
+export class RPC extends WorkerEntrypoint<ApiWorkerEnv> {
   /**
    * Helper: Get account by address (throws if not found)
    */
@@ -253,6 +249,131 @@ export class RPC extends WorkerEntrypoint<BackendRPCEnv> {
     return webhookService.deleteWebhook({
       accountId: account.id,
     })
+  }
+
+  /**
+   * Lists all subscriptions for an account
+   * Optionally filters by network (testnet vs mainnet)
+   */
+  async listSubscriptions(params: {
+    accountAddress: Address
+    testnet?: boolean
+  }): Promise<SubscriptionResponse[]> {
+    const account = await this.getAccountByAddress(params.accountAddress)
+
+    const subscriptionService = new SubscriptionService({
+      DB: this.env.DB,
+      LOGGING: this.env.LOGGING,
+      CDP_API_KEY_ID: this.env.CDP_API_KEY_ID,
+      CDP_API_KEY_SECRET: this.env.CDP_API_KEY_SECRET,
+      CDP_WALLET_SECRET: this.env.CDP_WALLET_SECRET,
+      CDP_CLIENT_API_KEY: this.env.CDP_CLIENT_API_KEY,
+      ORDER_SCHEDULER: this.env.ORDER_SCHEDULER,
+      WEBHOOK_QUEUE: this.env.WEBHOOK_QUEUE,
+    })
+
+    const subscriptions = await subscriptionService.listSubscriptions({
+      accountId: account.id,
+      testnet: params.testnet,
+    })
+
+    // Transform to RPC response format (strip accountId)
+    return subscriptions.map((sub) => ({
+      subscriptionId: sub.subscriptionId,
+      status: sub.status,
+      beneficiaryAddress: sub.beneficiaryAddress,
+      provider: sub.provider,
+      testnet: sub.testnet,
+      createdAt: sub.createdAt || "",
+      modifiedAt: sub.modifiedAt || "",
+    }))
+  }
+
+  /**
+   * Gets subscription details with all orders
+   * Returns null if subscription not found or doesn't belong to account
+   */
+  async getSubscription(params: {
+    accountAddress: Address
+    subscriptionId: Hash
+  }): Promise<SubscriptionDetailResponse | null> {
+    const account = await this.getAccountByAddress(params.accountAddress)
+
+    const subscriptionService = new SubscriptionService({
+      DB: this.env.DB,
+      LOGGING: this.env.LOGGING,
+      CDP_API_KEY_ID: this.env.CDP_API_KEY_ID,
+      CDP_API_KEY_SECRET: this.env.CDP_API_KEY_SECRET,
+      CDP_WALLET_SECRET: this.env.CDP_WALLET_SECRET,
+      CDP_CLIENT_API_KEY: this.env.CDP_CLIENT_API_KEY,
+      ORDER_SCHEDULER: this.env.ORDER_SCHEDULER,
+      WEBHOOK_QUEUE: this.env.WEBHOOK_QUEUE,
+    })
+
+    const result = await subscriptionService.getSubscriptionWithOrders({
+      subscriptionId: params.subscriptionId,
+      accountId: account.id,
+    })
+
+    if (!result) {
+      return null
+    }
+
+    // Transform to RPC response format
+    const subscription: SubscriptionResponse = {
+      subscriptionId: result.subscription.subscriptionId,
+      status: result.subscription.status,
+      beneficiaryAddress: result.subscription.beneficiaryAddress,
+      provider: result.subscription.provider,
+      testnet: result.subscription.testnet,
+      createdAt: result.subscription.createdAt || "",
+      modifiedAt: result.subscription.modifiedAt || "",
+    }
+
+    const orders: OrderResponse[] = result.orders.map((order) => ({
+      id: order.id,
+      type: order.type,
+      dueAt: order.dueAt,
+      amount: order.amount,
+      status: order.status,
+      orderNumber: order.orderNumber,
+      attempts: order.attempts,
+      periodLengthInSeconds: order.periodLengthInSeconds,
+      transactionHash: order.transactionHash,
+      failureReason: order.failureReason || undefined,
+      createdAt: order.createdAt || "",
+    }))
+
+    return { subscription, orders }
+  }
+
+  /**
+   * Revokes a subscription (immediate cancellation)
+   * Handles onchain revocation and database updates
+   */
+  async revokeSubscription(params: {
+    accountAddress: Address
+    subscriptionId: Hash
+  }): Promise<{ success: boolean }> {
+    const account = await this.getAccountByAddress(params.accountAddress)
+
+    const subscriptionService = new SubscriptionService({
+      DB: this.env.DB,
+      LOGGING: this.env.LOGGING,
+      CDP_API_KEY_ID: this.env.CDP_API_KEY_ID,
+      CDP_API_KEY_SECRET: this.env.CDP_API_KEY_SECRET,
+      CDP_WALLET_SECRET: this.env.CDP_WALLET_SECRET,
+      CDP_CLIENT_API_KEY: this.env.CDP_CLIENT_API_KEY,
+      ORDER_SCHEDULER: this.env.ORDER_SCHEDULER,
+      WEBHOOK_QUEUE: this.env.WEBHOOK_QUEUE,
+    })
+
+    await subscriptionService.revokeSubscription({
+      subscriptionId: params.subscriptionId,
+      accountId: account.id,
+    })
+
+    return { success: true }
   }
 }
 

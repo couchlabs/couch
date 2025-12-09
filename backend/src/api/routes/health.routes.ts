@@ -1,8 +1,8 @@
 import { Hono } from "hono"
 
-import type { WorkerEnv } from "@/types/api.env"
+import type { ApiWorkerEnv } from "@/types/api.env"
 
-export const healthRoutes = new Hono<{ Bindings: WorkerEnv }>()
+export const healthRoutes = new Hono<{ Bindings: ApiWorkerEnv }>()
 
 /**
  * GET /v1/health

@@ -8,10 +8,10 @@ import {
 } from "@/api/middleware/subscription.middleware"
 import { SubscriptionService } from "@/services/subscription.service"
 import { WebhookService } from "@/services/webhook.service"
-import type { WorkerEnv } from "@/types/api.env"
+import type { ApiWorkerEnv } from "@/types/api.env"
 
 export const subscriptionRoutes = new Hono<{
-  Bindings: WorkerEnv
+  Bindings: ApiWorkerEnv
   Variables: {
     auth: AuthContext
     subscription: SubscriptionBodyContext | SubscriptionParamContext

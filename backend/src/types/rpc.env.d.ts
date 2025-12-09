@@ -3,10 +3,10 @@
 
 import type { rpc } from "@alchemy.run"
 
-export type WorkerEnv = typeof rpc.Env
+export type RPCWorkerEnv = typeof rpc.Env
 
 declare module "cloudflare:workers" {
   namespace Cloudflare {
-    export interface Env extends WorkerEnv {}
+    export interface Env extends RPCWorkerEnv {}
   }
 }

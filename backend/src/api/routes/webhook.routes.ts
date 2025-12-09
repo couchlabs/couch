@@ -2,10 +2,10 @@ import { Hono } from "hono"
 import { type AuthContext, apiKeyAuth } from "@/api/middleware/auth.middleware"
 import { ErrorCode, HTTPError } from "@/errors/http.errors"
 import { WebhookService } from "@/services/webhook.service"
-import type { WorkerEnv } from "@/types/api.env"
+import type { ApiWorkerEnv } from "@/types/api.env"
 
 export const webhookRoutes = new Hono<{
-  Bindings: WorkerEnv
+  Bindings: ApiWorkerEnv
   Variables: { auth: AuthContext }
 }>()
 
