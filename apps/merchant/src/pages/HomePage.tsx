@@ -7,7 +7,13 @@ import { useAccountSync } from "../hooks/useAccountSync"
 
 export function HomePage() {
   const { evmAddress } = useEvmAddress()
-  const { isPending, isSuccess, isError, error } = useAccountSync()
+  const {
+    isPending,
+    isSuccess,
+    isError,
+    error,
+    data: account,
+  } = useAccountSync()
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -18,13 +24,22 @@ export function HomePage() {
           <AuthButton />
 
           {evmAddress && (
-            <div className="mt-4">
+            <div className="mt-4 space-y-2">
               <p className="text-sm text-gray-600">
-                Address:{" "}
+                Wallet Address:{" "}
                 <code className="bg-gray-100 px-2 py-1 rounded font-mono text-sm">
                   {evmAddress}
                 </code>
               </p>
+
+              {account?.subscriptionOwnerAddress && (
+                <p className="text-sm text-gray-600">
+                  Subscription Owner:{" "}
+                  <code className="bg-gray-100 px-2 py-1 rounded font-mono text-sm">
+                    {account.subscriptionOwnerAddress}
+                  </code>
+                </p>
+              )}
 
               {isPending && (
                 <p className="text-blue-600 text-sm mt-2">Syncing account...</p>

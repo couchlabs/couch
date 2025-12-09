@@ -53,6 +53,10 @@ export class AccountRepository {
     return {
       id: row.id,
       address: getAddress(row.address),
+      subscriptionOwnerAddress: row.subscriptionOwnerAddress
+        ? getAddress(row.subscriptionOwnerAddress)
+        : null,
+      createdAt: row.createdAt,
     }
   }
 
@@ -63,7 +67,10 @@ export class AccountRepository {
   async createAccount(params: CreateAccountParams): Promise<Account> {
     const result = await this.db
       .insert(schema.accounts)
-      .values({ address: params.accountAddress })
+      .values({
+        address: params.accountAddress,
+        subscriptionOwnerAddress: null,
+      })
       .returning()
       .get()
 
@@ -79,6 +86,8 @@ export class AccountRepository {
       .select({
         id: schema.accounts.id,
         address: schema.accounts.address,
+        subscriptionOwnerAddress: schema.accounts.subscriptionOwnerAddress,
+        createdAt: schema.accounts.createdAt,
         keyEnabled: schema.apiKeys.enabled,
       })
       .from(schema.apiKeys)
@@ -257,5 +266,28 @@ export class AccountRepository {
       .delete(schema.accounts)
       .where(eq(schema.accounts.id, accountId))
       .run()
+  }
+
+  /**
+   * Updates the subscription owner address for an account
+   */
+  async updateAccountSubscriptionOwnerAddress(params: {
+    id: number
+    subscriptionOwnerAddress: Address
+  }): Promise<Account> {
+    const result = await this.db
+      .update(schema.accounts)
+      .set({
+        subscriptionOwnerAddress: params.subscriptionOwnerAddress,
+      })
+      .where(eq(schema.accounts.id, params.id))
+      .returning()
+      .get()
+
+    if (!result) {
+      throw new Error(`Account ${params.id} not found`)
+    }
+
+    return this.toAccountDomain(result)
   }
 }

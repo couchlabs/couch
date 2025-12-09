@@ -6,7 +6,7 @@ import {
   useQuery,
   useQueryClient,
 } from "@tanstack/react-query"
-import type { ApiKeyResponse, CreateApiKeyResponse } from "@/rpc/types"
+import type { ApiKeyResponse, CreateApiKeyResponse } from "@/rpc/main"
 
 // Re-export for convenience
 export type { ApiKeyResponse, CreateApiKeyResponse }

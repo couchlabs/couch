@@ -94,8 +94,10 @@ describe("AccountService", () => {
     it("returns true when account exists", async () => {
       // Create account in database
       await testDB.db
-        .prepare("INSERT INTO accounts (address) VALUES (?)")
-        .bind(TEST_ACCOUNT)
+        .prepare(
+          "INSERT INTO accounts (address, subscription_owner_address) VALUES (?, ?)",
+        )
+        .bind(TEST_ACCOUNT, null)
         .run()
 
       const exists = await service.accountExists(TEST_ACCOUNT)
@@ -105,16 +107,18 @@ describe("AccountService", () => {
   })
 
   describe("createAccount", () => {
-    it("creates account successfully when address is allowlisted and doesn't exist", async () => {
+    it("creates account successfully and returns full Account object with subscriptionOwnerAddress", async () => {
       const result = await service.createAccount({
         address: TEST_ACCOUNT,
       })
 
-      // Should return wallet address only (API keys managed separately)
-      expect(result.subscriptionOwnerWalletAddress).toBeDefined()
-      expect(result.subscriptionOwnerWalletAddress).toMatch(
-        /^0x[a-fA-F0-9]{40}$/,
-      )
+      // Should return full Account object with subscription owner address set (not null)
+      expect(result.id).toBeDefined()
+      expect(result.address).toBe(TEST_ACCOUNT)
+      expect(result.subscriptionOwnerAddress).not.toBeNull()
+      expect(result.subscriptionOwnerAddress).toMatch(/^0x[a-fA-F0-9]{40}$/)
+      expect(result.createdAt).toBeDefined()
+      expect(result.createdAt).toMatch(/^\d{4}-\d{2}-\d{2}/)
 
       // Verify account was created in database
       const account = await testDB.db
@@ -141,10 +145,8 @@ describe("AccountService", () => {
         address: TEST_ACCOUNT_NOT_ALLOWED,
       })
 
-      expect(result).toHaveProperty("subscriptionOwnerWalletAddress")
-      expect(result.subscriptionOwnerWalletAddress).toMatch(
-        /^0x[a-fA-F0-9]{40}$/,
-      )
+      expect(result).toHaveProperty("subscriptionOwnerAddress")
+      expect(result.subscriptionOwnerAddress).toMatch(/^0x[a-fA-F0-9]{40}$/)
     })
 
     it("throws 409 when account already exists", async () => {
@@ -745,15 +747,11 @@ describe("AccountService", () => {
         address: lowercaseAddress,
       })
 
-      expect(result.success).toBe(true)
-
-      // Verify account was created with checksummed address
-      const account = await testDB.db
-        .prepare("SELECT address FROM accounts WHERE address = ?")
-        .bind(TEST_ACCOUNT)
-        .first<{ address: string }>()
-
-      expect(account?.address).toBe(TEST_ACCOUNT) // Checksummed version
+      // Should return full Account object
+      expect(result.id).toBeDefined()
+      expect(result.address).toBe(TEST_ACCOUNT) // Checksummed version
+      expect(result.subscriptionOwnerAddress).not.toBeNull()
+      expect(result.createdAt).toBeDefined()
     })
 
     it("throws 400 when address format is invalid", async () => {
@@ -774,29 +772,29 @@ describe("AccountService", () => {
         address: TEST_ACCOUNT,
       })
 
-      expect(result.success).toBe(true)
-
-      // Verify account was created
-      const account = await testDB.db
-        .prepare("SELECT id, address FROM accounts WHERE address = ?")
-        .bind(TEST_ACCOUNT)
-        .first<{ id: number; address: string }>()
-
-      expect(account).not.toBeNull()
-      expect(account?.address).toBe(TEST_ACCOUNT)
-      expect(account?.id).toBeDefined()
+      // Should return full Account object
+      expect(result.id).toBeDefined()
+      expect(result.address).toBe(TEST_ACCOUNT)
+      expect(result.subscriptionOwnerAddress).not.toBeNull()
+      expect(result.createdAt).toBeDefined()
     })
 
-    it("returns success for existing account (idempotent)", async () => {
+    it("returns existing account (idempotent)", async () => {
       // Create account first
-      await service.createAccount({ address: TEST_ACCOUNT })
+      const created = await service.createAccount({ address: TEST_ACCOUNT })
 
-      // Call getOrCreateAccount - should return success without error
+      // Call getOrCreateAccount - should return existing account
       const result = await service.getOrCreateAccount({
         address: TEST_ACCOUNT,
       })
 
-      expect(result.success).toBe(true)
+      // Should return the same account
+      expect(result.id).toBe(created.id)
+      expect(result.address).toBe(TEST_ACCOUNT)
+      expect(result.subscriptionOwnerAddress).toBe(
+        created.subscriptionOwnerAddress,
+      )
+      expect(result.createdAt).toBe(created.createdAt)
 
       // Verify only one account exists
       const count = await testDB.db
@@ -807,16 +805,22 @@ describe("AccountService", () => {
       expect(count?.count).toBe(1)
     })
 
-    it("returns success for existing account with different case", async () => {
+    it("returns existing account with different case", async () => {
       // Create account with checksummed address
-      await service.createAccount({ address: TEST_ACCOUNT })
+      const created = await service.createAccount({ address: TEST_ACCOUNT })
 
-      // Call with lowercase address
+      // Call with lowercase address - should return same account
       const result = await service.getOrCreateAccount({
         address: TEST_ACCOUNT.toLowerCase(),
       })
 
-      expect(result.success).toBe(true)
+      // Should return the same account (normalized to checksummed)
+      expect(result.id).toBe(created.id)
+      expect(result.address).toBe(TEST_ACCOUNT) // Checksummed
+      expect(result.subscriptionOwnerAddress).toBe(
+        created.subscriptionOwnerAddress,
+      )
+      expect(result.createdAt).toBe(created.createdAt)
 
       // Verify only one account exists
       const count = await testDB.db

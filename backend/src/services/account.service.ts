@@ -18,10 +18,6 @@ export interface CreateAccountParams {
   address: Address
 }
 
-export interface AccountResult {
-  subscriptionOwnerWalletAddress: Address
-}
-
 export interface AccountServiceDeps extends AccountRepositoryDeps {
   CDP_API_KEY_ID: string
   CDP_API_KEY_SECRET: string
@@ -117,7 +113,7 @@ export class AccountService {
    * API keys will be managed separately via API key CRUD operations
    * Note: Caller is responsible for address validation (already done in getOrCreateAccount)
    */
-  async createAccount(params: CreateAccountParams): Promise<AccountResult> {
+  async createAccount(params: CreateAccountParams): Promise<Account> {
     const accountAddress = params.address
     const log = logger.with({ accountAddress })
 
@@ -133,13 +129,12 @@ export class AccountService {
 
     log.info("Creating new account")
 
-    // Create account in DB - returns account with auto-generated ID
-    const account = await this.accountRepository.createAccount({
+    // Create account (subscription owner address will be set after wallet creation)
+    let account = await this.accountRepository.createAccount({
       accountAddress,
     })
 
-    // Create subscription owner wallet for this account
-    let subscriptionOwnerWalletAddress: Address
+    // Create subscription owner wallet with account ID
     try {
       const walletName = getSubscriptionOwnerWalletName(account.id)
 
@@ -150,12 +145,19 @@ export class AccountService {
         walletName,
       })
 
-      subscriptionOwnerWalletAddress = wallet.address as Address
+      const subscriptionOwnerWalletAddress = wallet.address as Address
       log.info("Created subscription owner wallet", {
         accountId: account.id,
         walletAddress: subscriptionOwnerWalletAddress,
         walletName,
       })
+
+      // Update account with subscription owner address and return updated account
+      account =
+        await this.accountRepository.updateAccountSubscriptionOwnerAddress({
+          id: account.id,
+          subscriptionOwnerAddress: subscriptionOwnerWalletAddress,
+        })
     } catch (error) {
       // Rollback account creation if wallet creation fails
       log.error("Failed to create subscription owner wallet - rolling back", {
@@ -163,7 +165,6 @@ export class AccountService {
         accountId: account.id,
       })
 
-      // Delete the account we just created
       await this.accountRepository.deleteAccount(account.id)
 
       throw new HTTPError(
@@ -175,7 +176,7 @@ export class AccountService {
 
     log.info("Account created successfully", { accountId: account.id })
 
-    return { subscriptionOwnerWalletAddress }
+    return account // Return full Account object
   }
 
   /**
@@ -395,12 +396,10 @@ export class AccountService {
 
   /**
    * Gets or creates an account (for internal RPC use)
-   * Returns success status only - no sensitive data
+   * Returns full Account object
    * Authentication is handled by CDP at the merchant app level
    */
-  async getOrCreateAccount(params: {
-    address: string
-  }): Promise<{ success: boolean }> {
+  async getOrCreateAccount(params: { address: string }): Promise<Account> {
     const accountAddress = this.validateAddress(params.address)
     const log = logger.with({ accountAddress })
 
@@ -409,12 +408,10 @@ export class AccountService {
       await this.accountRepository.getAccountByAddress(accountAddress)
     if (existing) {
       log.info("Account already exists")
-      return { success: true }
+      return existing
     }
 
     log.info("Creating new account via RPC")
-    await this.createAccount({ address: accountAddress })
-
-    return { success: true }
+    return await this.createAccount({ address: accountAddress })
   }
 }

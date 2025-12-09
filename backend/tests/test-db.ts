@@ -73,7 +73,13 @@ export async function createTestDB(options: CreateTestDbOptions = {}): Promise<{
   // Create test accounts if provided
   if (options.accounts) {
     for (const address of options.accounts) {
-      await drizzleD1.insert(schema.accounts).values({ address }).run()
+      await drizzleD1
+        .insert(schema.accounts)
+        .values({
+          address,
+          subscriptionOwnerAddress: null,
+        })
+        .run()
     }
   }
 
@@ -146,6 +152,9 @@ export async function createTestAccount(
 ): Promise<void> {
   await drizzle(db, { schema })
     .insert(schema.accounts)
-    .values({ address })
+    .values({
+      address,
+      subscriptionOwnerAddress: null,
+    })
     .run()
 }

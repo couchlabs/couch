@@ -43,6 +43,20 @@
       "when": 1765237041012,
       "tag": "0005_green_nextwave",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1765307147509,
+      "tag": "0006_acoustic_toad_men",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1765308212365,
+      "tag": "0007_shiny_the_executioner",
+      "breakpoints": true
     }
   ]
 }
