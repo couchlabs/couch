@@ -3,10 +3,10 @@
 
 import type { orderDLQConsumer } from "@alchemy.run"
 
-export type WorkerEnv = typeof orderDLQConsumer.Env
+export type OrderDLQConsumerWorkerEnv = typeof orderDLQConsumer.Env
 
 declare module "cloudflare:workers" {
   namespace Cloudflare {
-    export interface Env extends WorkerEnv {}
+    export interface Env extends OrderDLQConsumerWorkerEnv {}
   }
 }

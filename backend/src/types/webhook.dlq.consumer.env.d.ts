@@ -3,10 +3,10 @@
 
 import type { webhookDLQConsumer } from "@alchemy.run"
 
-export type WorkerEnv = typeof webhookDLQConsumer.Env
+export type WebhookDLQConsumerWorkerEnv = typeof webhookDLQConsumer.Env
 
 declare module "cloudflare:workers" {
   namespace Cloudflare {
-    export interface Env extends WorkerEnv {}
+    export interface Env extends WebhookDLQConsumerWorkerEnv {}
   }
 }

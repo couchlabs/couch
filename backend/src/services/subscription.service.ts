@@ -16,7 +16,7 @@ import {
   SubscriptionRepository,
   type SubscriptionRepositoryDeps,
 } from "@/repositories/subscription.repository"
-import type { WorkerEnv } from "@/types/api.env"
+import type { ApiWorkerEnv } from "@/types/api.env"
 import { WebhookService } from "./webhook.service"
 
 // Define the minimal dependencies needed by SubscriptionService
@@ -25,7 +25,7 @@ import { WebhookService } from "./webhook.service"
 export interface SubscriptionServiceDeps
   extends SubscriptionRepositoryDeps,
     OnchainRepositoryDeps,
-    Pick<WorkerEnv, "ORDER_SCHEDULER" | "WEBHOOK_QUEUE"> {}
+    Pick<ApiWorkerEnv, "ORDER_SCHEDULER" | "WEBHOOK_QUEUE"> {}
 
 export interface ValidateSubscriptionIdParams {
   subscriptionId: Hash

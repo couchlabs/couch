@@ -7,9 +7,9 @@ import { subscriptionRoutes } from "@/api/routes/subscriptions.routes"
 import { webhookRoutes } from "@/api/routes/webhook.routes"
 import { ErrorCode } from "@/errors/http.errors"
 import { logger } from "@/lib/logger"
-import type { WorkerEnv } from "@/types/api.env"
+import type { ApiWorkerEnv } from "@/types/api.env"
 
-const app = new Hono<{ Bindings: WorkerEnv }>().basePath("/v1")
+const app = new Hono<{ Bindings: ApiWorkerEnv }>().basePath("/v1")
 
 // CORS middleware
 app.use(cors())

@@ -1,5 +1,5 @@
 import { createLogger } from "@/lib/logger"
-import type { WorkerEnv } from "@/types/webhook.consumer.env"
+import type { WebhookConsumerWorkerEnv } from "@/types/webhook.consumer.env"
 import type { WebhookQueueMessage } from "../../alchemy.run"
 
 const logger = createLogger("webhook.consumer")
@@ -75,7 +75,7 @@ async function deliverWebhook(
 export default {
   async queue(
     batch: MessageBatch<WebhookQueueMessage>,
-    _env: WorkerEnv,
+    _env: WebhookConsumerWorkerEnv,
   ): Promise<void> {
     const log = logger.with({ consumer: "webhook-delivery" })
 

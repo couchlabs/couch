@@ -18,14 +18,14 @@ import {
   SubscriptionRepository,
   type SubscriptionRepositoryDeps,
 } from "@/repositories/subscription.repository"
-import type { WorkerEnv } from "@/types/api.env"
+import type { ApiWorkerEnv } from "@/types/api.env"
 
 // Define the minimal dependencies needed by OrderService
-// We pick ORDER_SCHEDULER from WorkerEnv to get the exact Alchemy-generated type
+// We pick ORDER_SCHEDULER from ApiWorkerEnv to get the exact Alchemy-generated type
 export interface OrderServiceDeps
   extends SubscriptionRepositoryDeps,
     OnchainRepositoryDeps,
-    Pick<WorkerEnv, "ORDER_SCHEDULER"> {}
+    Pick<ApiWorkerEnv, "ORDER_SCHEDULER"> {}
 
 export interface ProcessOrderParams {
   orderId: number

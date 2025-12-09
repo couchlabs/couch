@@ -173,13 +173,9 @@ export const rpc = await Worker(RPC_NAME, {
   entrypoint: path.join(import.meta.dirname, "src", "rpc", "main.ts"),
   rpc: type<RPC>,
   bindings: {
-    // RPC service needs same bindings as API for account creation + webhook queue
-    CDP_API_KEY_ID: alchemy.secret.env.CDP_API_KEY_ID,
-    CDP_API_KEY_SECRET: alchemy.secret.env.CDP_API_KEY_SECRET,
-    CDP_WALLET_SECRET: alchemy.secret.env.CDP_WALLET_SECRET,
-    LOGGING,
-    DB: db,
-    WEBHOOK_QUEUE: webhookQueue,
+    // Pass API worker binding to inherit its entire environment
+    // RPC is an internal API proxy - should have identical bindings to API
+    api,
   },
   compatibilityFlags,
   dev: { port: 3001 },

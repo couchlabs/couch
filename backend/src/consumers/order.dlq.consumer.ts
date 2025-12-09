@@ -1,5 +1,5 @@
 import { createLogger } from "@/lib/logger"
-import type { WorkerEnv } from "@/types/order.dlq.consumer.env"
+import type { OrderDLQConsumerWorkerEnv } from "@/types/order.dlq.consumer.env"
 import type { orderDLQ } from "../../alchemy.run"
 
 const logger = createLogger("order.dlq.consumer")
@@ -19,7 +19,7 @@ const logger = createLogger("order.dlq.consumer")
 export default {
   async queue(
     batch: typeof orderDLQ.Batch,
-    _env: WorkerEnv,
+    _env: OrderDLQConsumerWorkerEnv,
     _ctx: ExecutionContext,
   ): Promise<void> {
     const log = logger.with({

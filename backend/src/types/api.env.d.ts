@@ -3,10 +3,10 @@
 
 import type { api } from "@alchemy.run"
 
-export type WorkerEnv = typeof api.Env
+export type ApiWorkerEnv = typeof api.Env
 
 declare module "cloudflare:workers" {
   namespace Cloudflare {
-    export interface Env extends WorkerEnv {}
+    export interface Env extends ApiWorkerEnv {}
   }
 }

@@ -2,7 +2,7 @@ import { createLogger } from "@/lib/logger"
 import { calculateUpstreamRetryDelay } from "@/lib/retry.logic"
 import { OrderService } from "@/services/order.service"
 import { WebhookService } from "@/services/webhook.service"
-import type { WorkerEnv } from "@/types/order.consumer.env"
+import type { OrderConsumerWorkerEnv } from "@/types/order.consumer.env"
 import type { orderQueue } from "../../alchemy.run"
 
 const logger = createLogger("order.consumer")
@@ -14,7 +14,7 @@ export default {
    */
   async queue(
     batch: typeof orderQueue.Batch,
-    env: WorkerEnv,
+    env: OrderConsumerWorkerEnv,
     _ctx: ExecutionContext,
   ): Promise<void> {
     const log = logger.with({

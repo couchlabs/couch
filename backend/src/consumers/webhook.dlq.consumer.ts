@@ -1,5 +1,5 @@
 import { createLogger } from "@/lib/logger"
-import type { WorkerEnv } from "@/types/webhook.dlq.consumer.env"
+import type { WebhookDLQConsumerWorkerEnv } from "@/types/webhook.dlq.consumer.env"
 import type { webhookDLQ } from "../../alchemy.run"
 
 const logger = createLogger("webhook.dlq.consumer")
@@ -23,7 +23,7 @@ const logger = createLogger("webhook.dlq.consumer")
 export default {
   async queue(
     batch: typeof webhookDLQ.Batch,
-    _env: WorkerEnv,
+    _env: WebhookDLQConsumerWorkerEnv,
     _ctx: ExecutionContext,
   ): Promise<void> {
     const log = logger.with({

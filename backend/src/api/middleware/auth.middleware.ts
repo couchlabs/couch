@@ -2,7 +2,7 @@ import type { MiddlewareHandler } from "hono"
 import { ErrorCode, HTTPError } from "@/errors/http.errors"
 import type { Account } from "@/repositories/account.repository"
 import { AccountService } from "@/services/account.service"
-import type { WorkerEnv } from "@/types/api.env"
+import type { ApiWorkerEnv } from "@/types/api.env"
 
 /**
  * Context with authenticated user information
@@ -16,7 +16,7 @@ export interface AuthContext {
  * Validates Authorization: Bearer header and adds full account (id + address) to context
  */
 export const apiKeyAuth = (): MiddlewareHandler<{
-  Bindings: WorkerEnv
+  Bindings: ApiWorkerEnv
   Variables: { auth: AuthContext }
 }> => {
   return async function apiKeyAuthHandler(c, next) {
