@@ -172,11 +172,9 @@ export const rpc = await Worker(RPC_NAME, {
   name: `${NAME_PREFIX}-${RPC_NAME}`,
   entrypoint: path.join(import.meta.dirname, "src", "rpc", "main.ts"),
   rpc: type<RPC>,
-  bindings: {
-    // Pass API worker binding to inherit its entire environment
-    // RPC is an internal API proxy - should have identical bindings to API
-    api,
-  },
+  // Pass API worker binding to inherit its entire environment
+  // RPC is an internal API proxy - should have identical bindings to API
+  bindings: api.bindings,
   compatibilityFlags,
   dev: { port: 3001 },
 })
