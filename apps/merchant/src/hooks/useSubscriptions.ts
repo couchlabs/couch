@@ -72,6 +72,8 @@ export function useListSubscriptions(
       return data.subscriptions
     },
     enabled: !!evmAddress,
+    refetchInterval: 10000, // Poll every 10 seconds
+    refetchOnWindowFocus: true, // Refetch on tab focus
   })
 }
 
@@ -113,6 +115,8 @@ export function useSubscription(
       return response.json<SubscriptionDetail>()
     },
     enabled: !!evmAddress && !!subscriptionId,
+    refetchInterval: 3000, // Poll every 3 seconds (when modal is open)
+    refetchOnWindowFocus: true, // Immediate refresh on tab focus
   })
 }
 
@@ -156,6 +160,63 @@ export function useRevokeSubscription(): UseMutationResult<
       queryClient.invalidateQueries({ queryKey: ["subscriptions", evmAddress] })
       queryClient.invalidateQueries({
         queryKey: ["subscription", variables.subscriptionId, evmAddress],
+      })
+    },
+  })
+}
+
+/**
+ * Hook to create a new subscription
+ * Registers an onchain subscription with the backend
+ * Invalidates subscription queries on success
+ */
+export function useCreateSubscription(): UseMutationResult<
+  { status: string },
+  Error,
+  {
+    subscriptionId: string
+    provider: "base"
+    testnet: boolean
+  }
+> {
+  const { evmAddress } = useEvmAddress()
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: async (params: {
+      subscriptionId: string
+      provider: "base"
+      testnet: boolean
+    }) => {
+      if (!evmAddress) {
+        throw new Error("No EVM address available")
+      }
+
+      const response = await fetch("/api/subscriptions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          address: evmAddress,
+          subscriptionId: params.subscriptionId,
+          provider: params.provider,
+          testnet: params.testnet,
+        }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json<{ error?: string }>()
+        throw new Error(
+          errorData.error ||
+            `Failed to create subscription: ${response.statusText}`,
+        )
+      }
+
+      return response.json<{ status: string }>()
+    },
+    onSuccess: (_data, variables) => {
+      // Invalidate subscription list queries for the current network
+      queryClient.invalidateQueries({
+        queryKey: ["subscriptions", evmAddress, variables.testnet],
       })
     },
   })

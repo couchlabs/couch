@@ -1,15 +1,31 @@
+import { subscribe } from "@base-org/account"
 import { useState } from "react"
 import {
+  useCreateSubscription,
   useListSubscriptions,
   useRevokeSubscription,
   useSubscription,
 } from "@/hooks/useSubscriptions"
 
-export function SubscriptionList() {
+export function SubscriptionList({
+  subscriptionOwnerAddress,
+}: {
+  subscriptionOwnerAddress?: string
+}) {
   const [testnet, setTestnet] = useState(false)
   const [selectedSubscriptionId, setSelectedSubscriptionId] = useState<
     string | undefined
   >(undefined)
+
+  // Create subscription modal state
+  const [showCreateModal, setShowCreateModal] = useState(false)
+  const [chargeAmount, setChargeAmount] = useState("")
+  const [periodValue, setPeriodValue] = useState("")
+  const [periodUnit, setPeriodUnit] = useState<
+    "seconds" | "minutes" | "hours" | "days"
+  >("days")
+  const [isCreatingOnchain, setIsCreatingOnchain] = useState(false)
+  const [createError, setCreateError] = useState<string | null>(null)
 
   const {
     data: subscriptions,
@@ -22,6 +38,7 @@ export function SubscriptionList() {
     error: detailError,
   } = useSubscription(selectedSubscriptionId)
   const revokeMutation = useRevokeSubscription()
+  const createMutation = useCreateSubscription()
 
   const handleRevoke = async (subscriptionId: string) => {
     if (
@@ -36,6 +53,74 @@ export function SubscriptionList() {
       setSelectedSubscriptionId(undefined)
     } catch (err) {
       console.error("Failed to revoke subscription:", err)
+    }
+  }
+
+  const convertPeriodToSeconds = (value: number, unit: string): number => {
+    const multipliers = {
+      seconds: 1,
+      minutes: 60,
+      hours: 3600,
+      days: 86400,
+    }
+    return value * multipliers[unit as keyof typeof multipliers]
+  }
+
+  const handleCreate = async () => {
+    if (!chargeAmount || !periodValue || !subscriptionOwnerAddress) {
+      return
+    }
+
+    setCreateError(null)
+    setIsCreatingOnchain(true)
+
+    try {
+      // Step 1: Create onchain via Base SDK
+      const periodNum = Number.parseFloat(periodValue)
+      const periodInSeconds = convertPeriodToSeconds(periodNum, periodUnit)
+
+      const subscription = await subscribe(
+        testnet
+          ? {
+              recurringCharge: chargeAmount,
+              subscriptionOwner: subscriptionOwnerAddress as `0x${string}`,
+              testnet: true,
+              // For testnet, always use overridePeriodInSecondsForTestnet
+              overridePeriodInSecondsForTestnet: periodInSeconds,
+            }
+          : {
+              recurringCharge: chargeAmount,
+              subscriptionOwner: subscriptionOwnerAddress as `0x${string}`,
+              testnet: false,
+              // For mainnet, use periodInDays
+              periodInDays: Math.ceil(periodInSeconds / 86400),
+            },
+      )
+
+      setIsCreatingOnchain(false)
+
+      if (!subscription?.id) {
+        throw new Error("Failed to create subscription onchain")
+      }
+
+      // Step 2: Register with backend
+      await createMutation.mutateAsync({
+        subscriptionId: subscription.id,
+        provider: "base",
+        testnet,
+      })
+
+      // Success - reset and close
+      setChargeAmount("")
+      setPeriodValue("")
+      setPeriodUnit("days")
+      setShowCreateModal(false)
+    } catch (err) {
+      setIsCreatingOnchain(false)
+      const errorMessage =
+        err instanceof Error ? err.message : "Failed to create subscription"
+      setCreateError(errorMessage)
+      console.error("Failed to create subscription:", err)
     }
   }
 
@@ -112,29 +197,41 @@ export function SubscriptionList() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="text-xl font-semibold">Subscriptions</h2>
-        {/* Network toggle */}
-        <div className="flex items-center gap-2 bg-gray-100 p-1 rounded">
+        <div className="flex items-center gap-4">
+          {/* Network toggle */}
+          <div className="flex items-center gap-2 bg-gray-100 p-1 rounded">
+            <button
+              type="button"
+              onClick={() => setTestnet(false)}
+              className={`px-3 py-1 rounded text-sm transition-colors ${
+                !testnet
+                  ? "bg-white shadow text-gray-900"
+                  : "text-gray-600 hover:text-gray-900"
+              }`}
+            >
+              Mainnet
+            </button>
+            <button
+              type="button"
+              onClick={() => setTestnet(true)}
+              className={`px-3 py-1 rounded text-sm transition-colors ${
+                testnet
+                  ? "bg-white shadow text-gray-900"
+                  : "text-gray-600 hover:text-gray-900"
+              }`}
+            >
+              Testnet
+            </button>
+          </div>
+
+          {/* Create button */}
           <button
             type="button"
-            onClick={() => setTestnet(false)}
-            className={`px-3 py-1 rounded text-sm transition-colors ${
-              !testnet
-                ? "bg-white shadow text-gray-900"
-                : "text-gray-600 hover:text-gray-900"
-            }`}
+            onClick={() => setShowCreateModal(true)}
+            disabled={!subscriptionOwnerAddress}
+            className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm"
           >
-            Mainnet
-          </button>
-          <button
-            type="button"
-            onClick={() => setTestnet(true)}
-            className={`px-3 py-1 rounded text-sm transition-colors ${
-              testnet
-                ? "bg-white shadow text-gray-900"
-                : "text-gray-600 hover:text-gray-900"
-            }`}
-          >
-            Testnet
+            + Create Subscription
           </button>
         </div>
       </div>
@@ -174,16 +271,9 @@ export function SubscriptionList() {
                     {new Date(subscription.createdAt).toLocaleDateString()}
                   </p>
                 </div>
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    setSelectedSubscriptionId(subscription.subscriptionId)
-                  }}
-                  className="px-3 py-1 bg-blue-100 text-blue-700 rounded hover:bg-blue-200 text-sm"
-                >
-                  View Details
-                </button>
+                <div className="text-xs text-gray-500">
+                  Click to view details
+                </div>
               </div>
             </button>
           ))}
@@ -404,6 +494,143 @@ export function SubscriptionList() {
                 </div>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Create Subscription Modal */}
+      {showCreateModal && (
+        <div
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50"
+          onClick={() => setShowCreateModal(false)}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") {
+              setShowCreateModal(false)
+            }
+          }}
+          role="dialog"
+          aria-modal="true"
+          tabIndex={-1}
+        >
+          <div
+            className="bg-white rounded-lg shadow-xl max-w-md w-full p-6"
+            onClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => e.stopPropagation()}
+            role="document"
+          >
+            <h3 className="text-lg font-semibold mb-4">Create Subscription</h3>
+
+            {/* Charge Amount */}
+            <div className="mb-4">
+              <label
+                htmlFor="charge-amount"
+                className="block text-sm font-medium mb-2"
+              >
+                Charge Amount (USDC)
+              </label>
+              <input
+                id="charge-amount"
+                type="text"
+                value={chargeAmount}
+                onChange={(e) => setChargeAmount(e.target.value)}
+                placeholder="0.01"
+                className="w-full px-3 py-2 border rounded"
+              />
+            </div>
+
+            {/* Period */}
+            <div className="mb-4">
+              <label
+                htmlFor="period-value"
+                className="block text-sm font-medium mb-2"
+              >
+                Period
+              </label>
+              <div className="flex gap-2">
+                <input
+                  id="period-value"
+                  type="number"
+                  value={periodValue}
+                  onChange={(e) => setPeriodValue(e.target.value)}
+                  placeholder="30"
+                  min="1"
+                  step="any"
+                  className="flex-1 px-3 py-2 border rounded"
+                />
+                <select
+                  value={periodUnit}
+                  onChange={(e) =>
+                    setPeriodUnit(
+                      e.target.value as
+                        | "seconds"
+                        | "minutes"
+                        | "hours"
+                        | "days",
+                    )
+                  }
+                  className="px-3 py-2 border rounded bg-white"
+                >
+                  <option value="seconds">Seconds</option>
+                  <option value="minutes">Minutes</option>
+                  <option value="hours">Hours</option>
+                  <option value="days">Days</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Network Info */}
+            <div className="mb-4 p-3 bg-gray-100 rounded">
+              <div className="text-sm">
+                <span className="font-medium">Network:</span>{" "}
+                {testnet ? "Testnet" : "Mainnet"}
+              </div>
+              <div className="text-sm mt-1">
+                <span className="font-medium">Beneficiary:</span> Your account
+                address
+              </div>
+            </div>
+
+            {/* Error Display */}
+            {createError && (
+              <div className="mb-4 p-3 bg-red-100 text-red-700 rounded text-sm">
+                {createError}
+              </div>
+            )}
+
+            {/* Actions */}
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={handleCreate}
+                disabled={
+                  isCreatingOnchain ||
+                  createMutation.isPending ||
+                  !chargeAmount ||
+                  !periodValue
+                }
+                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isCreatingOnchain
+                  ? "Creating onchain..."
+                  : createMutation.isPending
+                    ? "Registering..."
+                    : "Create"}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowCreateModal(false)
+                  setChargeAmount("")
+                  setPeriodValue("")
+                  setPeriodUnit("days")
+                  setCreateError(null)
+                }}
+                disabled={isCreatingOnchain || createMutation.isPending}
+                className="px-4 py-2 bg-gray-200 rounded hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Cancel
+              </button>
+            </div>
           </div>
         </div>
       )}

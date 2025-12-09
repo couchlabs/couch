@@ -65,7 +65,11 @@ export function HomePage() {
               <WebhookManager />
             </div>
             <div className="bg-white rounded-lg shadow-sm p-6">
-              <SubscriptionList />
+              <SubscriptionList
+                subscriptionOwnerAddress={
+                  account?.subscriptionOwnerAddress ?? undefined
+                }
+              />
             </div>
           </>
         )}
