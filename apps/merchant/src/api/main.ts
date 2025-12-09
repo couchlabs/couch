@@ -6,7 +6,8 @@
  */
 
 import { Hono } from "hono"
-import { isAddress } from "viem"
+import { isAddress, isHash } from "viem"
+import { Provider } from "@/providers/provider.interface"
 import type { WorkerEnv } from "../../types/env.d.ts"
 
 const app = new Hono<{ Bindings: WorkerEnv }>()
@@ -289,6 +290,54 @@ app.get("/api/subscriptions", async (c) => {
     return c.json({ subscriptions: result })
   } catch (error) {
     console.error("List subscriptions error:", error)
+    return c.json({ error: "Internal error" }, 500)
+  }
+})
+
+// POST /api/subscriptions - Create subscription
+app.post("/api/subscriptions", async (c) => {
+  const {
+    address,
+    subscriptionId,
+    provider,
+    testnet = false,
+  } = await c.req.json<{
+    address?: string
+    subscriptionId?: string
+    provider?: string
+    testnet?: boolean
+  }>()
+
+  // Validate inputs
+  if (!address || !isAddress(address)) {
+    return c.json({ error: "Invalid address" }, 400)
+  }
+
+  if (!subscriptionId || !isHash(subscriptionId)) {
+    return c.json({ error: "Invalid subscription ID" }, 400)
+  }
+
+  if (!provider || !Object.values(Provider).includes(provider as Provider)) {
+    return c.json({ error: "Invalid provider" }, 400)
+  }
+
+  if (typeof testnet !== "boolean") {
+    return c.json({ error: "Invalid testnet flag" }, 400)
+  }
+
+  try {
+    const result = await c.env.COUCH_BACKEND_RPC.createSubscription({
+      accountAddress: address as `0x${string}`,
+      subscriptionId: subscriptionId as `0x${string}`,
+      provider: provider as Provider,
+      testnet,
+    })
+    return c.json(result)
+  } catch (error) {
+    console.error("Create subscription error:", error)
+    if (error instanceof Error && error.message.includes("already exists")) {
+      return c.json({ error: "Subscription already registered" }, 400)
+    }
     return c.json({ error: "Internal error" }, 500)
   }
 })
