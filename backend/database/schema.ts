@@ -13,7 +13,6 @@ import {
   OrderStatus,
   OrderType,
   SubscriptionStatus,
-  TransactionStatus,
 } from "@/constants/subscription.constants"
 import { Provider } from "@/providers/provider.interface"
 
@@ -29,9 +28,6 @@ const orderStatusValues = Object.values(OrderStatus)
   .map((s) => `'${s}'`)
   .join(", ")
 const orderTypeValues = Object.values(OrderType)
-  .map((s) => `'${s}'`)
-  .join(", ")
-const transactionStatusValues = Object.values(TransactionStatus)
   .map((s) => `'${s}'`)
   .join(", ")
 const providerValues = Object.values(Provider)
@@ -135,6 +131,7 @@ export const subscriptions = sqliteTable(
 // failureReason: Mapped error code (e.g., 'INSUFFICIENT_SPENDING_ALLOWANCE', 'PERMISSION_EXPIRED')
 // rawError: Original error message from blockchain/service for debugging
 // periodLengthInSeconds: Duration of billing period (period_start = due_at, period_end = due_at + period_length_in_seconds)
+// transactionHash: Blockchain transaction hash for successful payments
 export const orders = sqliteTable(
   "orders",
   {
@@ -153,6 +150,7 @@ export const orders = sqliteTable(
     failureReason: text("failure_reason"),
     rawError: text("raw_error"),
     periodLengthInSeconds: integer("period_length_in_seconds").notNull(),
+    transactionHash: text("transaction_hash"),
     createdAt: text("created_at").default(sql`CURRENT_TIMESTAMP`),
   },
   (table) => [
@@ -168,37 +166,9 @@ export const orders = sqliteTable(
       table.subscriptionId,
       table.orderNumber,
     ),
+    index("idx_orders_transaction_hash").on(table.transactionHash),
     check("type", sql.raw(`type IN (${orderTypeValues})`)),
     check("status", sql.raw(`status IN (${orderStatusValues})`)),
-  ],
-)
-
-// Transaction log - actual onchain transactions
-// transactionHash: Can be shared when SDK batches multiple orders
-// orderId: Unique per order
-// amount: In USDC base units
-export const transactions = sqliteTable(
-  "transactions",
-  {
-    transactionHash: text("transaction_hash").notNull(),
-    orderId: integer("order_id")
-      .primaryKey()
-      .references(() => orders.id),
-    subscriptionId: text("subscription_id")
-      .notNull()
-      .references(() => subscriptions.subscriptionId),
-    amount: text("amount").notNull(),
-    status: text("status").$type<TransactionStatus>().notNull(),
-    gasUsed: text("gas_used"),
-    createdAt: text("created_at").default(sql`CURRENT_TIMESTAMP`),
-  },
-  (table) => [
-    index("idx_transactions_created").on(table.createdAt),
-    index("idx_transactions_subscription").on(table.subscriptionId),
-    index("idx_transactions_order").on(table.orderId),
-    index("idx_transactions_hash").on(table.transactionHash),
-    index("idx_transactions_status").on(table.status),
-    check("status", sql.raw(`status IN (${transactionStatusValues})`)),
   ],
 )
 
@@ -212,9 +182,6 @@ export type NewSubscriptionRow = typeof subscriptions.$inferInsert
 
 export type OrderRow = typeof orders.$inferSelect
 export type NewOrderRow = typeof orders.$inferInsert
-
-export type TransactionRow = typeof transactions.$inferSelect
-export type NewTransactionRow = typeof transactions.$inferInsert
 
 export type AccountRow = typeof accounts.$inferSelect
 export type NewAccountRow = typeof accounts.$inferInsert
@@ -236,16 +203,9 @@ export type Subscription = Omit<
   testnet: boolean // Drizzle's mode: "boolean" makes this boolean not number
 }
 
-export type Order = Omit<OrderRow, "subscriptionId"> & {
+export type Order = Omit<OrderRow, "subscriptionId" | "transactionHash"> & {
   subscriptionId: Hash
-}
-
-export type Transaction = Omit<
-  TransactionRow,
-  "transactionHash" | "subscriptionId"
-> & {
-  transactionHash: Hash
-  subscriptionId: Hash
+  transactionHash?: Hash
 }
 
 export type Account = Omit<AccountRow, "address"> & {

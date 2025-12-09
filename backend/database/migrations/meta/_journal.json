@@ -36,6 +36,13 @@
       "when": 1765218422910,
       "tag": "0004_brave_solo",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1765237041012,
+      "tag": "0005_green_nextwave",
+      "breakpoints": true
     }
   ]
 }

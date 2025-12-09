@@ -8,7 +8,6 @@ import {
   OrderStatus,
   OrderType,
   SubscriptionStatus,
-  TransactionStatus,
 } from "@/constants/subscription.constants"
 import { DrizzleLogger } from "@/lib/logger"
 import type { Provider } from "@/providers/provider.interface"
@@ -16,7 +15,6 @@ import type { Provider } from "@/providers/provider.interface"
 // Re-export schema types (single source of truth)
 export type Subscription = schema.Subscription
 export type Order = schema.Order
-export type Transaction = schema.Transaction
 
 // Custom parameter/result types (not in schema)
 export interface CreateOrderParams {
@@ -39,11 +37,6 @@ export interface CreateSubscriptionParams {
 
 interface SubscriptionExistsParams {
   subscriptionId: Hash
-}
-
-export interface GetSuccessfulTransactionParams {
-  subscriptionId: Hash
-  orderId: number
 }
 
 export interface DueOrder {
@@ -71,19 +64,12 @@ export interface OrderDetails {
   testnet: boolean
 }
 
-export interface RecordTransactionParams {
-  transactionHash: Hash
-  orderId: number
-  subscriptionId: Hash
-  amount: string
-  status: TransactionStatus
-}
-
 export interface UpdateOrderParams {
   id: number
   status: OrderStatus
   failureReason?: string // Mapped error code (e.g., 'INSUFFICIENT_SPENDING_ALLOWANCE')
   rawError?: string // Original error message for debugging
+  transactionHash?: Hash // Transaction hash for successful payments
 }
 
 export interface UpdateSubscriptionParams {
@@ -175,17 +161,6 @@ export class SubscriptionRepository {
           ? new DrizzleLogger("subscription.repository")
           : undefined,
     })
-  }
-
-  /**
-   * Transform database row to domain type for Transaction
-   */
-  private toTransactionDomain(row: schema.TransactionRow): Transaction {
-    return {
-      ...row,
-      transactionHash: row.transactionHash as Hash,
-      subscriptionId: row.subscriptionId as Hash,
-    }
   }
 
   /**
@@ -403,25 +378,26 @@ export class SubscriptionRepository {
   }
 
   /**
-   * Check for existing successful transaction (for idempotency)
+   * Get order by ID
    */
-  async getSuccessfulTransaction(
-    params: GetSuccessfulTransactionParams,
-  ): Promise<Transaction | null> {
-    const { subscriptionId, orderId } = params
+  async getOrderById(params: { orderId: number }): Promise<Order | null> {
     const result = await this.db
       .select()
-      .from(schema.transactions)
-      .where(
-        and(
-          eq(schema.transactions.subscriptionId, subscriptionId),
-          eq(schema.transactions.orderId, orderId),
-          eq(schema.transactions.status, TransactionStatus.CONFIRMED),
-        ),
-      )
+      .from(schema.orders)
+      .where(eq(schema.orders.id, params.orderId))
       .get()
 
-    return result ? this.toTransactionDomain(result) : null
+    if (!result) {
+      return null
+    }
+
+    return {
+      ...result,
+      subscriptionId: result.subscriptionId as Hash,
+      transactionHash: result.transactionHash
+        ? (result.transactionHash as Hash)
+        : undefined,
+    }
   }
 
   async deleteSubscriptionData(
@@ -429,9 +405,6 @@ export class SubscriptionRepository {
   ): Promise<void> {
     const { subscriptionId } = params
     await this.db.batch([
-      this.db
-        .delete(schema.transactions)
-        .where(eq(schema.transactions.subscriptionId, subscriptionId)),
       this.db
         .delete(schema.orders)
         .where(eq(schema.orders.subscriptionId, subscriptionId)),
@@ -518,7 +491,7 @@ export class SubscriptionRepository {
 
   /**
    * TRANSACTION: Finalize subscription activation
-   * Updates subscription status, order, creates transaction, and next order
+   * Updates subscription status, order with transaction hash, and creates next order
    * Returns the next order ID for scheduling
    */
   async executeSubscriptionActivation(
@@ -526,49 +499,38 @@ export class SubscriptionRepository {
   ): Promise<{ nextOrderId: number }> {
     const { subscriptionId, order, transaction, nextOrder } = params
 
-    const [
-      _transactionResult,
-      _updateOrderResult,
-      nextOrderResult,
-      _subscriptionResult,
-    ] = await this.db.batch([
-      // Create transaction record
-      this.db
-        .insert(schema.transactions)
-        .values({
-          transactionHash: transaction.hash,
-          orderId: order.id,
-          subscriptionId,
-          amount: transaction.amount,
-          status: TransactionStatus.CONFIRMED,
-        }),
-      // Mark order as completed
-      this.db
-        .update(schema.orders)
-        .set({ status: OrderStatus.PAID })
-        .where(eq(schema.orders.id, order.id)),
-      // Create next order with auto-incremented order_number
-      this.db
-        .insert(schema.orders)
-        .values({
-          subscriptionId,
-          orderNumber: this.getNextOrderNumber(subscriptionId),
-          type: OrderType.RECURRING,
-          dueAt: nextOrder.dueAt,
-          amount: nextOrder.amount,
-          periodLengthInSeconds: nextOrder.periodInSeconds,
-          status: OrderStatus.PENDING,
-        })
-        .returning({ id: schema.orders.id }),
-      // Activate subscription
-      this.db
-        .update(schema.subscriptions)
-        .set({
-          status: SubscriptionStatus.ACTIVE,
-          modifiedAt: sql`CURRENT_TIMESTAMP`,
-        })
-        .where(eq(schema.subscriptions.subscriptionId, subscriptionId)),
-    ])
+    const [_updateOrderResult, nextOrderResult, _subscriptionResult] =
+      await this.db.batch([
+        // Mark order as completed and record transaction hash
+        this.db
+          .update(schema.orders)
+          .set({
+            status: OrderStatus.PAID,
+            transactionHash: transaction.hash,
+          })
+          .where(eq(schema.orders.id, order.id)),
+        // Create next order with auto-incremented order_number
+        this.db
+          .insert(schema.orders)
+          .values({
+            subscriptionId,
+            orderNumber: this.getNextOrderNumber(subscriptionId),
+            type: OrderType.RECURRING,
+            dueAt: nextOrder.dueAt,
+            amount: nextOrder.amount,
+            periodLengthInSeconds: nextOrder.periodInSeconds,
+            status: OrderStatus.PENDING,
+          })
+          .returning({ id: schema.orders.id }),
+        // Activate subscription
+        this.db
+          .update(schema.subscriptions)
+          .set({
+            status: SubscriptionStatus.ACTIVE,
+            modifiedAt: sql`CURRENT_TIMESTAMP`,
+          })
+          .where(eq(schema.subscriptions.subscriptionId, subscriptionId)),
+      ])
 
     const nextOrderId = nextOrderResult[0]?.id
     if (!nextOrderId) {
@@ -656,40 +618,27 @@ export class SubscriptionRepository {
   }
 
   /**
-   * Record a transaction for an order
-   */
-  async recordTransaction(params: RecordTransactionParams): Promise<void> {
-    const { transactionHash, orderId, subscriptionId, amount, status } = params
-
-    await this.db
-      .insert(schema.transactions)
-      .values({
-        transactionHash,
-        orderId,
-        subscriptionId,
-        amount,
-        status,
-      })
-      .run()
-  }
-
-  /**
    * Update order status and return order details
    */
   async updateOrder(
     params: UpdateOrderParams,
   ): Promise<{ orderNumber: number }> {
-    const { id, status, failureReason, rawError } = params
+    const { id, status, failureReason, rawError, transactionHash } = params
 
     const updateData: {
       status: OrderStatus
       failureReason?: string | null
       rawError?: string | null
+      transactionHash?: string | null
     } = { status }
 
     if (failureReason || rawError) {
       updateData.failureReason = failureReason || null
       updateData.rawError = rawError || null
+    }
+
+    if (transactionHash) {
+      updateData.transactionHash = transactionHash
     }
 
     const result = await this.db

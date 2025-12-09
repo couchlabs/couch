@@ -459,20 +459,18 @@ export class SubscriptionService {
       )
     }
 
-    // Check for existing successful transaction (idempotency)
-    const existingTransaction =
-      await this.subscriptionRepository.getSuccessfulTransaction({
-        subscriptionId,
-        orderId,
-      })
+    // Check for existing successful transaction on order (idempotency)
+    const order = await this.subscriptionRepository.getOrderById({
+      orderId,
+    })
 
     let transaction: ChargeResult
-    if (existingTransaction) {
+    if (order?.transactionHash) {
       log.info("Found existing successful transaction, skipping charge", {
-        transactionHash: existingTransaction.transactionHash,
+        transactionHash: order.transactionHash,
       })
       transaction = {
-        transactionHash: existingTransaction.transactionHash,
+        transactionHash: order.transactionHash,
         gasUsed: undefined,
       }
     } else {

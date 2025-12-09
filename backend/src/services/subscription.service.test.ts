@@ -460,18 +460,10 @@ describe("SubscriptionService", () => {
       })
       dispose = testDB.dispose
 
-      // Create existing successful transaction
+      // Set existing successful transaction hash on order
       await testDB.db
-        .prepare(
-          "INSERT INTO transactions (transaction_hash, order_id, subscription_id, amount, status) VALUES (?, ?, ?, ?, ?)",
-        )
-        .bind(
-          "0xexisting",
-          testDB.orderIds[0],
-          TEST_SUBSCRIPTION_ID,
-          "500000",
-          "confirmed",
-        )
+        .prepare("UPDATE orders SET transaction_hash = ? WHERE id = ?")
+        .bind("0xexisting", testDB.orderIds[0])
         .run()
 
       const service = createSubscriptionServiceForTest(testDB.db)
@@ -601,21 +593,14 @@ describe("SubscriptionService", () => {
 
       expect(subStatus?.status).toBe(SubscriptionStatus.ACTIVE)
 
-      // Verify transaction was recorded
-      const txRecord = await testDB.db
-        .prepare("SELECT * FROM transactions WHERE transaction_hash = ?")
-        .bind("0xtxhash")
-        .first()
-
-      expect(txRecord).toBeDefined()
-
-      // Verify order was marked as PAID
+      // Verify order was marked as PAID with transaction hash
       const orderStatus = await testDB.db
-        .prepare("SELECT status FROM orders WHERE id = ?")
+        .prepare("SELECT status, transaction_hash FROM orders WHERE id = ?")
         .bind(testDB.orderIds[0])
-        .first<{ status: string }>()
+        .first<{ status: string; transaction_hash: string }>()
 
       expect(orderStatus?.status).toBe(OrderStatus.PAID)
+      expect(orderStatus?.transaction_hash).toBe("0xtxhash")
 
       // Verify next order was created
       const nextOrderCount = await testDB.db
