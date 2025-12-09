@@ -81,6 +81,16 @@ export interface ActivationResult {
   }
 }
 
+export interface ListSubscriptionsParams {
+  accountId: number
+  testnet?: boolean
+}
+
+export interface GetSubscriptionWithOrdersParams {
+  subscriptionId: Hash
+  accountId: number
+}
+
 const logger = createLogger("subscription.service")
 
 export class SubscriptionService {
@@ -176,6 +186,50 @@ export class SubscriptionService {
     reason: string
   }): Promise<void> {
     await this.subscriptionRepository.markSubscriptionIncomplete(params)
+  }
+
+  /**
+   * Lists all subscriptions for an account.
+   * Optionally filters by network (testnet vs mainnet).
+   */
+  async listSubscriptions(params: ListSubscriptionsParams) {
+    const { accountId, testnet } = params
+    return await this.subscriptionRepository.listSubscriptions({
+      accountId,
+      testnet,
+    })
+  }
+
+  /**
+   * Gets subscription details with all associated orders.
+   * Enforces account ownership - throws 403 if subscription belongs to different account.
+   * Returns null if subscription not found.
+   */
+  async getSubscriptionWithOrders(params: GetSubscriptionWithOrdersParams) {
+    const { subscriptionId, accountId } = params
+
+    const subscription = await this.subscriptionRepository.getSubscription({
+      subscriptionId,
+    })
+
+    if (!subscription) {
+      return null
+    }
+
+    if (subscription.accountId !== accountId) {
+      throw new HTTPError(403, ErrorCode.FORBIDDEN, "Unauthorized", {
+        subscriptionId,
+      })
+    }
+
+    const orders = await this.subscriptionRepository.getSubscriptionOrders({
+      subscriptionId,
+    })
+
+    return {
+      subscription,
+      orders,
+    }
   }
 
   /**

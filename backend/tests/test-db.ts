@@ -33,6 +33,7 @@ export interface TestSubscription {
     periodInSeconds: number
     status: OrderStatus
     attempts?: number
+    transactionHash?: Hash
   }
 }
 
@@ -119,6 +120,7 @@ export async function createTestDB(options: CreateTestDbOptions = {}): Promise<{
             periodLengthInSeconds: sub.order.periodInSeconds,
             status: sub.order.status,
             attempts: sub.order.attempts ?? 0,
+            transactionHash: sub.order.transactionHash,
           })
           .returning({ id: schema.orders.id })
 

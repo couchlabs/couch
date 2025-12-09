@@ -1029,4 +1029,267 @@ describe("SubscriptionService", () => {
       expect(subStatus?.status).toBe(SubscriptionStatus.CANCELED)
     })
   })
+
+  describe("listSubscriptions", () => {
+    it("returns empty array when no subscriptions exist", async () => {
+      const result = await service.listSubscriptions({
+        accountId: testAccountId,
+      })
+
+      expect(result).toEqual([])
+    })
+
+    it("returns all subscriptions for an account", async () => {
+      const testDB = await createTestDB({
+        accounts: [TEST_ACCOUNT],
+        subscriptions: [
+          {
+            subscriptionId: "0x1111" as Hash,
+            accountAddress: TEST_ACCOUNT,
+            beneficiaryAddress: TEST_OWNER,
+            provider: Provider.BASE,
+            status: SubscriptionStatus.ACTIVE,
+          },
+          {
+            subscriptionId: "0x2222" as Hash,
+            accountAddress: TEST_ACCOUNT,
+            beneficiaryAddress: TEST_OWNER,
+            provider: Provider.BASE,
+            status: SubscriptionStatus.ACTIVE,
+            testnet: true,
+          },
+        ],
+      })
+      dispose = testDB.dispose
+
+      const service = createSubscriptionServiceForTest(testDB.db)
+
+      const result = await service.listSubscriptions({
+        accountId: testAccountId,
+      })
+
+      expect(result).toHaveLength(2)
+      const ids = result.map((s) => s.subscriptionId)
+      expect(ids).toContain("0x1111" as Hash)
+      expect(ids).toContain("0x2222" as Hash)
+    })
+
+    it("filters subscriptions by testnet flag", async () => {
+      const testDB = await createTestDB({
+        accounts: [TEST_ACCOUNT],
+        subscriptions: [
+          {
+            subscriptionId: "0x1111" as Hash,
+            accountAddress: TEST_ACCOUNT,
+            beneficiaryAddress: TEST_OWNER,
+            provider: Provider.BASE,
+            status: SubscriptionStatus.ACTIVE,
+            testnet: false,
+          },
+          {
+            subscriptionId: "0x2222" as Hash,
+            accountAddress: TEST_ACCOUNT,
+            beneficiaryAddress: TEST_OWNER,
+            provider: Provider.BASE,
+            status: SubscriptionStatus.ACTIVE,
+            testnet: true,
+          },
+        ],
+      })
+      dispose = testDB.dispose
+
+      const service = createSubscriptionServiceForTest(testDB.db)
+
+      const result = await service.listSubscriptions({
+        accountId: testAccountId,
+        testnet: true,
+      })
+
+      expect(result).toHaveLength(1)
+      expect(result[0].subscriptionId).toBe("0x2222" as Hash)
+      expect(result[0].testnet).toBe(true)
+    })
+
+    it("only returns subscriptions for the specified account", async () => {
+      const DIFFERENT_ACCOUNT = "0xdifferent" as Address
+      const testDB = await createTestDB({
+        accounts: [TEST_ACCOUNT, DIFFERENT_ACCOUNT],
+        subscriptions: [
+          {
+            subscriptionId: "0x1111" as Hash,
+            accountAddress: TEST_ACCOUNT,
+            beneficiaryAddress: TEST_OWNER,
+            provider: Provider.BASE,
+            status: SubscriptionStatus.ACTIVE,
+          },
+          {
+            subscriptionId: "0x2222" as Hash,
+            accountAddress: DIFFERENT_ACCOUNT,
+            beneficiaryAddress: TEST_OWNER,
+            provider: Provider.BASE,
+            status: SubscriptionStatus.ACTIVE,
+          },
+        ],
+      })
+      dispose = testDB.dispose
+
+      const service = createSubscriptionServiceForTest(testDB.db)
+
+      const result = await service.listSubscriptions({
+        accountId: testAccountId,
+      })
+
+      expect(result).toHaveLength(1)
+      expect(result[0].subscriptionId).toBe("0x1111" as Hash)
+    })
+  })
+
+  describe("getSubscriptionWithOrders", () => {
+    it("returns null when subscription not found", async () => {
+      const result = await service.getSubscriptionWithOrders({
+        subscriptionId: TEST_SUBSCRIPTION_ID,
+        accountId: testAccountId,
+      })
+
+      expect(result).toBeNull()
+    })
+
+    it("returns subscription with orders", async () => {
+      const testDB = await createTestDB({
+        accounts: [TEST_ACCOUNT],
+        subscriptions: [
+          {
+            subscriptionId: TEST_SUBSCRIPTION_ID,
+            accountAddress: TEST_ACCOUNT,
+            beneficiaryAddress: TEST_OWNER,
+            provider: Provider.BASE,
+            status: SubscriptionStatus.ACTIVE,
+            order: {
+              type: OrderType.RECURRING,
+              dueAt: "2025-02-01T00:00:00Z",
+              amount: "1000000",
+              periodInSeconds: 2592000,
+              status: OrderStatus.PAID,
+              transactionHash: "0xtxhash",
+            },
+          },
+        ],
+      })
+      dispose = testDB.dispose
+
+      const service = createSubscriptionServiceForTest(testDB.db)
+
+      const result = await service.getSubscriptionWithOrders({
+        subscriptionId: TEST_SUBSCRIPTION_ID,
+        accountId: testAccountId,
+      })
+
+      expect(result).not.toBeNull()
+      expect(result?.subscription.subscriptionId).toBe(TEST_SUBSCRIPTION_ID)
+      expect(result?.subscription.status).toBe(SubscriptionStatus.ACTIVE)
+      expect(result?.orders).toHaveLength(1)
+      expect(result?.orders[0].amount).toBe("1000000")
+      expect(result?.orders[0].transactionHash).toBe("0xtxhash" as Hash)
+    })
+
+    it("returns subscription with multiple orders", async () => {
+      const testDB = await createTestDB({
+        accounts: [TEST_ACCOUNT],
+        subscriptions: [
+          {
+            subscriptionId: TEST_SUBSCRIPTION_ID,
+            accountAddress: TEST_ACCOUNT,
+            beneficiaryAddress: TEST_OWNER,
+            provider: Provider.BASE,
+            status: SubscriptionStatus.ACTIVE,
+            order: {
+              type: OrderType.INITIAL,
+              dueAt: "2025-01-01T00:00:00Z",
+              amount: "500000",
+              periodInSeconds: 2592000,
+              status: OrderStatus.PAID,
+              transactionHash: "0xtx1",
+            },
+          },
+        ],
+      })
+      dispose = testDB.dispose
+
+      // Add a second order manually
+      await testDB.db
+        .prepare(
+          "INSERT INTO orders (subscription_id, type, due_at, amount, status, order_number, period_length_in_seconds, transaction_hash) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        )
+        .bind(
+          TEST_SUBSCRIPTION_ID,
+          OrderType.RECURRING,
+          "2025-02-01T00:00:00Z",
+          "1000000",
+          OrderStatus.PAID,
+          2,
+          2592000,
+          "0xtx2",
+        )
+        .run()
+
+      const service = createSubscriptionServiceForTest(testDB.db)
+
+      const result = await service.getSubscriptionWithOrders({
+        subscriptionId: TEST_SUBSCRIPTION_ID,
+        accountId: testAccountId,
+      })
+
+      expect(result).not.toBeNull()
+      expect(result?.orders).toHaveLength(2)
+      const amounts = result?.orders.map((o) => o.amount)
+      expect(amounts).toContain("500000")
+      expect(amounts).toContain("1000000")
+    })
+
+    it("throws 403 when subscription belongs to different account", async () => {
+      const DIFFERENT_ACCOUNT = "0xdifferent" as Address
+      const testDB = await createTestDB({
+        accounts: [TEST_ACCOUNT, DIFFERENT_ACCOUNT],
+        subscriptions: [
+          {
+            subscriptionId: TEST_SUBSCRIPTION_ID,
+            accountAddress: TEST_ACCOUNT,
+            beneficiaryAddress: TEST_OWNER,
+            provider: Provider.BASE,
+            status: SubscriptionStatus.ACTIVE,
+          },
+        ],
+      })
+      dispose = testDB.dispose
+
+      const service = createSubscriptionServiceForTest(testDB.db)
+
+      // Get different account ID
+      const differentAccount = await testDB.db
+        .prepare("SELECT id FROM accounts WHERE address = ?")
+        .bind(DIFFERENT_ACCOUNT)
+        .first<{ id: number }>()
+      if (!differentAccount) {
+        throw new Error("Different test account not found in database")
+      }
+
+      await expect(
+        service.getSubscriptionWithOrders({
+          subscriptionId: TEST_SUBSCRIPTION_ID,
+          accountId: differentAccount.id,
+        }),
+      ).rejects.toThrow(HTTPError)
+
+      try {
+        await service.getSubscriptionWithOrders({
+          subscriptionId: TEST_SUBSCRIPTION_ID,
+          accountId: differentAccount.id,
+        })
+      } catch (error) {
+        expect(error).toBeInstanceOf(HTTPError)
+        expect((error as HTTPError).status).toBe(403)
+        expect((error as HTTPError).code).toBe(ErrorCode.FORBIDDEN)
+      }
+    })
+  })
 })
