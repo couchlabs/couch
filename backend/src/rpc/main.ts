@@ -112,6 +112,13 @@ export interface SuccessResponse {
   success: boolean
 }
 
+/**
+ * Create subscription response
+ */
+export interface CreateSubscriptionResponse {
+  status: string
+}
+
 export class RPC extends WorkerEntrypoint<ApiWorkerEnv> {
   /**
    * Helper: Get account by address (throws if not found)
@@ -457,6 +464,106 @@ export class RPC extends WorkerEntrypoint<ApiWorkerEnv> {
     }))
 
     return { subscription, orders }
+  }
+
+  /**
+   * Creates a subscription for a merchant account
+   * Registers an existing onchain subscription with the backend
+   * Processes activation charge and emits webhooks
+   * Security: Always uses merchant's address as beneficiary (no override)
+   */
+  async createSubscription(params: {
+    accountAddress: Address
+    subscriptionId: Hash
+    provider: Provider
+    testnet: boolean
+  }): Promise<CreateSubscriptionResponse> {
+    const account = await this.getAccountByAddress(params.accountAddress)
+
+    const subscriptionService = new SubscriptionService({
+      DB: this.env.DB,
+      LOGGING: this.env.LOGGING,
+      CDP_API_KEY_ID: this.env.CDP_API_KEY_ID,
+      CDP_API_KEY_SECRET: this.env.CDP_API_KEY_SECRET,
+      CDP_WALLET_SECRET: this.env.CDP_WALLET_SECRET,
+      CDP_CLIENT_API_KEY: this.env.CDP_CLIENT_API_KEY,
+      ORDER_SCHEDULER: this.env.ORDER_SCHEDULER,
+      WEBHOOK_QUEUE: this.env.WEBHOOK_QUEUE,
+    })
+
+    const webhookService = new WebhookService({
+      DB: this.env.DB,
+      LOGGING: this.env.LOGGING,
+      WEBHOOK_QUEUE: this.env.WEBHOOK_QUEUE,
+    })
+
+    // Always use merchant's address as beneficiary (security: no beneficiary override)
+    const beneficiaryAddress = params.accountAddress
+
+    // Create subscription in DB and get order details
+    const { orderId, orderNumber, subscriptionMetadata } =
+      await subscriptionService.createSubscription({
+        accountId: account.id,
+        subscriptionId: params.subscriptionId,
+        provider: params.provider,
+        testnet: params.testnet,
+        beneficiaryAddress,
+      })
+
+    // Process activation charge and emit webhooks in background
+    // Using ctx.waitUntil to extend execution context (same as API route)
+    this.ctx.waitUntil(
+      (async () => {
+        try {
+          // 1. Fire created webhook FIRST
+          await webhookService.emitSubscriptionCreated({
+            accountId: account.id,
+            subscriptionId: params.subscriptionId,
+            amount: subscriptionMetadata.amount,
+            periodInSeconds: subscriptionMetadata.periodInSeconds,
+            testnet: params.testnet,
+          })
+
+          // 2. Attempt activation charge
+          const activation = await subscriptionService.processActivationCharge({
+            subscriptionId: params.subscriptionId,
+            accountId: account.id,
+            beneficiaryAddress,
+            provider: params.provider,
+            testnet: params.testnet,
+            orderId,
+            orderNumber,
+          })
+
+          // 3. Complete activation in DB
+          await subscriptionService.completeActivation(activation)
+
+          // 4. Fire activation success webhook
+          await webhookService.emitSubscriptionActivated(activation)
+        } catch (error) {
+          // 5. Mark subscription as incomplete in DB
+          const errorMessage =
+            error instanceof Error ? error.message : "activation_failed"
+          await subscriptionService.markSubscriptionIncomplete({
+            subscriptionId: params.subscriptionId,
+            orderId,
+            reason: errorMessage,
+          })
+
+          // 6. Fire activation failed webhook
+          await webhookService.emitActivationFailed({
+            accountId: account.id,
+            subscriptionId: params.subscriptionId,
+            amount: subscriptionMetadata.amount,
+            periodInSeconds: subscriptionMetadata.periodInSeconds,
+            testnet: params.testnet,
+            error,
+          })
+        }
+      })(),
+    )
+
+    return { status: "processing" }
   }
 
   /**
