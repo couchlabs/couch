@@ -71,12 +71,6 @@ export enum OrderStatus {
   PENDING_RETRY = "pending_retry",
 }
 
-export enum TransactionStatus {
-  PENDING = "pending",
-  CONFIRMED = "confirmed",
-  FAILED = "failed",
-}
-
 /**
  * Dunning (payment retry) configuration
  * Defines retry schedule for recurring payment failures

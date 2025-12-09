@@ -3,7 +3,6 @@ import {
   OrderStatus,
   OrderType,
   SubscriptionStatus,
-  TransactionStatus,
 } from "@/constants/subscription.constants"
 import { ErrorCode, HTTPError } from "@/errors/http.errors"
 import { isUpstreamServiceError } from "@/errors/subscription.errors"
@@ -264,22 +263,14 @@ export class OrderService {
         testnet,
       })
 
-      // Step 3: Record successful transaction
-      log.info("Recording transaction", {
+      // Step 3: Update order as paid with transaction hash
+      log.info("Recording transaction on order", {
         transactionHash: chargeResult.transactionHash,
       })
-      await this.subscriptionRepository.recordTransaction({
-        transactionHash: chargeResult.transactionHash,
-        orderId,
-        subscriptionId,
-        amount,
-        status: TransactionStatus.CONFIRMED,
-      })
-
-      // Step 4: Update order as paid and get order_number
       const orderResult = await this.subscriptionRepository.updateOrder({
         id: orderId,
         status: OrderStatus.PAID,
+        transactionHash: chargeResult.transactionHash,
       })
 
       // Step 4.5: If this was a retry, reactivate subscription
