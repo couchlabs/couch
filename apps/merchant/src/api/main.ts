@@ -264,6 +264,102 @@ app.delete("/api/webhook", async (c) => {
   }
 })
 
+// GET /api/subscriptions?address=0x...&testnet=true - List subscriptions
+app.get("/api/subscriptions", async (c) => {
+  const address = c.req.query("address")
+  const testnetParam = c.req.query("testnet")
+
+  if (!address || !isAddress(address)) {
+    return c.json({ error: "Invalid address" }, 400)
+  }
+
+  // Parse testnet as optional boolean
+  const testnet =
+    testnetParam === "true"
+      ? true
+      : testnetParam === "false"
+        ? false
+        : undefined
+
+  try {
+    const result = await c.env.COUCH_BACKEND_RPC.listSubscriptions({
+      accountAddress: address,
+      testnet,
+    })
+    return c.json({ subscriptions: result })
+  } catch (error) {
+    console.error("List subscriptions error:", error)
+    return c.json({ error: "Internal error" }, 500)
+  }
+})
+
+// GET /api/subscriptions/:id?address=0x... - Get subscription details with orders
+app.get("/api/subscriptions/:id", async (c) => {
+  const subscriptionId = c.req.param("id")
+  const address = c.req.query("address")
+
+  if (!address || !isAddress(address)) {
+    return c.json({ error: "Invalid address" }, 400)
+  }
+
+  if (!subscriptionId || typeof subscriptionId !== "string") {
+    return c.json({ error: "Invalid subscription ID" }, 400)
+  }
+
+  try {
+    const result = await c.env.COUCH_BACKEND_RPC.getSubscription({
+      accountAddress: address,
+      subscriptionId: subscriptionId as `0x${string}`,
+    })
+
+    if (!result) {
+      return c.json({ error: "Subscription not found" }, 404)
+    }
+
+    return c.json(result)
+  } catch (error) {
+    console.error("Get subscription error:", error)
+    if (error instanceof Error && error.message.includes("Unauthorized")) {
+      return c.json({ error: "Unauthorized" }, 403)
+    }
+    return c.json({ error: "Internal error" }, 500)
+  }
+})
+
+// POST /api/subscriptions/:id/revoke?address=0x... - Revoke subscription
+app.post("/api/subscriptions/:id/revoke", async (c) => {
+  const subscriptionId = c.req.param("id")
+  const address = c.req.query("address")
+
+  if (!address || !isAddress(address)) {
+    return c.json({ error: "Invalid address" }, 400)
+  }
+
+  if (!subscriptionId || typeof subscriptionId !== "string") {
+    return c.json({ error: "Invalid subscription ID" }, 400)
+  }
+
+  try {
+    const result = await c.env.COUCH_BACKEND_RPC.revokeSubscription({
+      accountAddress: address,
+      subscriptionId: subscriptionId as `0x${string}`,
+    })
+    return c.json(result)
+  } catch (error) {
+    console.error("Revoke subscription error:", error)
+    if (error instanceof Error && error.message.includes("not found")) {
+      return c.json({ error: "Subscription not found" }, 404)
+    }
+    if (error instanceof Error && error.message.includes("Unauthorized")) {
+      return c.json({ error: "Unauthorized" }, 403)
+    }
+    if (error instanceof Error && error.message.includes("cannot be revoked")) {
+      return c.json({ error: error.message }, 400)
+    }
+    return c.json({ error: "Internal error" }, 500)
+  }
+})
+
 // 404 for everything else
 app.notFound((c) => {
   return c.json({ error: "Not found" }, 404)
