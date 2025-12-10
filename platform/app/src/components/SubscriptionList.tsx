@@ -4,7 +4,7 @@ import {
   useRevokeSubscription,
   useSubscription,
 } from "@app/hooks/useSubscriptions"
-import { subscribe } from "@base-org/account"
+import { subscribe } from "@base-org/account/browser"
 import { useState } from "react"
 
 export function SubscriptionList({
