@@ -1,0 +1,29 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:docs.base.org)",
+      "WebSearch",
+      "Bash(bun lint:*)",
+      "Bash(bun format:*)",
+      "Bash(bun fix:*)",
+      "Bash(bun test:*)",
+      "Bash(bun typecheck:*)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:developers.cloudflare.com)",
+      "WebFetch(domain:docs.cdp.coinbase.com)",
+      "Bash(bun db:generate:*)",
+      "Bash(ls:*)"
+    ],
+    "deny": [
+      "Read(file_path:**/.env**)",
+      "Edit(file_path:**/.env**)",
+      "Write(file_path:**/.env**)",
+      "Read(file_path:**/.alchemy/**)",
+      "Edit(file_path:**/.alchemy/**)",
+      "Write(file_path:**/.alchemy/**)",
+      "Bash(*.env*)",
+      "Bash(*.alchemy*)"
+    ],
+    "ask": []
+  }
+}

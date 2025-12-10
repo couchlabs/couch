@@ -19,37 +19,26 @@
     "test": {
       "cache": false
     },
-    "test:unit": {
-      "cache": false
-    },
     "//#lint": {
       "cache": false
     },
     "//#format": {
       "cache": false
     },
-    "typecheck": {
-      "cache": false
-    },
     "//#fix": {
       "cache": false
     },
+    "typecheck": {
+      "cache": false
+    },
     "db:generate": {
-      "cache": false,
-      "dependsOn": ["test"]
+      "cache": false
     },
     "infra:deploy": {
       "dependsOn": ["^infra:deploy"],
       "cache": false
     },
     "infra:destroy": {
-      "cache": false
-    },
-    "backend#infra:destroy": {
-      "dependsOn": ["merchant#infra:destroy"],
-      "cache": false
-    },
-    "merchant#infra:destroy": {
       "cache": false
     }
   }
