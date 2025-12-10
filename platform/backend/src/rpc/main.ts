@@ -121,6 +121,14 @@ export interface CreateSubscriptionResponse {
 
 export class RPC extends WorkerEntrypoint<ApiWorkerEnv> {
   /**
+   * Fetch handler (required by Cloudflare even for RPC-only workers)
+   * This worker is accessed via service bindings, not HTTP
+   */
+  async fetch(): Promise<Response> {
+    return new Response("RPC worker - use service binding", { status: 404 })
+  }
+
+  /**
    * Helper: Get account by address (throws if not found)
    * Returns full Account for internal use (includes id for database operations)
    */
