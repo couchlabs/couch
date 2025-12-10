@@ -8,8 +8,7 @@
     "GITHUB_*",
     "ALCHEMY_*",
     "CLOUDFLARE_*",
-    "CDP_*",
-    "COUCH_*"
+    "CDP_*"
   ],
   "tasks": {
     "dev": {
