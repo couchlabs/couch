@@ -125,6 +125,7 @@ jobs:
           CDP_API_KEY_ID: ${{ secrets.CDP_API_KEY_ID }}
           CDP_API_KEY_SECRET: ${{ secrets.CDP_API_KEY_SECRET }}
           CDP_WALLET_SECRET: ${{ secrets.CDP_WALLET_SECRET }}
+          CDP_PROJECT_ID: ${{ secrets.CDP_PROJECT_ID }}
           CDP_CLIENT_API_KEY: ${{ secrets.CDP_CLIENT_API_KEY }}
           COUCH_TEST_ACCOUNT_ADDRESS: ${{ secrets.COUCH_TEST_ACCOUNT_ADDRESS }}
           PULL_REQUEST: ${{ github.event.number }}
@@ -162,5 +163,6 @@ jobs:
           CDP_API_KEY_ID: ${{ secrets.CDP_API_KEY_ID }}
           CDP_API_KEY_SECRET: ${{ secrets.CDP_API_KEY_SECRET }}
           CDP_WALLET_SECRET: ${{ secrets.CDP_WALLET_SECRET }}
+          CDP_PROJECT_ID: ${{ secrets.CDP_PROJECT_ID }}
           CDP_CLIENT_API_KEY: ${{ secrets.CDP_CLIENT_API_KEY }}
           COUCH_TEST_ACCOUNT_ADDRESS: ${{ secrets.COUCH_TEST_ACCOUNT_ADDRESS }}
