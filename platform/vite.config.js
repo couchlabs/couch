@@ -13,9 +13,9 @@ export default defineConfig({
     tsconfigPaths(),
     nodePolyfills({ include: ["buffer"] }),
   ],
-  publicDir: "./app/public",
-  root: './app',
   envDir: "../",
+  root: './app',
+  publicDir: "./public",
   server: {
     port: 8000,
     open: "chrome",
