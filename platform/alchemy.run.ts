@@ -347,6 +347,9 @@ const WEBSITE_NAME = "app"
 export const website = await Vite(WEBSITE_NAME, {
   name: `${NAME_PREFIX}-${WEBSITE_NAME}`,
   entrypoint: path.join(import.meta.dirname, "app", "src", "api", "main.ts"),
+  assets: {
+    directory: path.join(import.meta.dirname, "app", "dist"),
+  },
   // Envs exposed to vite build
   dev: {
     env: {
