@@ -36,7 +36,7 @@ bun dev
 ```
 
 This will spin up locally the database, workers, durable objexts, events queues apis and rpc infrastructure, together with the merchant application to access it. 
-The mmrchant should now be fully functional at `http://localhost:8000`
+The merchant app should should now be available at `http://localhost:8000`
 
 ## Stack
 
