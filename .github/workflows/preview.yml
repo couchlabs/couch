@@ -131,8 +131,13 @@ jobs:
           GITHUB_SHA: ${{ github.sha }}
           GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
 
+<<<<<<< HEAD
       - name: "Output deployment URLs"
         # Note: api_url and app_url outputs are set in alchemy.run.ts
+=======
+        # Note: api_url and app_url outputs are set in alchemy.run.ts
+      - name: "Output deployment URLs"
+>>>>>>> 1b67ac7 (simpler platform setup - atomic deployments, simpler dev, ...)
         run: |
           echo "::notice::Api deployed to ${{ steps.deployment.outputs.api_url }}"
           echo "::notice::App deployed to ${{ steps.deployment.outputs.app_url }}"

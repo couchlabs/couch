@@ -1,0 +1,57 @@
+{
+  "name": "platform",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "dev": "alchemy dev --stage dev --adopt --app couch-platform",
+    "infra:deploy": "alchemy deploy --stage $STAGE --adopt --app couch-platform",
+    "infra:destroy": "alchemy destroy --stage $STAGE --app couch-platform",
+    "db:generate": "drizzle-kit generate",
+    "test": "bun test",
+    "typecheck": "tsc --noEmit"
+  },
+  "exports": {
+    "./alchemy": {
+      "bun": "./alchemy.run.ts",
+      "import": "./alchemy.run.js",
+      "types": "./alchemy.run.ts"
+    }
+  },
+  "dependencies": {
+    "hono": "catalog:cloudflare",
+    "@base-org/account": "catalog:coinbase",
+    "@coinbase/cdp-sdk": "catalog:coinbase",
+    "@coinbase/cdp-core": "catalog:coinbase",
+    "@coinbase/cdp-hooks": "catalog:coinbase",
+    "@coinbase/cdp-react": "catalog:coinbase",
+    "viem": "catalog:crypto",
+    "react": "catalog:react",
+    "react-dom": "catalog:react",
+    "react-router-dom": "catalog:react",
+    "@tanstack/react-query": "catalog:react",
+    "tailwind-merge": "catalog:tailwind",
+    "tailwindcss": "catalog:tailwind",
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "lucide-react": "^0.555.0",
+    "drizzle-orm": "^0.44.7"
+  },
+  "devDependencies": {
+    "alchemy": "catalog:",
+    "typescript": "catalog:",
+    "@cloudflare/workers-types": "catalog:cloudflare",
+    "@cloudflare/vite-plugin": "catalog:cloudflare",
+    "@types/node": "catalog:cloudflare",
+    "miniflare": "catalog:cloudflare",
+    "@types/bun": "latest",
+    "@types/react": "catalog:react",
+    "@types/react-dom": "catalog:react",
+    "vite": "catalog:vite",
+    "vite-plugin-node-polyfills": "catalog:vite",
+    "@vitejs/plugin-react": "catalog:vite",
+    "vite-tsconfig-paths": "catalog:vite",
+    "@tailwindcss/vite": "catalog:vite",
+    "tw-animate-css": "catalog:tailwind",
+    "drizzle-kit": "^0.31.7"
+  }
+}

@@ -1,0 +1,770 @@
+import { afterEach, beforeEach, describe, expect, it, mock } from "bun:test"
+import {
+  OrderType,
+  SubscriptionStatus,
+} from "@backend/constants/subscription.constants"
+import { ErrorCode, HTTPError } from "@backend/errors/http.errors"
+import { Provider } from "@backend/providers/provider.interface"
+import { WebhookRepository } from "@backend/repositories/webhook.repository"
+import type { ActivationResult } from "@backend/services/subscription.service"
+import { WebhookService } from "@backend/services/webhook.service"
+import { createTestDB } from "@backend-tests/test-db"
+import type { Address, Hash } from "viem"
+
+// Mock only the webhook queue
+const mockQueueSend = mock()
+
+describe("WebhookService", () => {
+  let testDB: Awaited<ReturnType<typeof createTestDB>>
+  let service: WebhookService
+  let testAccountId: number
+
+  const TEST_ACCOUNT = "0xabcd" as Address
+  const TEST_SUBSCRIPTION_ID = "0x1234" as Hash
+  const TEST_WEBHOOK_URL = "https://example.com/webhook"
+
+  beforeEach(async () => {
+    // Create test database with account
+    testDB = await createTestDB({
+      accounts: [TEST_ACCOUNT],
+    })
+
+    // Get account ID from test database
+    const account = await testDB.db
+      .prepare("SELECT id FROM accounts WHERE address = ?")
+      .bind(TEST_ACCOUNT)
+      .first<{ id: number }>()
+    if (!account) {
+      throw new Error("Test account not found in database")
+    }
+    testAccountId = account.id
+
+    // Create service with test dependencies
+    service = WebhookService.createForTesting({
+      webhookRepository: new WebhookRepository({
+        DB: testDB.db,
+        LOGGING: "verbose",
+      }),
+      webhookQueue: {
+        send: mockQueueSend,
+        // biome-ignore lint/suspicious/noExplicitAny: Test mocks
+      } as any,
+    })
+
+    // Reset mocks before each test
+    mockQueueSend.mockResolvedValue(undefined)
+  })
+
+  afterEach(async () => {
+    // Clean up database
+    await testDB.dispose()
+    // Reset all mocks
+    mock.clearAllMocks()
+  })
+
+  describe("setWebhook", () => {
+    it("sets webhook URL successfully and generates secret", async () => {
+      const result = await service.setWebhook({
+        accountId: testAccountId,
+        url: TEST_WEBHOOK_URL,
+      })
+
+      expect(result.url).toBe(TEST_WEBHOOK_URL)
+      expect(result.secret).toMatch(/^whsec_[a-f0-9]{64}$/) // 32 bytes = 64 hex chars
+
+      // Verify webhook was created in database
+      const webhook = await testDB.db
+        .prepare("SELECT * FROM webhooks WHERE account_id = ?")
+        .bind(testAccountId)
+        .first<{ url: string; secret: string }>()
+
+      expect(webhook?.url).toBe(TEST_WEBHOOK_URL)
+      expect(webhook?.secret).toBe(result.secret)
+    })
+
+    it("creates new webhook row when replacing existing (audit trail)", async () => {
+      // Set initial webhook
+      const result1 = await service.setWebhook({
+        accountId: testAccountId,
+        url: "https://example.com/old",
+      })
+
+      // Replace with new URL (soft deletes old, creates new)
+      const result2 = await service.setWebhook({
+        accountId: testAccountId,
+        url: TEST_WEBHOOK_URL,
+      })
+
+      expect(result2.url).toBe(TEST_WEBHOOK_URL)
+      expect(result2.secret).not.toBe(result1.secret) // New secret generated
+
+      // Verify 2 webhook rows exist - old deleted one + new active one
+      const allWebhooks = await testDB.db
+        .prepare("SELECT * FROM webhooks WHERE account_id = ? ORDER BY id")
+        .bind(testAccountId)
+        .all<{ deleted_at: string | null; url: string }>()
+
+      expect(allWebhooks.results).toHaveLength(2)
+      expect(allWebhooks.results[0].deleted_at).not.toBeNull() // Old one deleted
+      expect(allWebhooks.results[0].url).toBe("https://example.com/old")
+      expect(allWebhooks.results[1].deleted_at).toBeNull() // New one active
+      expect(allWebhooks.results[1].url).toBe(TEST_WEBHOOK_URL)
+    })
+
+    it("throws error for invalid webhook URL format", async () => {
+      await expect(
+        service.setWebhook({
+          accountId: testAccountId,
+          url: "not-a-valid-url",
+        }),
+      ).rejects.toThrow(HTTPError)
+
+      try {
+        await service.setWebhook({
+          accountId: testAccountId,
+          url: "not-a-valid-url",
+        })
+      } catch (error) {
+        expect(error).toBeInstanceOf(HTTPError)
+        expect((error as HTTPError).code).toBe(ErrorCode.INVALID_FORMAT)
+      }
+    })
+  })
+
+  describe("emitSubscriptionActivated", () => {
+    it("emits activation event and queues webhook", async () => {
+      // Set up webhook
+      await testDB.db
+        .prepare(
+          "INSERT INTO webhooks (account_id, url, secret) VALUES (?, ?, ?)",
+        )
+        .bind(testAccountId, TEST_WEBHOOK_URL, "whsec_testsecret")
+        .run()
+
+      const activationResult: ActivationResult = {
+        subscriptionId: TEST_SUBSCRIPTION_ID,
+        accountId: testAccountId,
+        provider: Provider.BASE,
+        testnet: true,
+        transaction: {
+          hash: "0xtxhash" as Hash,
+          amount: "500000",
+        },
+        order: {
+          id: 1,
+          number: 1,
+          dueAt: "2025-01-01T00:00:00Z",
+          periodInSeconds: 2592000,
+        },
+        nextOrder: {
+          date: "2025-02-01T00:00:00Z",
+          amount: "1000000",
+          periodInSeconds: 2592000,
+        },
+      }
+
+      await service.emitSubscriptionActivated(activationResult)
+
+      // Verify queue was called
+      expect(mockQueueSend).toHaveBeenCalledTimes(1)
+      const queueMessage = mockQueueSend.mock.calls[0][0]
+
+      expect(queueMessage.url).toBe(TEST_WEBHOOK_URL)
+      expect(queueMessage.signature).toBeDefined()
+      expect(queueMessage.timestamp).toBeGreaterThan(0)
+
+      // Verify event structure
+      const event = JSON.parse(queueMessage.payload)
+      expect(event.type).toBe("subscription.updated")
+      expect(event.data.subscription.id).toBe(TEST_SUBSCRIPTION_ID)
+      expect(event.data.subscription.status).toBe(SubscriptionStatus.ACTIVE)
+      expect(event.data.subscription.amount).toBe("500000")
+      expect(event.data.order.number).toBe(1)
+      expect(event.data.order.type).toBe(OrderType.INITIAL)
+      expect(event.data.order.status).toBe("paid")
+      expect(event.data.transaction.hash).toBe("0xtxhash")
+    })
+
+    it("does not throw if no webhook configured", async () => {
+      const activationResult: ActivationResult = {
+        subscriptionId: TEST_SUBSCRIPTION_ID,
+        accountId: testAccountId,
+        provider: Provider.BASE,
+        testnet: true,
+        transaction: { hash: "0xtxhash" as Hash, amount: "500000" },
+        order: {
+          id: 1,
+          number: 1,
+          dueAt: "2025-01-01T00:00:00Z",
+          periodInSeconds: 2592000,
+        },
+        nextOrder: {
+          date: "2025-02-01T00:00:00Z",
+          amount: "1000000",
+          periodInSeconds: 2592000,
+        },
+      }
+
+      // Should not throw
+      await expect(
+        service.emitSubscriptionActivated(activationResult),
+      ).resolves.toBeUndefined()
+
+      // Queue should not be called
+      expect(mockQueueSend).not.toHaveBeenCalled()
+    })
+
+    it("does not send webhook when webhook is disabled", async () => {
+      // Set up webhook with enabled=false
+      await testDB.db
+        .prepare(
+          "INSERT INTO webhooks (account_id, url, secret, enabled) VALUES (?, ?, ?, ?)",
+        )
+        .bind(testAccountId, TEST_WEBHOOK_URL, "whsec_testsecret", 0)
+        .run()
+
+      const activationResult: ActivationResult = {
+        subscriptionId: TEST_SUBSCRIPTION_ID,
+        accountId: testAccountId,
+        provider: Provider.BASE,
+        testnet: true,
+        transaction: { hash: "0xtxhash" as Hash, amount: "500000" },
+        order: {
+          id: 1,
+          number: 1,
+          dueAt: "2025-01-01T00:00:00Z",
+          periodInSeconds: 2592000,
+        },
+        nextOrder: {
+          date: "2025-02-01T00:00:00Z",
+          amount: "1000000",
+          periodInSeconds: 2592000,
+        },
+      }
+
+      await service.emitSubscriptionActivated(activationResult)
+
+      // Queue should not be called because webhook is disabled
+      expect(mockQueueSend).not.toHaveBeenCalled()
+    })
+  })
+
+  describe("emitSubscriptionCreated", () => {
+    it("emits creation event with subscription metadata only", async () => {
+      // Set up webhook
+      await testDB.db
+        .prepare(
+          "INSERT INTO webhooks (account_id, url, secret) VALUES (?, ?, ?)",
+        )
+        .bind(testAccountId, TEST_WEBHOOK_URL, "whsec_testsecret")
+        .run()
+
+      await service.emitSubscriptionCreated({
+        accountId: testAccountId,
+        subscriptionId: TEST_SUBSCRIPTION_ID,
+        amount: "1000000",
+        periodInSeconds: 2592000,
+        testnet: false,
+      })
+
+      // Verify queue was called
+      expect(mockQueueSend).toHaveBeenCalledTimes(1)
+      const queueMessage = mockQueueSend.mock.calls[0][0]
+
+      // Verify event structure (no order or transaction)
+      const event = JSON.parse(queueMessage.payload)
+      expect(event.data.subscription.status).toBe(SubscriptionStatus.PROCESSING)
+      expect(event.data.subscription.amount).toBe("1000000")
+      expect(event.data.order).toBeUndefined()
+      expect(event.data.transaction).toBeUndefined()
+    })
+  })
+
+  describe("emitPaymentProcessed", () => {
+    it("emits payment success event with order and transaction", async () => {
+      // Set up webhook
+      await testDB.db
+        .prepare(
+          "INSERT INTO webhooks (account_id, url, secret) VALUES (?, ?, ?)",
+        )
+        .bind(testAccountId, TEST_WEBHOOK_URL, "whsec_testsecret")
+        .run()
+
+      await service.emitPaymentProcessed({
+        accountId: testAccountId,
+        subscriptionId: TEST_SUBSCRIPTION_ID,
+        orderNumber: 2,
+        amount: "1000000",
+        transactionHash: "0xtxhash" as Hash,
+        orderDueAt: new Date("2025-02-01T00:00:00Z"),
+        orderPeriodInSeconds: 2592000,
+        testnet: false,
+      })
+
+      // Verify queue was called
+      expect(mockQueueSend).toHaveBeenCalledTimes(1)
+      const queueMessage = mockQueueSend.mock.calls[0][0]
+
+      // Verify event structure
+      const event = JSON.parse(queueMessage.payload)
+      expect(event.data.subscription.status).toBe(SubscriptionStatus.ACTIVE)
+      expect(event.data.order.number).toBe(2)
+      expect(event.data.order.type).toBe(OrderType.RECURRING)
+      expect(event.data.order.status).toBe("paid")
+      expect(event.data.order.current_period_start).toBe(1738368000) // 2025-02-01 UTC
+      expect(event.data.transaction.hash).toBe("0xtxhash")
+    })
+  })
+
+  describe("emitPaymentFailed", () => {
+    it("emits payment failure event with error details", async () => {
+      // Set up webhook
+      await testDB.db
+        .prepare(
+          "INSERT INTO webhooks (account_id, url, secret) VALUES (?, ?, ?)",
+        )
+        .bind(testAccountId, TEST_WEBHOOK_URL, "whsec_testsecret")
+        .run()
+
+      await service.emitPaymentFailed({
+        accountId: testAccountId,
+        subscriptionId: TEST_SUBSCRIPTION_ID,
+        subscriptionStatus: SubscriptionStatus.PAST_DUE,
+        orderNumber: 2,
+        amount: "1000000",
+        periodInSeconds: 2592000,
+        testnet: false,
+        failureReason: ErrorCode.INSUFFICIENT_BALANCE,
+        failureMessage: "Insufficient USDC balance",
+      })
+
+      // Verify queue was called
+      expect(mockQueueSend).toHaveBeenCalledTimes(1)
+      const queueMessage = mockQueueSend.mock.calls[0][0]
+
+      // Verify event structure
+      const event = JSON.parse(queueMessage.payload)
+      expect(event.data.subscription.status).toBe(SubscriptionStatus.PAST_DUE)
+      expect(event.data.order.status).toBe("failed")
+      expect(event.data.error.code).toBe(ErrorCode.INSUFFICIENT_BALANCE)
+      expect(event.data.error.message).toBe("Insufficient USDC balance")
+      expect(event.data.transaction).toBeUndefined()
+    })
+
+    it("includes next_retry_at when retry is scheduled", async () => {
+      // Set up webhook
+      await testDB.db
+        .prepare(
+          "INSERT INTO webhooks (account_id, url, secret) VALUES (?, ?, ?)",
+        )
+        .bind(testAccountId, TEST_WEBHOOK_URL, "whsec_testsecret")
+        .run()
+
+      const nextRetryDate = new Date("2025-02-02T00:00:00Z")
+
+      await service.emitPaymentFailed({
+        accountId: testAccountId,
+        subscriptionId: TEST_SUBSCRIPTION_ID,
+        subscriptionStatus: SubscriptionStatus.PAST_DUE,
+        orderNumber: 2,
+        amount: "1000000",
+        periodInSeconds: 2592000,
+        testnet: false,
+        failureReason: ErrorCode.INSUFFICIENT_BALANCE,
+        failureMessage: "Insufficient USDC balance",
+        nextRetryAt: nextRetryDate,
+      })
+
+      // Verify queue was called
+      const queueMessage = mockQueueSend.mock.calls[0][0]
+      const event = JSON.parse(queueMessage.payload)
+
+      expect(event.data.order.next_retry_at).toBe(
+        Math.floor(nextRetryDate.getTime() / 1000),
+      )
+    })
+  })
+
+  describe("emitActivationFailed", () => {
+    it("sanitizes payment errors for webhook exposure", async () => {
+      // Set up webhook
+      await testDB.db
+        .prepare(
+          "INSERT INTO webhooks (account_id, url, secret) VALUES (?, ?, ?)",
+        )
+        .bind(testAccountId, TEST_WEBHOOK_URL, "whsec_testsecret")
+        .run()
+
+      // Payment error (402) should be exposed
+      const paymentError = new HTTPError(
+        402,
+        ErrorCode.INSUFFICIENT_BALANCE,
+        "Insufficient USDC balance",
+      )
+
+      await service.emitActivationFailed({
+        accountId: testAccountId,
+        subscriptionId: TEST_SUBSCRIPTION_ID,
+        amount: "500000",
+        periodInSeconds: 2592000,
+        testnet: false,
+        error: paymentError,
+      })
+
+      // Verify queue was called
+      const queueMessage = mockQueueSend.mock.calls[0][0]
+      const event = JSON.parse(queueMessage.payload)
+
+      expect(event.data.subscription.status).toBe(SubscriptionStatus.INCOMPLETE)
+      expect(event.data.error.code).toBe(ErrorCode.INSUFFICIENT_BALANCE)
+      expect(event.data.error.message).toBe("Insufficient USDC balance")
+    })
+
+    it("hides internal errors from webhook exposure", async () => {
+      // Set up webhook
+      await testDB.db
+        .prepare(
+          "INSERT INTO webhooks (account_id, url, secret) VALUES (?, ?, ?)",
+        )
+        .bind(testAccountId, TEST_WEBHOOK_URL, "whsec_testsecret")
+        .run()
+
+      // Internal error (500) should be hidden
+      const internalError = new HTTPError(
+        500,
+        ErrorCode.INTERNAL_ERROR,
+        "Database connection failed",
+      )
+
+      await service.emitActivationFailed({
+        accountId: testAccountId,
+        subscriptionId: TEST_SUBSCRIPTION_ID,
+        amount: "500000",
+        periodInSeconds: 2592000,
+        testnet: false,
+        error: internalError,
+      })
+
+      // Verify queue was called
+      const queueMessage = mockQueueSend.mock.calls[0][0]
+      const event = JSON.parse(queueMessage.payload)
+
+      // Error should be sanitized
+      expect(event.data.error.code).toBe("internal_error")
+      expect(event.data.error.message).toBe("An internal error occurred")
+    })
+  })
+
+  describe("getWebhook", () => {
+    it("returns webhook configuration with secret preview", async () => {
+      await testDB.db
+        .prepare(
+          "INSERT INTO webhooks (account_id, url, secret) VALUES (?, ?, ?)",
+        )
+        .bind(testAccountId, TEST_WEBHOOK_URL, "whsec_testsecret123456")
+        .run()
+
+      const result = await service.getWebhook({ accountId: testAccountId })
+
+      expect(result).not.toBeNull()
+      expect(result?.url).toBe(TEST_WEBHOOK_URL)
+      expect(result?.secretPreview).toBe("whsec_testse...")
+      expect(result?.enabled).toBe(true)
+      expect(result?.createdAt).toBeDefined()
+    })
+
+    it("returns null when no webhook configured", async () => {
+      const result = await service.getWebhook({ accountId: testAccountId })
+      expect(result).toBeNull()
+    })
+
+    it("excludes soft-deleted webhooks", async () => {
+      await testDB.db
+        .prepare(
+          "INSERT INTO webhooks (account_id, url, secret, deleted_at) VALUES (?, ?, ?, ?)",
+        )
+        .bind(
+          testAccountId,
+          TEST_WEBHOOK_URL,
+          "whsec_testsecret",
+          new Date().toISOString(),
+        )
+        .run()
+
+      const result = await service.getWebhook({ accountId: testAccountId })
+      expect(result).toBeNull()
+    })
+  })
+
+  describe("updateWebhookUrl", () => {
+    it("updates URL while keeping existing secret", async () => {
+      const originalSecret =
+        "whsec_originalsecret123456789012345678901234567890123456"
+      await testDB.db
+        .prepare(
+          "INSERT INTO webhooks (account_id, url, secret) VALUES (?, ?, ?)",
+        )
+        .bind(testAccountId, "https://example.com/old", originalSecret)
+        .run()
+
+      const result = await service.updateWebhookUrl({
+        accountId: testAccountId,
+        url: TEST_WEBHOOK_URL,
+      })
+
+      expect(result.url).toBe(TEST_WEBHOOK_URL)
+
+      const webhook = await testDB.db
+        .prepare("SELECT * FROM webhooks WHERE account_id = ?")
+        .bind(testAccountId)
+        .first<{ url: string; secret: string }>()
+
+      expect(webhook?.url).toBe(TEST_WEBHOOK_URL)
+      expect(webhook?.secret).toBe(originalSecret)
+    })
+
+    it("throws error when webhook not found", async () => {
+      await expect(
+        service.updateWebhookUrl({
+          accountId: testAccountId,
+          url: TEST_WEBHOOK_URL,
+        }),
+      ).rejects.toThrow(HTTPError)
+
+      try {
+        await service.updateWebhookUrl({
+          accountId: testAccountId,
+          url: TEST_WEBHOOK_URL,
+        })
+      } catch (error) {
+        expect(error).toBeInstanceOf(HTTPError)
+        expect((error as HTTPError).code).toBe(ErrorCode.NOT_FOUND)
+      }
+    })
+
+    it("validates new URL format", async () => {
+      await testDB.db
+        .prepare(
+          "INSERT INTO webhooks (account_id, url, secret) VALUES (?, ?, ?)",
+        )
+        .bind(testAccountId, TEST_WEBHOOK_URL, "whsec_testsecret")
+        .run()
+
+      await expect(
+        service.updateWebhookUrl({
+          accountId: testAccountId,
+          url: "invalid-url",
+        }),
+      ).rejects.toThrow(HTTPError)
+    })
+  })
+
+  describe("rotateWebhookSecret", () => {
+    it("generates new secret while keeping existing URL", async () => {
+      const originalSecret =
+        "whsec_originalsecret123456789012345678901234567890123456"
+      await testDB.db
+        .prepare(
+          "INSERT INTO webhooks (account_id, url, secret) VALUES (?, ?, ?)",
+        )
+        .bind(testAccountId, TEST_WEBHOOK_URL, originalSecret)
+        .run()
+
+      const result = await service.rotateWebhookSecret({
+        accountId: testAccountId,
+      })
+
+      expect(result.secret).toMatch(/^whsec_[a-f0-9]{64}$/)
+      expect(result.secret).not.toBe(originalSecret)
+
+      const webhook = await testDB.db
+        .prepare("SELECT * FROM webhooks WHERE account_id = ?")
+        .bind(testAccountId)
+        .first<{ url: string; secret: string }>()
+
+      expect(webhook?.url).toBe(TEST_WEBHOOK_URL)
+      expect(webhook?.secret).toBe(result.secret)
+    })
+
+    it("throws error when webhook not found", async () => {
+      await expect(
+        service.rotateWebhookSecret({
+          accountId: testAccountId,
+        }),
+      ).rejects.toThrow(HTTPError)
+
+      try {
+        await service.rotateWebhookSecret({
+          accountId: testAccountId,
+        })
+      } catch (error) {
+        expect(error).toBeInstanceOf(HTTPError)
+        expect((error as HTTPError).code).toBe(ErrorCode.NOT_FOUND)
+      }
+    })
+  })
+
+  describe("deleteWebhook", () => {
+    it("soft deletes webhook by setting deletedAt and enabled=false", async () => {
+      await testDB.db
+        .prepare(
+          "INSERT INTO webhooks (account_id, url, secret) VALUES (?, ?, ?)",
+        )
+        .bind(testAccountId, TEST_WEBHOOK_URL, "whsec_testsecret")
+        .run()
+
+      const result = await service.deleteWebhook({ accountId: testAccountId })
+      expect(result.success).toBe(true)
+
+      const webhook = await testDB.db
+        .prepare("SELECT * FROM webhooks WHERE account_id = ?")
+        .bind(testAccountId)
+        .first<{ deleted_at: string | null; enabled: number }>()
+
+      expect(webhook?.deleted_at).not.toBeNull()
+      expect(webhook?.enabled).toBe(0)
+    })
+
+    it("throws error when webhook not found", async () => {
+      await expect(
+        service.deleteWebhook({
+          accountId: testAccountId,
+        }),
+      ).rejects.toThrow(HTTPError)
+
+      try {
+        await service.deleteWebhook({
+          accountId: testAccountId,
+        })
+      } catch (error) {
+        expect(error).toBeInstanceOf(HTTPError)
+        expect((error as HTTPError).code).toBe(ErrorCode.NOT_FOUND)
+      }
+    })
+
+    it("throws error when webhook already deleted", async () => {
+      await testDB.db
+        .prepare(
+          "INSERT INTO webhooks (account_id, url, secret, deleted_at) VALUES (?, ?, ?, ?)",
+        )
+        .bind(
+          testAccountId,
+          TEST_WEBHOOK_URL,
+          "whsec_testsecret",
+          new Date().toISOString(),
+        )
+        .run()
+
+      await expect(
+        service.deleteWebhook({
+          accountId: testAccountId,
+        }),
+      ).rejects.toThrow(HTTPError)
+    })
+
+    it("can recreate webhook after deletion (creates new row)", async () => {
+      // Create and delete webhook
+      await testDB.db
+        .prepare(
+          "INSERT INTO webhooks (account_id, url, secret, deleted_at, enabled) VALUES (?, ?, ?, ?, ?)",
+        )
+        .bind(
+          testAccountId,
+          TEST_WEBHOOK_URL,
+          "whsec_testsecret",
+          new Date().toISOString(),
+          0,
+        )
+        .run()
+
+      // Recreate webhook (should create new row, keeping old deleted one)
+      const newUrl = "https://new-webhook.com"
+      const result = await service.setWebhook({
+        accountId: testAccountId,
+        url: newUrl,
+      })
+
+      expect(result.url).toBe(newUrl)
+      expect(result.secret).toMatch(/^whsec_[a-f0-9]{64}$/)
+
+      // Verify new webhook can be fetched
+      const webhook = await service.getWebhook({ accountId: testAccountId })
+      expect(webhook).not.toBeNull()
+      expect(webhook?.url).toBe(newUrl)
+      expect(webhook?.enabled).toBe(true)
+
+      // Verify we have 2 rows in database - old deleted one + new active one
+      const allWebhooks = await testDB.db
+        .prepare("SELECT * FROM webhooks WHERE account_id = ? ORDER BY id")
+        .bind(testAccountId)
+        .all<{
+          id: number
+          deleted_at: string | null
+          enabled: number
+          url: string
+        }>()
+
+      expect(allWebhooks.results).toHaveLength(2)
+      // First row: old deleted webhook
+      expect(allWebhooks.results[0].deleted_at).not.toBeNull()
+      expect(allWebhooks.results[0].enabled).toBe(0)
+      expect(allWebhooks.results[0].url).toBe(TEST_WEBHOOK_URL)
+      // Second row: new active webhook
+      expect(allWebhooks.results[1].deleted_at).toBeNull()
+      expect(allWebhooks.results[1].enabled).toBe(1)
+      expect(allWebhooks.results[1].url).toBe(newUrl)
+    })
+  })
+
+  describe("emitSubscriptionCanceled", () => {
+    it("emits subscription.updated webhook with canceled status", async () => {
+      // Register webhook for the account
+      await testDB.db
+        .prepare(
+          "INSERT INTO webhooks (account_id, url, secret) VALUES (?, ?, ?)",
+        )
+        .bind(testAccountId, TEST_WEBHOOK_URL, "test-secret")
+        .run()
+
+      await service.emitSubscriptionCanceled({
+        accountId: testAccountId,
+        subscriptionId: TEST_SUBSCRIPTION_ID,
+        amount: "1000000",
+        periodInSeconds: 2592000,
+        testnet: false,
+      })
+
+      // Verify queue was called
+      expect(mockQueueSend).toHaveBeenCalledTimes(1)
+
+      const queueMessage = mockQueueSend.mock.calls[0][0]
+      expect(queueMessage.url).toBe(TEST_WEBHOOK_URL)
+
+      const event = JSON.parse(queueMessage.payload)
+      expect(event.type).toBe("subscription.updated")
+      expect(event.data.subscription.id).toBe(TEST_SUBSCRIPTION_ID)
+      expect(event.data.subscription.status).toBe(SubscriptionStatus.CANCELED)
+      expect(event.data.subscription.amount).toBe("1000000")
+      expect(event.data.subscription.period_in_seconds).toBe(2592000)
+      expect(event.data.order).toBeUndefined()
+      expect(event.data.transaction).toBeUndefined()
+      expect(event.data.error).toBeUndefined()
+    })
+
+    it("does not throw if no webhook configured", async () => {
+      // No webhook registered for this account
+      await expect(
+        service.emitSubscriptionCanceled({
+          accountId: testAccountId,
+          subscriptionId: TEST_SUBSCRIPTION_ID,
+          amount: "1000000",
+          periodInSeconds: 2592000,
+          testnet: false,
+        }),
+      ).resolves.toBeUndefined()
+
+      // Queue should not be called
+      expect(mockQueueSend).not.toHaveBeenCalled()
+    })
+  })
+})

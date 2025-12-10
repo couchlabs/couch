@@ -5,21 +5,18 @@
   "private": true,
   "scripts": {
     "dev": "turbo dev --ui=tui",
-    "dev:cleanup": "bun scripts/alchemy.dev.cleanup.ts",
-    "test": "turbo typecheck && turbo test:unit",
-    "test:unit": "turbo test:unit",
     "lint": "biome lint .",
     "format": "biome format .",
-    "typecheck": "turbo typecheck",
     "fix": "biome check . --write",
+    "typecheck": "turbo typecheck",
     "db:generate": "turbo db:generate",
+    "test": "turbo test",
     "infra:deploy": "turbo infra:deploy",
     "infra:destroy": "turbo infra:destroy"
   },
   "workspaces": {
     "packages": [
-      "backend",
-      "apps/*"
+      "platform"
     ],
     "catalog": {
       "alchemy": "^0.79.0",

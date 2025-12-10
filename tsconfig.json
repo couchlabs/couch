@@ -2,13 +2,7 @@
   "files": [],
   "references": [
     {
-      "path": "./backend"
-    },
-    {
-      "path": "./apps/playground"
-    },
-    {
-      "path": "./apps/merchant"
+      "path": "./platform"
     }
   ]
 }

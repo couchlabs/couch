@@ -7,10 +7,10 @@ Couch is an offchain orchestrator for SpendPermission-based recurring payments. 
 ## What's in this repo
 
 ```
-couch/
-├── backend/         Offchain orchestrator for recurring payments
-├── apps/
-│ └── playground/    Playground application for testing
+couch/         
+├── platform/ 
+│ ├── backend/  Offchain orchestrator for recurring payments 
+│ └── app/      Main apps for merchants to manage their accounts and subscriptions
 ```
 
 ## Getting started
@@ -27,61 +27,16 @@ bun install
 cp .env.example .env
 ```
 
-Configure your backend `CDP_*` environment variables
+Configure your environment variables
 
-3. **Start the backend**
-
-```bash
-bun dev --filter=backend
-```
-
-4. **Create an account and register webhook**
-
-First, create your account and get an API key:
+3. **Start the platform**
 
 ```bash
-curl -X POST http://localhost:3000/v1/account \
-  -H "Content-Type: application/json" \
-  -d '{"address": "YOUR_WALLET_ADDRESS"}'
+bun dev 
 ```
 
-Use the returned `api_key` to register the webhook:
-
-```bash
-curl -X PUT http://localhost:3000/v1/webhook \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer YOUR_API_KEY" \
-  -d '{"url": "http://localhost:8000/api/webhook"}'
-```
-
-5. **Update your environment**
-
-Add both values to your `.env`:
-
-```
-COUCH_TEST_ACCOUNT_APIKEY=your_api_key_here
-COUCH_TEST_ACCOUNT_WEBHOOK_SECRET=your_webhook_secret_here
-```
-
-6. **Start the playground**
-
-```bash
-bun dev --filter=playground
-```
-
-Your playground should now be fully functional at `http://localhost:8000`
-
-**Notes:**
-> - You can start both backend and playground together with just `bun dev`
-> - For backend-specific instructions (testing, endpoints, architecture), see the [Backend README](./apps/backend/README.md).
-
-## Scripts
-
-If you need to add funds to your CDP spender account (on base sepolia), run the faucet script:
-
-```bash
-bun faucet
-```
+This will spin up locally the database, workers, durable objexts, events queues apis and rpc infrastructure, together with the merchant application to access it. 
+The mmrchant should now be fully functional at `http://localhost:8000`
 
 ## Stack
 
