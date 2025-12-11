@@ -14,7 +14,7 @@ export default defineConfig({
     nodePolyfills({ include: ["buffer"] }),
   ],
   envDir: "../",
-  root: './app',
+  root: "./app/src",
   publicDir: "./public",
   server: {
     port: 8000,
