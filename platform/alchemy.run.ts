@@ -397,15 +397,16 @@ if (app.local) {
 // CI
 // =============================================================================
 
-if (process.env.PULL_REQUEST) {
-  // Get URLs for PR comments (use custom domains or workers.dev URLs)
-  const appUrl = website.url
-  const apiUrl = api.url
+const appUrl = website.url || `https://${domains.website?.[0]}`
+const apiUrl = api.url || `https://${domains.api?.[0]}`
 
+if (process.env.GITHUB_OUTPUT) {
   // Use new GitHub Actions environment file method
   fs.appendFileSync(alchemy.env.GITHUB_OUTPUT, `api_url=${apiUrl}\n`)
   fs.appendFileSync(alchemy.env.GITHUB_OUTPUT, `app_url=${appUrl}\n`)
+}
 
+if (process.env.PULL_REQUEST) {
   await GitHubComment("preview-comment", {
     owner: "couchlabs",
     repository: "couch",
