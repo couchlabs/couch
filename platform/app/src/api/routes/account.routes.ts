@@ -1,6 +1,6 @@
 import {
-  validateJWT,
   type ValidatedJWT,
+  validateJWT,
 } from "@app/api/middleware/cdp-jwt-validate.middleware"
 import type { ApiWorkerEnv } from "@app-types/api.env"
 import { createLogger } from "@backend/lib/logger"

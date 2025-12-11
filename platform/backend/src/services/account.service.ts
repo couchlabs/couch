@@ -409,12 +409,25 @@ export class AccountService {
     const log = logger.with({ accountAddress, cdpUserId: params.cdpUserId })
 
     // Try to get existing account by CDP user ID
-    const existing = await this.accountRepository.getAccountByCdpUserId(
-      params.cdpUserId,
-    )
-    if (existing) {
+    const existingByCdpUserId =
+      await this.accountRepository.getAccountByCdpUserId(params.cdpUserId)
+    if (existingByCdpUserId) {
       log.info("Account found by CDP user ID")
-      return existing
+      return existingByCdpUserId
+    }
+
+    // Check if account exists by address (without cdpUserId)
+    const existingByAddress =
+      await this.accountRepository.getAccountByAddress(accountAddress)
+    if (existingByAddress) {
+      // Account exists but doesn't have cdpUserId - update it
+      log.info(
+        "Account found by address without CDP user ID - linking accounts",
+      )
+      return await this.accountRepository.updateAccountCdpUserId({
+        accountId: existingByAddress.id,
+        cdpUserId: params.cdpUserId,
+      })
     }
 
     // Create new account with CDP user ID
