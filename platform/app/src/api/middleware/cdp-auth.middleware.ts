@@ -15,9 +15,9 @@ export interface VerifiedAuth {
 }
 
 /**
- * CDP JWT authentication middleware
- * Validates Bearer token by calling validateJWT via RPC
- * Adds verified user info to context
+ * CDP authentication middleware
+ * Validates Bearer token and authenticates user via RPC
+ * Adds verified user info with account to context
  */
 export function cdpAuth(): MiddlewareHandler<{
   Bindings: ApiWorkerEnv
@@ -26,15 +26,15 @@ export function cdpAuth(): MiddlewareHandler<{
   return bearerAuth({
     verifyToken: async (jwt, c) => {
       try {
-        // Call RPC to validate JWT
-        const auth = await c.env.COUCH_BACKEND_RPC.validateJWT({ jwt })
+        // Call RPC to authenticate user (validates JWT + looks up account)
+        const auth = await c.env.COUCH_BACKEND_RPC.cdpAuthenticate({ jwt })
 
         // Store verified auth data in context
         c.set("auth", auth)
 
         return true
       } catch (error) {
-        logger.error("JWT validation failed", { error })
+        logger.error("JWT validation failed", error)
         return false
       }
     },

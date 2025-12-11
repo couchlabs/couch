@@ -148,10 +148,27 @@ export class RPC extends WorkerEntrypoint<ApiWorkerEnv> {
   }
 
   /**
-   * Validates CDP JWT token and returns authenticated user info
-   * Used by merchant worker auth middleware
+   * Validates CDP JWT token only (doesn't require account to exist)
+   * Used by cdp-jwt-validate middleware for account setup endpoint
    */
-  async validateJWT(params: { jwt: string }): Promise<{
+  async cdpJWTValidate(params: { jwt: string }): Promise<{
+    cdpUserId: string
+  }> {
+    const cdpUserId = await validateCDPJWT(
+      params.jwt,
+      this.env.CDP_PROJECT_ID,
+      this.env.CDP_API_KEY_ID,
+      this.env.CDP_API_KEY_SECRET,
+    )
+
+    return { cdpUserId }
+  }
+
+  /**
+   * Authenticates user via CDP JWT and returns user info with account
+   * Used by cdp-auth middleware for protected routes
+   */
+  async cdpAuthenticate(params: { jwt: string }): Promise<{
     cdpUserId: string
     accountAddress: Address
   }> {

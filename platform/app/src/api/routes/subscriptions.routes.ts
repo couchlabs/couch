@@ -1,4 +1,7 @@
-import type { VerifiedAuth } from "@app/api/middleware/cdp-auth.middleware"
+import {
+  cdpAuth,
+  type VerifiedAuth,
+} from "@app/api/middleware/cdp-auth.middleware"
 import type { ApiWorkerEnv } from "@app-types/api.env"
 import { createLogger } from "@backend/lib/logger"
 import { Provider } from "@backend/providers/provider.interface"
@@ -11,6 +14,9 @@ export const subscriptionsRoutes = new Hono<{
   Bindings: ApiWorkerEnv
   Variables: { auth: VerifiedAuth }
 }>()
+
+// Require full auth (account must exist)
+subscriptionsRoutes.use(cdpAuth())
 
 /**
  * GET /api/subscriptions?testnet=true

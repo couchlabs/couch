@@ -1,14 +1,20 @@
-import type { VerifiedAuth } from "@app/api/middleware/cdp-auth.middleware"
+import {
+  cdpAuth,
+  type VerifiedAuth,
+} from "@app/api/middleware/cdp-auth.middleware"
 import type { ApiWorkerEnv } from "@app-types/api.env"
 import { createLogger } from "@backend/lib/logger"
 import { Hono } from "hono"
 
-const logger = createLogger("webhook.route")
+const logger = createLogger("app.api.webhook.route")
 
 export const webhookRoutes = new Hono<{
   Bindings: ApiWorkerEnv
   Variables: { auth: VerifiedAuth }
 }>()
+
+// Require full auth (account must exist)
+webhookRoutes.use(cdpAuth())
 
 /**
  * POST /api/webhook

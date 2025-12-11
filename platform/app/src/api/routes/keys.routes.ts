@@ -1,4 +1,7 @@
-import type { VerifiedAuth } from "@app/api/middleware/cdp-auth.middleware"
+import {
+  cdpAuth,
+  type VerifiedAuth,
+} from "@app/api/middleware/cdp-auth.middleware"
 import type { ApiWorkerEnv } from "@app-types/api.env"
 import { createLogger } from "@backend/lib/logger"
 import { Hono } from "hono"
@@ -9,6 +12,9 @@ export const keysRoutes = new Hono<{
   Bindings: ApiWorkerEnv
   Variables: { auth: VerifiedAuth }
 }>()
+
+// Require full auth (account must exist)
+keysRoutes.use(cdpAuth())
 
 /**
  * POST /api/keys
