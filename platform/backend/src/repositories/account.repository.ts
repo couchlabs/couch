@@ -17,6 +17,7 @@ export interface AccountRepositoryDeps {
 
 export interface CreateAccountParams {
   accountAddress: Address
+  cdpUserId?: string // Optional CDP user ID from JWT
 }
 
 export interface GetApiKeyParams {
@@ -53,6 +54,7 @@ export class AccountRepository {
     return {
       id: row.id,
       address: getAddress(row.address),
+      cdpUserId: row.cdpUserId ?? null,
       subscriptionOwnerAddress: row.subscriptionOwnerAddress
         ? getAddress(row.subscriptionOwnerAddress)
         : null,
@@ -69,6 +71,7 @@ export class AccountRepository {
       .insert(schema.accounts)
       .values({
         address: params.accountAddress,
+        cdpUserId: params.cdpUserId ?? null,
         subscriptionOwnerAddress: null,
       })
       .returning()
@@ -86,6 +89,7 @@ export class AccountRepository {
       .select({
         id: schema.accounts.id,
         address: schema.accounts.address,
+        cdpUserId: schema.accounts.cdpUserId,
         subscriptionOwnerAddress: schema.accounts.subscriptionOwnerAddress,
         createdAt: schema.accounts.createdAt,
         keyEnabled: schema.apiKeys.enabled,
@@ -255,6 +259,37 @@ export class AccountRepository {
     }
 
     return this.toAccountDomain(result)
+  }
+
+  /**
+   * Gets account by CDP user ID (from JWT 'sub' claim)
+   */
+  async getAccountByCdpUserId(cdpUserId: string): Promise<Account | null> {
+    const result = await this.db
+      .select()
+      .from(schema.accounts)
+      .where(eq(schema.accounts.cdpUserId, cdpUserId))
+      .get()
+
+    if (!result) {
+      return null
+    }
+
+    return this.toAccountDomain(result)
+  }
+
+  /**
+   * Updates the CDP user ID for an existing account
+   */
+  async updateCdpUserId(params: {
+    accountId: number
+    cdpUserId: string
+  }): Promise<void> {
+    await this.db
+      .update(schema.accounts)
+      .set({ cdpUserId: params.cdpUserId })
+      .where(eq(schema.accounts.id, params.accountId))
+      .run()
   }
 
   /**

@@ -57,6 +57,13 @@
       "when": 1765308212365,
       "tag": "0007_shiny_the_executioner",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1765398328293,
+      "tag": "0008_wealthy_pride",
+      "breakpoints": true
     }
   ]
 }

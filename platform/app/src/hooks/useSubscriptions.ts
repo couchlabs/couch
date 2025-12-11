@@ -1,4 +1,5 @@
-import { useEvmAddress } from "@coinbase/cdp-hooks"
+import { authenticatedFetch } from "@app/lib/fetch"
+import { useEvmAddress, useGetAccessToken } from "@coinbase/cdp-hooks"
 import {
   type UseMutationResult,
   type UseQueryResult,
@@ -40,11 +41,13 @@ export interface SubscriptionDetail {
 /**
  * Hook to list all subscriptions for the current user
  * Optionally filters by network (testnet vs mainnet)
+ * Now with CDP JWT authentication
  */
 export function useListSubscriptions(
   testnet?: boolean,
 ): UseQueryResult<Subscription[], Error> {
   const { evmAddress } = useEvmAddress()
+  const { getAccessToken } = useGetAccessToken()
 
   return useQuery({
     queryKey: ["subscriptions", evmAddress, testnet],
@@ -53,12 +56,19 @@ export function useListSubscriptions(
         throw new Error("No EVM address available")
       }
 
-      const params = new URLSearchParams({ address: evmAddress })
+      // Build query params (no need to send address - it's in the JWT)
+      const params = new URLSearchParams()
       if (testnet !== undefined) {
         params.append("testnet", String(testnet))
       }
 
-      const response = await fetch(`/api/subscriptions?${params}`)
+      const queryString = params.toString()
+      const url = queryString
+        ? `/api/subscriptions?${queryString}`
+        : "/api/subscriptions"
+
+      // Use authenticated fetch with CDP JWT token
+      const response = await authenticatedFetch(url, { getAccessToken })
 
       if (!response.ok) {
         const errorData = await response.json<{ error?: string }>()
@@ -84,6 +94,7 @@ export function useSubscription(
   subscriptionId: string | undefined,
 ): UseQueryResult<SubscriptionDetail | null, Error> {
   const { evmAddress } = useEvmAddress()
+  const { getAccessToken } = useGetAccessToken()
 
   return useQuery({
     queryKey: ["subscription", subscriptionId, evmAddress],
@@ -96,8 +107,10 @@ export function useSubscription(
         throw new Error("No subscription ID provided")
       }
 
-      const response = await fetch(
-        `/api/subscriptions/${subscriptionId}?address=${evmAddress}`,
+      // Use authenticated fetch - no address in query params
+      const response = await authenticatedFetch(
+        `/api/subscriptions/${subscriptionId}`,
+        { getAccessToken },
       )
 
       if (response.status === 404) {
@@ -130,6 +143,7 @@ export function useRevokeSubscription(): UseMutationResult<
   { subscriptionId: string }
 > {
   const { evmAddress } = useEvmAddress()
+  const { getAccessToken } = useGetAccessToken()
   const queryClient = useQueryClient()
 
   return useMutation({
@@ -138,8 +152,10 @@ export function useRevokeSubscription(): UseMutationResult<
         throw new Error("No EVM address available")
       }
 
-      const response = await fetch(
-        `/api/subscriptions/${subscriptionId}/revoke?address=${evmAddress}`,
+      // Use authenticated fetch - no address in query params
+      const response = await authenticatedFetch(
+        `/api/subscriptions/${subscriptionId}/revoke`,
+        { getAccessToken },
         {
           method: "POST",
         },
@@ -180,6 +196,7 @@ export function useCreateSubscription(): UseMutationResult<
   }
 > {
   const { evmAddress } = useEvmAddress()
+  const { getAccessToken } = useGetAccessToken()
   const queryClient = useQueryClient()
 
   return useMutation({
@@ -192,16 +209,20 @@ export function useCreateSubscription(): UseMutationResult<
         throw new Error("No EVM address available")
       }
 
-      const response = await fetch("/api/subscriptions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          address: evmAddress,
-          subscriptionId: params.subscriptionId,
-          provider: params.provider,
-          testnet: params.testnet,
-        }),
-      })
+      // Use authenticated fetch - no address in body
+      const response = await authenticatedFetch(
+        "/api/subscriptions",
+        { getAccessToken },
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            subscriptionId: params.subscriptionId,
+            provider: params.provider,
+            testnet: params.testnet,
+          }),
+        },
+      )
 
       if (!response.ok) {
         const errorData = await response.json<{ error?: string }>()

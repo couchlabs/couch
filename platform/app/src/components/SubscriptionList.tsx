@@ -51,9 +51,7 @@ export function SubscriptionList({
     try {
       await revokeMutation.mutateAsync({ subscriptionId })
       setSelectedSubscriptionId(undefined)
-    } catch (err) {
-      console.error("Failed to revoke subscription:", err)
-    }
+    } catch {}
   }
 
   const convertPeriodToSeconds = (value: number, unit: string): number => {
@@ -120,7 +118,6 @@ export function SubscriptionList({
       const errorMessage =
         err instanceof Error ? err.message : "Failed to create subscription"
       setCreateError(errorMessage)
-      console.error("Failed to create subscription:", err)
     }
   }
 

@@ -1,4 +1,5 @@
-import { useEvmAddress } from "@coinbase/cdp-hooks"
+import { authenticatedFetch } from "@app/lib/fetch"
+import { useEvmAddress, useGetAccessToken } from "@coinbase/cdp-hooks"
 import {
   type UseMutationResult,
   type UseQueryResult,
@@ -27,6 +28,7 @@ export interface CreatedWebhook {
  */
 export function useWebhook(): UseQueryResult<Webhook | null, Error> {
   const { evmAddress } = useEvmAddress()
+  const { getAccessToken } = useGetAccessToken()
 
   return useQuery({
     queryKey: ["webhook", evmAddress],
@@ -35,7 +37,10 @@ export function useWebhook(): UseQueryResult<Webhook | null, Error> {
         throw new Error("No EVM address available")
       }
 
-      const response = await fetch(`/api/webhook?address=${evmAddress}`)
+      // Use authenticated fetch - no address in query params
+      const response = await authenticatedFetch("/api/webhook", {
+        getAccessToken,
+      })
 
       if (!response.ok) {
         const errorData = await response.json<{ error?: string }>()
@@ -60,6 +65,7 @@ export function useCreateWebhook(): UseMutationResult<
   { url: string }
 > {
   const { evmAddress } = useEvmAddress()
+  const { getAccessToken } = useGetAccessToken()
   const queryClient = useQueryClient()
 
   return useMutation({
@@ -68,11 +74,16 @@ export function useCreateWebhook(): UseMutationResult<
         throw new Error("No EVM address available")
       }
 
-      const response = await fetch("/api/webhook", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ address: evmAddress, url }),
-      })
+      // Use authenticated fetch - no address in body
+      const response = await authenticatedFetch(
+        "/api/webhook",
+        { getAccessToken },
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url }),
+        },
+      )
 
       if (!response.ok) {
         const errorData = await response.json<{ error?: string }>()
@@ -99,6 +110,7 @@ export function useUpdateWebhookUrl(): UseMutationResult<
   { url: string }
 > {
   const { evmAddress } = useEvmAddress()
+  const { getAccessToken } = useGetAccessToken()
   const queryClient = useQueryClient()
 
   return useMutation({
@@ -107,11 +119,16 @@ export function useUpdateWebhookUrl(): UseMutationResult<
         throw new Error("No EVM address available")
       }
 
-      const response = await fetch("/api/webhook/url", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ address: evmAddress, url }),
-      })
+      // Use authenticated fetch - no address in body
+      const response = await authenticatedFetch(
+        "/api/webhook/url",
+        { getAccessToken },
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url }),
+        },
+      )
 
       if (!response.ok) {
         const errorData = await response.json<{ error?: string }>()
@@ -140,6 +157,7 @@ export function useRotateWebhookSecret(): UseMutationResult<
   void
 > {
   const { evmAddress } = useEvmAddress()
+  const { getAccessToken } = useGetAccessToken()
   const queryClient = useQueryClient()
 
   return useMutation({
@@ -148,11 +166,15 @@ export function useRotateWebhookSecret(): UseMutationResult<
         throw new Error("No EVM address available")
       }
 
-      const response = await fetch("/api/webhook/rotate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ address: evmAddress }),
-      })
+      // Use authenticated fetch - no body needed
+      const response = await authenticatedFetch(
+        "/api/webhook/rotate",
+        { getAccessToken },
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+        },
+      )
 
       if (!response.ok) {
         const errorData = await response.json<{ error?: string }>()
@@ -180,6 +202,7 @@ export function useDeleteWebhook(): UseMutationResult<
   void
 > {
   const { evmAddress } = useEvmAddress()
+  const { getAccessToken } = useGetAccessToken()
   const queryClient = useQueryClient()
 
   return useMutation({
@@ -188,9 +211,16 @@ export function useDeleteWebhook(): UseMutationResult<
         throw new Error("No EVM address available")
       }
 
-      const response = await fetch(`/api/webhook?address=${evmAddress}`, {
-        method: "DELETE",
-      })
+      // Use authenticated fetch - no address in query params
+      const response = await authenticatedFetch(
+        "/api/webhook",
+        {
+          getAccessToken,
+        },
+        {
+          method: "DELETE",
+        },
+      )
 
       if (!response.ok) {
         const errorData = await response.json<{ error?: string }>()

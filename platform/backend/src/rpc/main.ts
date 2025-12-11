@@ -4,6 +4,7 @@ import type {
   OrderType,
   SubscriptionStatus,
 } from "@backend/constants/subscription.constants"
+import { validateCDPJWT } from "@backend/lib/cdp-jwt"
 import type { Provider } from "@backend/providers/provider.interface"
 import {
   type Account,
@@ -147,13 +148,48 @@ export class RPC extends WorkerEntrypoint<ApiWorkerEnv> {
   }
 
   /**
-   * Gets or creates an account for the given EVM address
-   * Skips allowlist check - trusted internal caller (merchant app)
+   * Validates CDP JWT token and returns authenticated user info
+   * Used by merchant worker auth middleware
+   */
+  async validateJWT(params: { jwt: string }): Promise<{
+    cdpUserId: string
+    accountAddress: Address
+  }> {
+    const cdpUserId = await validateCDPJWT(
+      params.jwt,
+      this.env.CDP_PROJECT_ID,
+      this.env.CDP_API_KEY_ID,
+      this.env.CDP_API_KEY_SECRET,
+    )
+
+    const accountRepo = new AccountRepository({
+      DB: this.env.DB,
+      LOGGING: this.env.LOGGING,
+    })
+
+    // Look up account by CDP user ID
+    const account = await accountRepo.getAccountByCdpUserId(cdpUserId)
+    if (!account) {
+      throw new Error("Account not found - please complete account setup")
+    }
+
+    return {
+      cdpUserId,
+      accountAddress: account.address,
+    }
+  }
+
+  /**
+   * Gets or creates an account for the authenticated user
+   * Validates JWT and links wallet address to CDP user ID
    * Returns account data including subscription owner address
    */
   async getOrCreateAccount(params: {
     address: Address
+    cdpUserId: string
   }): Promise<AccountResponse> {
+    // Use the address and CDP user ID from auth middleware
+    const accountAddress = params.address
     const accountService = new AccountService({
       DB: this.env.DB,
       LOGGING: this.env.LOGGING,
@@ -163,8 +199,37 @@ export class RPC extends WorkerEntrypoint<ApiWorkerEnv> {
     })
 
     const account = await accountService.getOrCreateAccount({
-      address: params.address,
+      address: accountAddress,
+      cdpUserId: params.cdpUserId,
     })
+
+    return {
+      address: account.address,
+      subscriptionOwnerAddress: account.subscriptionOwnerAddress,
+      createdAt: account.createdAt,
+    }
+  }
+
+  /**
+   * Gets account by CDP user ID (from JWT 'sub' claim)
+   * Used by API endpoints after JWT verification to get the wallet address
+   */
+  async getAccountByCdpUserId(params: {
+    cdpUserId: string
+  }): Promise<AccountResponse | null> {
+    const accountService = new AccountService({
+      DB: this.env.DB,
+      LOGGING: this.env.LOGGING,
+      CDP_API_KEY_ID: this.env.CDP_API_KEY_ID,
+      CDP_API_KEY_SECRET: this.env.CDP_API_KEY_SECRET,
+      CDP_WALLET_SECRET: this.env.CDP_WALLET_SECRET,
+    })
+
+    const account = await accountService.getAccountByCdpUserId(params.cdpUserId)
+
+    if (!account) {
+      return null
+    }
 
     return {
       address: account.address,
@@ -506,7 +571,7 @@ export class RPC extends WorkerEntrypoint<ApiWorkerEnv> {
     })
 
     // Always use merchant's address as beneficiary (security: no beneficiary override)
-    const beneficiaryAddress = params.accountAddress
+    const beneficiaryAddress = account.address
 
     // Create subscription in DB and get order details
     const { orderId, orderNumber, subscriptionMetadata } =
