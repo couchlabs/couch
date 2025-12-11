@@ -65,7 +65,7 @@ jobs:
         run: bun install
 
       - name: Run tests
-        run: bun run test:unit
+        run: bun run test
 
   deploy:
     name: "Staging Deployment"
@@ -81,10 +81,9 @@ jobs:
       - name: "Install dependencies"
         run: bun install
 
-      - name: "Deploy backend"
-        id: backend
-        run: bun run infra:deploy --filter=backend
-        # Note: api_url and db_name outputs are set in alchemy.run.ts
+      - name: "Deploy"
+        id: deployment
+        run: bun run infra:deploy
         env:
           STAGE: ${{ env.STAGE }}
           ALCHEMY_PASSWORD: ${{ secrets.ALCHEMY_PASSWORD }}
@@ -94,87 +93,13 @@ jobs:
           CDP_API_KEY_ID: ${{ secrets.CDP_API_KEY_ID }}
           CDP_API_KEY_SECRET: ${{ secrets.CDP_API_KEY_SECRET }}
           CDP_WALLET_SECRET: ${{ secrets.CDP_WALLET_SECRET }}
+          CDP_PROJECT_ID: ${{ secrets.CDP_PROJECT_ID }}
           CDP_CLIENT_API_KEY: ${{ secrets.CDP_CLIENT_API_KEY }}
           COUCH_TEST_ACCOUNT_ADDRESS: ${{ secrets.COUCH_TEST_ACCOUNT_ADDRESS }}
           GITHUB_SHA: ${{ github.sha }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: "Output backend deployment URL"
-        run: echo "::notice::Backend deployed to ${{ steps.backend.outputs.api_url }}"
-
-      # DISABLED: Playground deployment for merchant app development
-      # - name: "Seed test account in database"
-      #   run: .github/scripts/seed-test-account.sh
-      #   env:
-      #     DATABASE_NAME: ${{ steps.backend.outputs.db_name }}
-      #     COUCH_TEST_ACCOUNT_ADDRESS: ${{ secrets.COUCH_TEST_ACCOUNT_ADDRESS }}
-      #     COUCH_TEST_ACCOUNT_APIKEY: ${{ secrets.COUCH_TEST_ACCOUNT_APIKEY }}
-      #     CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-      #     CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-
-      # DISABLED: Playground deployment for merchant app development
-      # - name: "Register webhook on the backend"
-      #   id: couch
-      #   run: |
-      #     BACKEND_URL="${{ steps.backend.outputs.api_url }}"
-      #     API_KEY="${{ secrets.COUCH_TEST_ACCOUNT_APIKEY }}"
-      #
-      #     # Staging always uses custom domains
-      #     PLAYGROUND_URL="https://playground.staging.cou.ch"
-      #
-      #     echo "Registering webhook at $PLAYGROUND_URL/api/webhook..."
-      #     WEBHOOK_RESPONSE=$(curl -X PUT $BACKEND_URL/v1/webhook \
-      #       -H "Content-Type: application/json" \
-      #       -H "Authorization: Bearer $API_KEY" \
-      #       -d "{\"url\":\"$PLAYGROUND_URL/api/webhook\"}" \
-      #       -s -w "\n%{http_code}")
-      #
-      #     WEBHOOK_HTTP_CODE=$(echo "$WEBHOOK_RESPONSE" | tail -n1)
-      #     WEBHOOK_BODY=$(echo "$WEBHOOK_RESPONSE" | sed '$d')
-      #
-      #     if [ "$WEBHOOK_HTTP_CODE" != "200" ] && [ "$WEBHOOK_HTTP_CODE" != "201" ]; then
-      #       echo "Error: Webhook registration failed with HTTP $WEBHOOK_HTTP_CODE"
-      #       echo "Response structure: $(echo "$WEBHOOK_BODY" | jq 'keys')"
-      #       exit 1
-      #     fi
-      #
-      #     WEBHOOK_SECRET=$(echo "$WEBHOOK_BODY" | jq -r '.secret')
-      #
-      #     # Mask webhook secret IMMEDIATELY before any error handling that might echo it
-      #     if [ -n "$WEBHOOK_SECRET" ] && [ "$WEBHOOK_SECRET" != "null" ]; then
-      #       echo "::add-mask::$WEBHOOK_SECRET"
-      #     fi
-      #
-      #     if [ -z "$WEBHOOK_SECRET" ] || [ "$WEBHOOK_SECRET" = "null" ]; then
-      #       echo "Error: Failed to extract webhook secret from response"
-      #       echo "Response structure: $(echo "$WEBHOOK_BODY" | jq 'keys')"
-      #       exit 1
-      #     fi
-      #
-      #     echo "✅ Webhook registered successfully"
-      #
-      #     # Output webhook secret and playground URL for next step
-      #     echo "webhook_secret=$WEBHOOK_SECRET" >> $GITHUB_OUTPUT
-      #     echo "playground_url=$PLAYGROUND_URL" >> $GITHUB_OUTPUT
-      #
-      # - name: "Deploy playground"
-      #   run: bun run infra:deploy --filter=playground
-      #   env:
-      #     STAGE: ${{ env.STAGE }}
-      #     ALCHEMY_PASSWORD: ${{ secrets.ALCHEMY_PASSWORD }}
-      #     ALCHEMY_STATE_TOKEN: ${{ secrets.ALCHEMY_STATE_TOKEN }}
-      #     CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-      #     CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-      #     CDP_API_KEY_ID: ${{ secrets.CDP_API_KEY_ID }}
-      #     CDP_API_KEY_SECRET: ${{ secrets.CDP_API_KEY_SECRET }}
-      #     CDP_WALLET_SECRET: ${{ secrets.CDP_WALLET_SECRET }}
-      #     CDP_CLIENT_API_KEY: ${{ secrets.CDP_CLIENT_API_KEY }}
-      #     COUCH_TEST_ACCOUNT_ADDRESS: ${{ secrets.COUCH_TEST_ACCOUNT_ADDRESS }}
-      #     COUCH_TEST_ACCOUNT_SUBSCRIPTION_OWNER_ADDRESS: ${{ secrets.COUCH_TEST_ACCOUNT_SUBSCRIPTION_OWNER_ADDRESS }}
-      #     COUCH_TEST_ACCOUNT_WEBHOOK_SECRET: ${{ steps.couch.outputs.webhook_secret }}
-      #     COUCH_TEST_ACCOUNT_APIKEY: ${{ secrets.COUCH_TEST_ACCOUNT_APIKEY }}
-      #     GITHUB_SHA: ${{ github.sha }}
-      #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      #
-      # - name: "Output playground deployment URL"
-      #   run: echo "::notice::Playground deployed to ${{ steps.couch.outputs.playground_url }}"
+      - name: "Output deployment URLs"
+        run: |
+          echo "::notice::Api deployed to ${{ steps.deployment.outputs.api_url }}"
+          echo "::notice::App deployed to ${{ steps.deployment.outputs.app_url }}"
