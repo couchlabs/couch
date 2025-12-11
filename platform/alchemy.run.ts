@@ -77,6 +77,7 @@ if (GH_ENVIRONMENT === "prod") {
   domains.api = [`api.${domain}`]
   domains.website = [`app.${domain}`]
 }
+const url = GH_ENVIRONMENT === "dev"
 
 // -----------------------------------------------------------------------------
 // DATABASES
@@ -173,7 +174,7 @@ export const api = await Worker(API_NAME, {
   },
   compatibilityFlags,
   dev: { port: 3000 },
-  url: GH_ENVIRONMENT === "dev",
+  url,
   domains: domains.api,
 })
 
@@ -350,7 +351,7 @@ export const website = await Vite(WEBSITE_NAME, {
     COUCH_BACKEND_RPC: rpc,
   },
   compatibilityFlags,
-  url: GH_ENVIRONMENT === "dev", // Generate URLs for dev (previews deployments)
+  url,
   domains: domains.website,
 })
 
