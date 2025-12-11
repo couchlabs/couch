@@ -130,18 +130,18 @@ export class RPC extends WorkerEntrypoint<ApiWorkerEnv> {
   }
 
   /**
-   * Helper: Get account by address (throws if not found)
+   * Helper: Get account by CDP user ID (throws if not found)
    * Returns full Account for internal use (includes id for database operations)
    */
-  private async getAccountByAddress(address: Address): Promise<Account> {
+  private async getAccountByCdpUserId(cdpUserId: string): Promise<Account> {
     const accountRepo = new AccountRepository({
       DB: this.env.DB,
       LOGGING: this.env.LOGGING,
     })
 
-    const account = await accountRepo.getAccountByAddress(address)
+    const account = await accountRepo.getAccountByCdpUserId(cdpUserId)
     if (!account) {
-      throw new Error("Account not found")
+      throw new Error("Account not found - please complete account setup")
     }
 
     return account
@@ -162,38 +162,6 @@ export class RPC extends WorkerEntrypoint<ApiWorkerEnv> {
     )
 
     return { cdpUserId }
-  }
-
-  /**
-   * Authenticates user via CDP JWT and returns user info with account
-   * Used by cdp-auth middleware for protected routes
-   */
-  async cdpAuthenticate(params: { jwt: string }): Promise<{
-    cdpUserId: string
-    accountAddress: Address
-  }> {
-    const cdpUserId = await validateCDPJWT(
-      params.jwt,
-      this.env.CDP_PROJECT_ID,
-      this.env.CDP_API_KEY_ID,
-      this.env.CDP_API_KEY_SECRET,
-    )
-
-    const accountRepo = new AccountRepository({
-      DB: this.env.DB,
-      LOGGING: this.env.LOGGING,
-    })
-
-    // Look up account by CDP user ID
-    const account = await accountRepo.getAccountByCdpUserId(cdpUserId)
-    if (!account) {
-      throw new Error("Account not found - please complete account setup")
-    }
-
-    return {
-      cdpUserId,
-      accountAddress: account.address,
-    }
   }
 
   /**
@@ -228,42 +196,14 @@ export class RPC extends WorkerEntrypoint<ApiWorkerEnv> {
   }
 
   /**
-   * Gets account by CDP user ID (from JWT 'sub' claim)
-   * Used by API endpoints after JWT verification to get the wallet address
-   */
-  async getAccountByCdpUserId(params: {
-    cdpUserId: string
-  }): Promise<AccountResponse | null> {
-    const accountService = new AccountService({
-      DB: this.env.DB,
-      LOGGING: this.env.LOGGING,
-      CDP_API_KEY_ID: this.env.CDP_API_KEY_ID,
-      CDP_API_KEY_SECRET: this.env.CDP_API_KEY_SECRET,
-      CDP_WALLET_SECRET: this.env.CDP_WALLET_SECRET,
-    })
-
-    const account = await accountService.getAccountByCdpUserId(params.cdpUserId)
-
-    if (!account) {
-      return null
-    }
-
-    return {
-      address: account.address,
-      subscriptionOwnerAddress: account.subscriptionOwnerAddress,
-      createdAt: account.createdAt,
-    }
-  }
-
-  /**
    * Creates a new API key for an account
    * Returns the full key (one-time reveal) and metadata
    */
   async createApiKey(params: {
-    accountAddress: Address
+    cdpUserId: string
     name?: string
   }): Promise<CreateApiKeyResponse> {
-    const account = await this.getAccountByAddress(params.accountAddress)
+    const account = await this.getAccountByCdpUserId(params.cdpUserId)
 
     const accountService = new AccountService({
       DB: this.env.DB,
@@ -282,10 +222,8 @@ export class RPC extends WorkerEntrypoint<ApiWorkerEnv> {
   /**
    * Lists all API keys for an account (no secrets)
    */
-  async listApiKeys(params: {
-    accountAddress: Address
-  }): Promise<ApiKeyResponse[]> {
-    const account = await this.getAccountByAddress(params.accountAddress)
+  async listApiKeys(params: { cdpUserId: string }): Promise<ApiKeyResponse[]> {
+    const account = await this.getAccountByCdpUserId(params.cdpUserId)
 
     const accountService = new AccountService({
       DB: this.env.DB,
@@ -302,12 +240,12 @@ export class RPC extends WorkerEntrypoint<ApiWorkerEnv> {
    * Updates an API key (name and/or enabled status)
    */
   async updateApiKey(params: {
-    accountAddress: Address
+    cdpUserId: string
     keyId: number
     name?: string
     enabled?: boolean
   }): Promise<ApiKeyResponse> {
-    const account = await this.getAccountByAddress(params.accountAddress)
+    const account = await this.getAccountByCdpUserId(params.cdpUserId)
 
     const accountService = new AccountService({
       DB: this.env.DB,
@@ -329,10 +267,10 @@ export class RPC extends WorkerEntrypoint<ApiWorkerEnv> {
    * Deletes an API key (hard delete)
    */
   async deleteApiKey(params: {
-    accountAddress: Address
+    cdpUserId: string
     keyId: number
   }): Promise<SuccessResponse> {
-    const account = await this.getAccountByAddress(params.accountAddress)
+    const account = await this.getAccountByCdpUserId(params.cdpUserId)
 
     const accountService = new AccountService({
       DB: this.env.DB,
@@ -353,10 +291,10 @@ export class RPC extends WorkerEntrypoint<ApiWorkerEnv> {
    * Returns the webhook secret for HMAC verification
    */
   async createWebhook(params: {
-    accountAddress: Address
+    cdpUserId: string
     url: string
   }): Promise<CreateWebhookResponse> {
-    const account = await this.getAccountByAddress(params.accountAddress)
+    const account = await this.getAccountByCdpUserId(params.cdpUserId)
 
     const webhookService = new WebhookService({
       DB: this.env.DB,
@@ -374,9 +312,9 @@ export class RPC extends WorkerEntrypoint<ApiWorkerEnv> {
    * Gets webhook configuration for an account (safe - secret preview only)
    */
   async getWebhook(params: {
-    accountAddress: Address
+    cdpUserId: string
   }): Promise<WebhookResponse | null> {
-    const account = await this.getAccountByAddress(params.accountAddress)
+    const account = await this.getAccountByCdpUserId(params.cdpUserId)
 
     const webhookService = new WebhookService({
       DB: this.env.DB,
@@ -406,10 +344,10 @@ export class RPC extends WorkerEntrypoint<ApiWorkerEnv> {
    * Updates webhook URL only (keeps existing secret)
    */
   async updateWebhookUrl(params: {
-    accountAddress: Address
+    cdpUserId: string
     url: string
   }): Promise<{ url: string }> {
-    const account = await this.getAccountByAddress(params.accountAddress)
+    const account = await this.getAccountByCdpUserId(params.cdpUserId)
 
     const webhookService = new WebhookService({
       DB: this.env.DB,
@@ -427,9 +365,9 @@ export class RPC extends WorkerEntrypoint<ApiWorkerEnv> {
    * Rotates webhook secret only (keeps existing URL)
    */
   async rotateWebhookSecret(params: {
-    accountAddress: Address
+    cdpUserId: string
   }): Promise<{ secret: string }> {
-    const account = await this.getAccountByAddress(params.accountAddress)
+    const account = await this.getAccountByCdpUserId(params.cdpUserId)
 
     const webhookService = new WebhookService({
       DB: this.env.DB,
@@ -445,10 +383,8 @@ export class RPC extends WorkerEntrypoint<ApiWorkerEnv> {
   /**
    * Soft deletes webhook configuration
    */
-  async deleteWebhook(params: {
-    accountAddress: Address
-  }): Promise<SuccessResponse> {
-    const account = await this.getAccountByAddress(params.accountAddress)
+  async deleteWebhook(params: { cdpUserId: string }): Promise<SuccessResponse> {
+    const account = await this.getAccountByCdpUserId(params.cdpUserId)
 
     const webhookService = new WebhookService({
       DB: this.env.DB,
@@ -466,10 +402,10 @@ export class RPC extends WorkerEntrypoint<ApiWorkerEnv> {
    * Optionally filters by network (testnet vs mainnet)
    */
   async listSubscriptions(params: {
-    accountAddress: Address
+    cdpUserId: string
     testnet?: boolean
   }): Promise<SubscriptionResponse[]> {
-    const account = await this.getAccountByAddress(params.accountAddress)
+    const account = await this.getAccountByCdpUserId(params.cdpUserId)
 
     const subscriptionService = new SubscriptionService({
       DB: this.env.DB,
@@ -504,10 +440,10 @@ export class RPC extends WorkerEntrypoint<ApiWorkerEnv> {
    * Returns null if subscription not found or doesn't belong to account
    */
   async getSubscription(params: {
-    accountAddress: Address
+    cdpUserId: string
     subscriptionId: Hash
   }): Promise<SubscriptionDetailResponse | null> {
-    const account = await this.getAccountByAddress(params.accountAddress)
+    const account = await this.getAccountByCdpUserId(params.cdpUserId)
 
     const subscriptionService = new SubscriptionService({
       DB: this.env.DB,
@@ -563,12 +499,12 @@ export class RPC extends WorkerEntrypoint<ApiWorkerEnv> {
    * Security: Always uses merchant's address as beneficiary (no override)
    */
   async createSubscription(params: {
-    accountAddress: Address
+    cdpUserId: string
     subscriptionId: Hash
     provider: Provider
     testnet: boolean
   }): Promise<CreateSubscriptionResponse> {
-    const account = await this.getAccountByAddress(params.accountAddress)
+    const account = await this.getAccountByCdpUserId(params.cdpUserId)
 
     const subscriptionService = new SubscriptionService({
       DB: this.env.DB,
@@ -661,10 +597,10 @@ export class RPC extends WorkerEntrypoint<ApiWorkerEnv> {
    * Handles onchain revocation and database updates
    */
   async revokeSubscription(params: {
-    accountAddress: Address
+    cdpUserId: string
     subscriptionId: Hash
   }): Promise<SuccessResponse> {
-    const account = await this.getAccountByAddress(params.accountAddress)
+    const account = await this.getAccountByCdpUserId(params.cdpUserId)
 
     const subscriptionService = new SubscriptionService({
       DB: this.env.DB,

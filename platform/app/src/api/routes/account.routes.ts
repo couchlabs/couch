@@ -1,7 +1,4 @@
-import {
-  type ValidatedJWT,
-  validateJWT,
-} from "@app-api/middleware/cdp-jwt-validate.middleware"
+import type { ValidatedJWT } from "@app-api/middleware/cdp-jwt-validate.middleware"
 import type { ApiWorkerEnv } from "@app-types/api.env"
 import { createLogger } from "@backend/lib/logger"
 import { Hono } from "hono"
@@ -13,9 +10,6 @@ export const accountRoutes = new Hono<{
   Bindings: ApiWorkerEnv
   Variables: { jwt: ValidatedJWT }
 }>()
-
-// Validate JWT only (doesn't require account to exist yet)
-accountRoutes.use(validateJWT())
 
 /**
  * PUT /api/account

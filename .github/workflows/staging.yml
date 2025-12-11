@@ -95,7 +95,6 @@ jobs:
           CDP_WALLET_SECRET: ${{ secrets.CDP_WALLET_SECRET }}
           CDP_PROJECT_ID: ${{ secrets.CDP_PROJECT_ID }}
           CDP_CLIENT_API_KEY: ${{ secrets.CDP_CLIENT_API_KEY }}
-          COUCH_TEST_ACCOUNT_ADDRESS: ${{ secrets.COUCH_TEST_ACCOUNT_ADDRESS }}
           GITHUB_SHA: ${{ github.sha }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

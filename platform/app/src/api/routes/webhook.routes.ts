@@ -1,7 +1,4 @@
-import {
-  cdpAuth,
-  type VerifiedAuth,
-} from "@app-api/middleware/cdp-auth.middleware"
+import type { ValidatedJWT } from "@app-api/middleware/cdp-jwt-validate.middleware"
 import type { ApiWorkerEnv } from "@app-types/api.env"
 import { createLogger } from "@backend/lib/logger"
 import { Hono } from "hono"
@@ -10,18 +7,15 @@ const logger = createLogger("app.api.webhook.route")
 
 export const webhookRoutes = new Hono<{
   Bindings: ApiWorkerEnv
-  Variables: { auth: VerifiedAuth }
+  Variables: { jwt: ValidatedJWT }
 }>()
-
-// Require full auth (account must exist)
-webhookRoutes.use(cdpAuth())
 
 /**
  * POST /api/webhook
  * Create or update webhook configuration
  */
 webhookRoutes.post("/", async (c) => {
-  const { accountAddress } = c.get("auth")
+  const { cdpUserId } = c.get("jwt")
   const { url } = await c.req.json<{ url?: string }>()
 
   if (!url || typeof url !== "string" || url.trim().length === 0) {
@@ -30,7 +24,7 @@ webhookRoutes.post("/", async (c) => {
 
   try {
     const result = await c.env.COUCH_BACKEND_RPC.createWebhook({
-      accountAddress,
+      cdpUserId,
       url: url.trim(),
     })
     return c.json(result)
@@ -48,11 +42,11 @@ webhookRoutes.post("/", async (c) => {
  * Get webhook configuration
  */
 webhookRoutes.get("/", async (c) => {
-  const { accountAddress } = c.get("auth")
+  const { cdpUserId } = c.get("jwt")
 
   try {
     const result = await c.env.COUCH_BACKEND_RPC.getWebhook({
-      accountAddress,
+      cdpUserId,
     })
     return c.json(result)
   } catch (error) {
@@ -66,7 +60,7 @@ webhookRoutes.get("/", async (c) => {
  * Update webhook URL only
  */
 webhookRoutes.patch("/url", async (c) => {
-  const { accountAddress } = c.get("auth")
+  const { cdpUserId } = c.get("jwt")
   const { url } = await c.req.json<{ url?: string }>()
 
   if (!url || typeof url !== "string" || url.trim().length === 0) {
@@ -75,7 +69,7 @@ webhookRoutes.patch("/url", async (c) => {
 
   try {
     const result = await c.env.COUCH_BACKEND_RPC.updateWebhookUrl({
-      accountAddress,
+      cdpUserId,
       url: url.trim(),
     })
     return c.json(result)
@@ -96,11 +90,11 @@ webhookRoutes.patch("/url", async (c) => {
  * Rotate webhook secret only
  */
 webhookRoutes.post("/rotate", async (c) => {
-  const { accountAddress } = c.get("auth")
+  const { cdpUserId } = c.get("jwt")
 
   try {
     const result = await c.env.COUCH_BACKEND_RPC.rotateWebhookSecret({
-      accountAddress,
+      cdpUserId,
     })
     return c.json(result)
   } catch (error) {
@@ -117,11 +111,11 @@ webhookRoutes.post("/rotate", async (c) => {
  * Delete webhook
  */
 webhookRoutes.delete("/", async (c) => {
-  const { accountAddress } = c.get("auth")
+  const { cdpUserId } = c.get("jwt")
 
   try {
     const result = await c.env.COUCH_BACKEND_RPC.deleteWebhook({
-      accountAddress,
+      cdpUserId,
     })
     return c.json(result)
   } catch (error) {
