@@ -1,7 +1,4 @@
-import {
-  cdpAuth,
-  type VerifiedAuth,
-} from "@app-api/middleware/cdp-auth.middleware"
+import type { ValidatedJWT } from "@app-api/middleware/cdp-jwt-validate.middleware"
 import type { ApiWorkerEnv } from "@app-types/api.env"
 import { createLogger } from "@backend/lib/logger"
 import { Provider } from "@backend/providers/provider.interface"
@@ -12,23 +9,20 @@ const logger = createLogger("app.api.subscriptions.route")
 
 export const subscriptionsRoutes = new Hono<{
   Bindings: ApiWorkerEnv
-  Variables: { auth: VerifiedAuth }
+  Variables: { jwt: ValidatedJWT }
 }>()
-
-// Require full auth (account must exist)
-subscriptionsRoutes.use(cdpAuth())
 
 /**
  * GET /api/subscriptions?testnet=true
  * List all subscriptions for authenticated user
  */
 subscriptionsRoutes.get("/", async (c) => {
-  const { accountAddress } = c.get("auth")
+  const { cdpUserId } = c.get("jwt")
   const testnetParam = c.req.query("testnet")
 
   try {
     const result = await c.env.COUCH_BACKEND_RPC.listSubscriptions({
-      accountAddress,
+      cdpUserId,
       testnet: testnetParam === "true",
     })
     return c.json({ subscriptions: result })
@@ -43,7 +37,7 @@ subscriptionsRoutes.get("/", async (c) => {
  * Create a new subscription
  */
 subscriptionsRoutes.post("/", async (c) => {
-  const { accountAddress } = c.get("auth")
+  const { cdpUserId } = c.get("jwt")
   const {
     subscriptionId,
     provider,
@@ -69,7 +63,7 @@ subscriptionsRoutes.post("/", async (c) => {
 
   try {
     const result = await c.env.COUCH_BACKEND_RPC.createSubscription({
-      accountAddress,
+      cdpUserId,
       subscriptionId: subscriptionId,
       provider: provider as Provider,
       testnet,
@@ -89,7 +83,7 @@ subscriptionsRoutes.post("/", async (c) => {
  * Get subscription details with orders
  */
 subscriptionsRoutes.get("/:id", async (c) => {
-  const { accountAddress } = c.get("auth")
+  const { cdpUserId } = c.get("jwt")
   const subscriptionId = c.req.param("id")
 
   if (!subscriptionId || typeof subscriptionId !== "string") {
@@ -98,7 +92,7 @@ subscriptionsRoutes.get("/:id", async (c) => {
 
   try {
     const result = await c.env.COUCH_BACKEND_RPC.getSubscription({
-      accountAddress,
+      cdpUserId,
       subscriptionId: subscriptionId as `0x${string}`,
     })
 
@@ -121,7 +115,7 @@ subscriptionsRoutes.get("/:id", async (c) => {
  * Revoke a subscription
  */
 subscriptionsRoutes.post("/:id/revoke", async (c) => {
-  const { accountAddress } = c.get("auth")
+  const { cdpUserId } = c.get("jwt")
   const subscriptionId = c.req.param("id")
 
   if (!subscriptionId || typeof subscriptionId !== "string") {
@@ -130,7 +124,7 @@ subscriptionsRoutes.post("/:id/revoke", async (c) => {
 
   try {
     const result = await c.env.COUCH_BACKEND_RPC.revokeSubscription({
-      accountAddress,
+      cdpUserId,
       subscriptionId: subscriptionId as `0x${string}`,
     })
     return c.json(result)

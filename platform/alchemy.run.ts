@@ -10,7 +10,6 @@ import {
   D1Database,
   DurableObjectNamespace,
   Queue,
-  Ruleset,
   Vite,
   Worker,
 } from "alchemy/cloudflare"
@@ -61,7 +60,7 @@ const { LOGGING, DUNNING_MODE, GH_ENVIRONMENT, PUBLIC_APP_NAME } =
 const compatibilityFlags = ["nodejs_compat", "disallow_importable_env"]
 
 // -----------------------------------------------------------------------------
-// DOMAINS &  WAF/Rules
+// DOMAINS
 // -----------------------------------------------------------------------------
 
 const domains: {
@@ -78,25 +77,7 @@ if (GH_ENVIRONMENT === "prod") {
   domains.api = [`api.${domain}`]
   domains.website = [`app.${domain}`]
 }
-
-const WAF_RULE_NAME = "api-protection"
-const wafRuleSet = await Ruleset(WAF_RULE_NAME, {
-  zone: "cou.ch",
-  phase: "http_request_firewall_custom",
-  name: "API Protection for couch-platform-app",
-  description: "Block non-browser requests to couch-platform-app API endpoints",
-  rules: [
-    {
-      description:
-        "Block non-browser requests to couch-platform-app API endpoints",
-      expression: `(
-        starts_with(http.request.uri.path, "/api/")
-        and not http.request.headers["sec-fetch-site"][0] eq "same-origin"
-      )`,
-      action: "block",
-    },
-  ],
-})
+const url = GH_ENVIRONMENT === "dev"
 
 // -----------------------------------------------------------------------------
 // DATABASES
@@ -193,7 +174,7 @@ export const api = await Worker(API_NAME, {
   },
   compatibilityFlags,
   dev: { port: 3000 },
-  url: GH_ENVIRONMENT === "dev",
+  url,
   domains: domains.api,
 })
 
@@ -370,7 +351,7 @@ export const website = await Vite(WEBSITE_NAME, {
     COUCH_BACKEND_RPC: rpc,
   },
   compatibilityFlags,
-  url: GH_ENVIRONMENT === "dev", // Generate URLs for dev (previews deployments)
+  url,
   domains: domains.website,
 })
 
@@ -389,7 +370,6 @@ if (app.local) {
     [WEBHOOK_DLQ_NAME]: webhookDLQ,
     [WEBHOOK_DLQ_CONSUMER_NAME]: webhookDLQConsumer,
     [WEBSITE_NAME]: website,
-    [WAF_RULE_NAME]: wafRuleSet,
   })
 }
 
@@ -406,7 +386,7 @@ if (process.env.GITHUB_OUTPUT) {
   fs.appendFileSync(alchemy.env.GITHUB_OUTPUT, `app_url=${appUrl}\n`)
 }
 
-if (process.env.PULL_REQUEST) {
+if (GH_ENVIRONMENT === "dev" && process.env.PULL_REQUEST) {
   await GitHubComment("preview-comment", {
     owner: "couchlabs",
     repository: "couch",

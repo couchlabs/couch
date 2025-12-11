@@ -1,7 +1,4 @@
-import {
-  cdpAuth,
-  type VerifiedAuth,
-} from "@app-api/middleware/cdp-auth.middleware"
+import type { ValidatedJWT } from "@app-api/middleware/cdp-jwt-validate.middleware"
 import type { ApiWorkerEnv } from "@app-types/api.env"
 import { createLogger } from "@backend/lib/logger"
 import { Hono } from "hono"
@@ -10,18 +7,15 @@ const logger = createLogger("app.api.keys.route")
 
 export const keysRoutes = new Hono<{
   Bindings: ApiWorkerEnv
-  Variables: { auth: VerifiedAuth }
+  Variables: { jwt: ValidatedJWT }
 }>()
-
-// Require full auth (account must exist)
-keysRoutes.use(cdpAuth())
 
 /**
  * POST /api/keys
  * Create a new API key
  */
 keysRoutes.post("/", async (c) => {
-  const { accountAddress } = c.get("auth")
+  const { cdpUserId } = c.get("jwt")
   const { name } = await c.req.json<{ name?: string }>()
 
   if (!name || typeof name !== "string" || name.trim().length === 0) {
@@ -30,7 +24,7 @@ keysRoutes.post("/", async (c) => {
 
   try {
     const result = await c.env.COUCH_BACKEND_RPC.createApiKey({
-      accountAddress,
+      cdpUserId,
       name: name.trim(),
     })
     return c.json(result)
@@ -45,10 +39,10 @@ keysRoutes.post("/", async (c) => {
  * List all API keys for authenticated user
  */
 keysRoutes.get("/", async (c) => {
-  const { accountAddress } = c.get("auth")
+  const { cdpUserId } = c.get("jwt")
 
   try {
-    const result = await c.env.COUCH_BACKEND_RPC.listApiKeys({ accountAddress })
+    const result = await c.env.COUCH_BACKEND_RPC.listApiKeys({ cdpUserId })
     return c.json({ keys: result })
   } catch (error) {
     logger.error("List API keys error:", error)
@@ -61,7 +55,7 @@ keysRoutes.get("/", async (c) => {
  * Update an API key (name or enabled status)
  */
 keysRoutes.patch("/:id", async (c) => {
-  const { accountAddress } = c.get("auth")
+  const { cdpUserId } = c.get("jwt")
   const keyId = parseInt(c.req.param("id"), 10)
   const { name, enabled } = await c.req.json<{
     name?: string
@@ -74,7 +68,7 @@ keysRoutes.patch("/:id", async (c) => {
 
   try {
     const result = await c.env.COUCH_BACKEND_RPC.updateApiKey({
-      accountAddress,
+      cdpUserId,
       keyId,
       name: name?.trim(),
       enabled,
@@ -94,7 +88,7 @@ keysRoutes.patch("/:id", async (c) => {
  * Delete an API key
  */
 keysRoutes.delete("/:id", async (c) => {
-  const { accountAddress } = c.get("auth")
+  const { cdpUserId } = c.get("jwt")
   const keyId = parseInt(c.req.param("id"), 10)
 
   if (Number.isNaN(keyId) || keyId <= 0) {
@@ -103,7 +97,7 @@ keysRoutes.delete("/:id", async (c) => {
 
   try {
     const result = await c.env.COUCH_BACKEND_RPC.deleteApiKey({
-      accountAddress,
+      cdpUserId,
       keyId,
     })
     return c.json(result)

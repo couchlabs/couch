@@ -5,6 +5,7 @@
  * Provides minimal API surface and enforces security via CDP JWT authentication.
  */
 
+import { validateJWT } from "@app-api/middleware/cdp-jwt-validate.middleware"
 import { sameOrigin } from "@app-api/middleware/same-origin.middleware"
 import { accountRoutes } from "@app-api/routes/account.routes"
 import { keysRoutes } from "@app-api/routes/keys.routes"
@@ -15,8 +16,8 @@ import { Hono } from "hono"
 
 const app = new Hono<{ Bindings: ApiWorkerEnv }>().basePath("/api")
 
-// Security: Same-origin check for all routes
-app.use(sameOrigin())
+// Security: Same-origin check + JWT validation for all routes
+app.use(sameOrigin(), validateJWT())
 
 // Mount routes
 app.route("/account", accountRoutes)
