@@ -1,4 +1,7 @@
-import type { VerifiedAuth } from "@app/api/middleware/cdp-auth.middleware"
+import {
+  validateJWT,
+  type ValidatedJWT,
+} from "@app/api/middleware/cdp-jwt-validate.middleware"
 import type { ApiWorkerEnv } from "@app-types/api.env"
 import { createLogger } from "@backend/lib/logger"
 import { Hono } from "hono"
@@ -8,8 +11,11 @@ const logger = createLogger("app.api.account.route")
 
 export const accountRoutes = new Hono<{
   Bindings: ApiWorkerEnv
-  Variables: { auth: VerifiedAuth }
+  Variables: { jwt: ValidatedJWT }
 }>()
+
+// Validate JWT only (doesn't require account to exist yet)
+accountRoutes.use(validateJWT())
 
 /**
  * PUT /api/account
@@ -17,7 +23,7 @@ export const accountRoutes = new Hono<{
  * Idempotent - safe to call multiple times with same data
  */
 accountRoutes.put("/", async (c) => {
-  const { cdpUserId } = c.get("auth")
+  const { cdpUserId } = c.get("jwt")
 
   // Get wallet address from request body
   // Frontend provides this via useEvmAddress() - the wallet CDP created for this user
