@@ -16,6 +16,10 @@ export default defineConfig({
   envDir: "../",
   root: "./app/src",
   publicDir: "./public",
+  build: {
+    outDir: "../dist/client",
+    emptyOutDir: true,
+  },
   server: {
     port: 8000,
     open: "chrome",
