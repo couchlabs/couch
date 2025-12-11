@@ -325,4 +325,24 @@ export class AccountRepository {
 
     return this.toAccountDomain(result)
   }
+
+  async updateAccountCdpUserId(params: {
+    accountId: number
+    cdpUserId: string
+  }): Promise<Account> {
+    const result = await this.db
+      .update(schema.accounts)
+      .set({
+        cdpUserId: params.cdpUserId,
+      })
+      .where(eq(schema.accounts.id, params.accountId))
+      .returning()
+      .get()
+
+    if (!result) {
+      throw new Error(`Account ${params.accountId} not found`)
+    }
+
+    return this.toAccountDomain(result)
+  }
 }
