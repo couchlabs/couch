@@ -1,4 +1,4 @@
-import { authenticatedFetch } from "@app/lib/fetch"
+import { authenticatedFetch } from "@app-client/lib/fetch"
 import {
   useCurrentUser,
   useEvmAddress,

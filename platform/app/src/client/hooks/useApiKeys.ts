@@ -1,4 +1,4 @@
-import { authenticatedFetch } from "@app/lib/fetch"
+import { authenticatedFetch } from "@app-client/lib/fetch"
 import type { ApiKeyResponse, CreateApiKeyResponse } from "@backend/rpc/main"
 import { useEvmAddress, useGetAccessToken } from "@coinbase/cdp-hooks"
 import {

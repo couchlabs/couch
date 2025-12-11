@@ -14,10 +14,10 @@ export default defineConfig({
     nodePolyfills({ include: ["buffer"] }),
   ],
   envDir: "../",
-  root: "./app/src",
+  root: "./app/src/client",
   publicDir: "./public",
   build: {
-    outDir: "../dist",
+    outDir: "../../dist",
     emptyOutDir: true,
   },
   server: {
