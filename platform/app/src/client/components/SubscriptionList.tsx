@@ -3,7 +3,7 @@ import {
   useListSubscriptions,
   useRevokeSubscription,
   useSubscription,
-} from "@app/hooks/useSubscriptions"
+} from "@app-client/hooks/useSubscriptions"
 import { subscribe } from "@base-org/account/browser"
 import { useState } from "react"
 

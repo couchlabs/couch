@@ -1,4 +1,4 @@
-import { authenticatedFetch } from "@app/lib/fetch"
+import { authenticatedFetch } from "@app-client/lib/fetch"
 import { useEvmAddress, useGetAccessToken } from "@coinbase/cdp-hooks"
 import {
   type UseMutationResult,

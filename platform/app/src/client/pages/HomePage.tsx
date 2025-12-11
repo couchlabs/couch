@@ -1,7 +1,7 @@
-import { ApiKeyManager } from "@app/components/ApiKeyManager"
-import { SubscriptionList } from "@app/components/SubscriptionList"
-import { WebhookManager } from "@app/components/WebhookManager"
-import { useAccountSync } from "@app/hooks/useAccountSync"
+import { ApiKeyManager } from "@app-client/components/ApiKeyManager"
+import { SubscriptionList } from "@app-client/components/SubscriptionList"
+import { WebhookManager } from "@app-client/components/WebhookManager"
+import { useAccountSync } from "@app-client/hooks/useAccountSync"
 import { useEvmAddress } from "@coinbase/cdp-hooks"
 import { AuthButton } from "@coinbase/cdp-react/components/AuthButton"
 

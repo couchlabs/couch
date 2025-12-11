@@ -3,7 +3,7 @@ import {
   useCreateApiKey,
   useDeleteApiKey,
   useUpdateApiKey,
-} from "@app/hooks/useApiKeys"
+} from "@app-client/hooks/useApiKeys"
 import type { ApiKeyResponse, CreateApiKeyResponse } from "@backend/rpc/main"
 import { useState } from "react"
 

@@ -4,7 +4,7 @@ import {
   useRotateWebhookSecret,
   useUpdateWebhookUrl,
   useWebhook,
-} from "@app/hooks/useWebhook"
+} from "@app-client/hooks/useWebhook"
 import { useState } from "react"
 
 export function WebhookManager() {

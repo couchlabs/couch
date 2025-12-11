@@ -1,7 +1,7 @@
 import {
   cdpAuth,
   type VerifiedAuth,
-} from "@app/api/middleware/cdp-auth.middleware"
+} from "@app-api/middleware/cdp-auth.middleware"
 import type { ApiWorkerEnv } from "@app-types/api.env"
 import { createLogger } from "@backend/lib/logger"
 import { Hono } from "hono"

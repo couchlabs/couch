@@ -23,11 +23,11 @@ export function validateJWT(): MiddlewareHandler<{
   Variables: { jwt: ValidatedJWT }
 }> {
   return bearerAuth({
-    verifyToken: async (token, c) => {
+    verifyToken: async (jwt, c) => {
       try {
         // Call RPC to validate JWT and get cdpUserId (no account lookup)
         const { cdpUserId } = await c.env.COUCH_BACKEND_RPC.cdpJWTValidate({
-          jwt: token,
+          jwt,
         })
 
         // Store only cdpUserId in context (account doesn't exist yet)
