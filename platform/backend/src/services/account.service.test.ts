@@ -31,6 +31,7 @@ describe("AccountService", () => {
   const TEST_ACCOUNT = getAddress(
     "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb1",
   ) as Address
+  const TEST_CDP_USER_ID = "test-cdp-user-123"
   const TEST_ACCOUNT_2 = getAddress(
     "0x8888888888888888888888888888888888888888",
   ) as Address
@@ -745,6 +746,7 @@ describe("AccountService", () => {
 
       const result = await service.getOrCreateAccount({
         address: lowercaseAddress,
+        cdpUserId: TEST_CDP_USER_ID,
       })
 
       // Should return full Account object
@@ -758,6 +760,7 @@ describe("AccountService", () => {
       try {
         await service.getOrCreateAccount({
           address: "invalid-address",
+          cdpUserId: TEST_CDP_USER_ID,
         })
         expect.unreachable("Should have thrown HTTPError")
       } catch (error) {
@@ -770,6 +773,7 @@ describe("AccountService", () => {
     it("creates new account successfully", async () => {
       const result = await service.getOrCreateAccount({
         address: TEST_ACCOUNT,
+        cdpUserId: TEST_CDP_USER_ID,
       })
 
       // Should return full Account object
@@ -780,12 +784,16 @@ describe("AccountService", () => {
     })
 
     it("returns existing account (idempotent)", async () => {
-      // Create account first
-      const created = await service.createAccount({ address: TEST_ACCOUNT })
+      // Create account first with CDP user ID
+      const created = await service.createAccount({
+        address: TEST_ACCOUNT,
+        cdpUserId: TEST_CDP_USER_ID,
+      })
 
       // Call getOrCreateAccount - should return existing account
       const result = await service.getOrCreateAccount({
         address: TEST_ACCOUNT,
+        cdpUserId: TEST_CDP_USER_ID,
       })
 
       // Should return the same account
@@ -807,11 +815,15 @@ describe("AccountService", () => {
 
     it("returns existing account with different case", async () => {
       // Create account with checksummed address
-      const created = await service.createAccount({ address: TEST_ACCOUNT })
+      const created = await service.createAccount({
+        address: TEST_ACCOUNT,
+        cdpUserId: TEST_CDP_USER_ID,
+      })
 
       // Call with lowercase address - should return same account
       const result = await service.getOrCreateAccount({
         address: TEST_ACCOUNT.toLowerCase(),
+        cdpUserId: TEST_CDP_USER_ID,
       })
 
       // Should return the same account (normalized to checksummed)

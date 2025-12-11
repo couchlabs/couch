@@ -41,6 +41,7 @@ const providerValues = Object.values(Provider)
 export const accounts = sqliteTable("accounts", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   address: text("address").unique().notNull(),
+  cdpUserId: text("cdp_user_id").unique(), // CDP user ID from JWT 'sub' claim
   subscriptionOwnerAddress: text("subscription_owner_address"),
   createdAt: text("created_at").notNull().default(sql`CURRENT_TIMESTAMP`),
 })

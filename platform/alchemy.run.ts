@@ -83,11 +83,12 @@ const WAF_RULE_NAME = "api-protection"
 const wafRuleSet = await Ruleset(WAF_RULE_NAME, {
   zone: "cou.ch",
   phase: "http_request_firewall_custom",
-  name: `API Protection for ${NAME_PREFIX}`,
-  description: `Block non-browser requests to ${NAME_PREFIX} Merchant API endpoints`,
+  name: "API Protection for couch-platform-app",
+  description: "Block non-browser requests to couch-platform-app API endpoints",
   rules: [
     {
-      description: `Block non-browser requests to ${NAME_PREFIX} Merchant API endpoints`,
+      description:
+        "Block non-browser requests to couch-platform-app API endpoints",
       expression: `(
         starts_with(http.request.uri.path, "/api/")
         and not http.request.headers["sec-fetch-site"][0] eq "same-origin"
@@ -174,6 +175,7 @@ export const api = await Worker(API_NAME, {
   ),
   bindings: {
     // ENV & SECRETS:
+    CDP_PROJECT_ID: alchemy.env.CDP_PROJECT_ID,
     CDP_API_KEY_ID: alchemy.secret.env.CDP_API_KEY_ID,
     CDP_API_KEY_SECRET: alchemy.secret.env.CDP_API_KEY_SECRET,
     CDP_WALLET_SECRET: alchemy.secret.env.CDP_WALLET_SECRET,

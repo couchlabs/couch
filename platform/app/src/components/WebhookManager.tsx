@@ -28,9 +28,7 @@ export function WebhookManager() {
       setRevealedSecret(result.secret)
       setWebhookUrl("")
       setIsCreating(false)
-    } catch (err) {
-      console.error("Failed to create webhook:", err)
-    }
+    } catch {}
   }
 
   const handleUpdateUrl = async (e: React.FormEvent) => {
@@ -41,9 +39,7 @@ export function WebhookManager() {
       await updateUrlMutation.mutateAsync({ url: webhookUrl })
       setWebhookUrl("")
       setIsEditingUrl(false)
-    } catch (err) {
-      console.error("Failed to update webhook URL:", err)
-    }
+    } catch {}
   }
 
   const handleRotateSecret = async () => {
@@ -57,9 +53,7 @@ export function WebhookManager() {
     try {
       const result = await rotateSecretMutation.mutateAsync()
       setRevealedSecret(result.secret)
-    } catch (err) {
-      console.error("Failed to rotate webhook secret:", err)
-    }
+    } catch {}
   }
 
   const handleDelete = async () => {
@@ -68,9 +62,7 @@ export function WebhookManager() {
     try {
       await deleteMutation.mutateAsync()
       setRevealedSecret(null)
-    } catch (err) {
-      console.error("Failed to delete webhook:", err)
-    }
+    } catch {}
   }
 
   const copyToClipboard = (text: string) => {

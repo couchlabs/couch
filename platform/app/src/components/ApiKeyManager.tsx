@@ -1,11 +1,10 @@
 import {
-  type ApiKeyResponse,
-  type CreateApiKeyResponse,
   useApiKeys,
   useCreateApiKey,
   useDeleteApiKey,
   useUpdateApiKey,
 } from "@app/hooks/useApiKeys"
+import type { ApiKeyResponse, CreateApiKeyResponse } from "@backend/rpc/main"
 import { useState } from "react"
 
 export function ApiKeyManager() {
@@ -31,9 +30,8 @@ export function ApiKeyManager() {
       setCreatedKey(result)
       setNewKeyName("")
       setIsCreating(false)
-    } catch (err) {
+    } catch {
       // Error is handled by mutation
-      console.error("Failed to create API key:", err)
     }
   }
 
@@ -43,9 +41,7 @@ export function ApiKeyManager() {
         keyId: key.id,
         enabled: !key.enabled,
       })
-    } catch (err) {
-      console.error("Failed to toggle API key:", err)
-    }
+    } catch {}
   }
 
   const handleStartEdit = (key: ApiKeyResponse) => {
@@ -62,9 +58,7 @@ export function ApiKeyManager() {
         name: editName,
       })
       setEditingKeyId(null)
-    } catch (err) {
-      console.error("Failed to update API key name:", err)
-    }
+    } catch {}
   }
 
   const handleCancelEdit = () => {
@@ -77,9 +71,7 @@ export function ApiKeyManager() {
 
     try {
       await deleteMutation.mutateAsync({ keyId })
-    } catch (err) {
-      console.error("Failed to delete API key:", err)
-    }
+    } catch {}
   }
 
   const copyToClipboard = (text: string) => {

@@ -1,5 +1,6 @@
+import { authenticatedFetch } from "@app/lib/fetch"
 import type { ApiKeyResponse, CreateApiKeyResponse } from "@backend/rpc/main"
-import { useEvmAddress } from "@coinbase/cdp-hooks"
+import { useEvmAddress, useGetAccessToken } from "@coinbase/cdp-hooks"
 import {
   type UseMutationResult,
   type UseQueryResult,
@@ -8,14 +9,12 @@ import {
   useQueryClient,
 } from "@tanstack/react-query"
 
-// Re-export for convenience
-export type { ApiKeyResponse, CreateApiKeyResponse }
-
 /**
  * Hook to list all API keys for the current user
  */
 export function useApiKeys(): UseQueryResult<ApiKeyResponse[], Error> {
   const { evmAddress } = useEvmAddress()
+  const { getAccessToken } = useGetAccessToken()
 
   return useQuery({
     queryKey: ["apiKeys", evmAddress],
@@ -24,7 +23,8 @@ export function useApiKeys(): UseQueryResult<ApiKeyResponse[], Error> {
         throw new Error("No EVM address available")
       }
 
-      const response = await fetch(`/api/keys?address=${evmAddress}`)
+      // Use authenticated fetch - no address in query params
+      const response = await authenticatedFetch("/api/keys", { getAccessToken })
 
       if (!response.ok) {
         const errorData = await response.json<{ error?: string }>()
@@ -49,6 +49,7 @@ export function useCreateApiKey(): UseMutationResult<
   { name: string }
 > {
   const { evmAddress } = useEvmAddress()
+  const { getAccessToken } = useGetAccessToken()
   const queryClient = useQueryClient()
 
   return useMutation({
@@ -57,11 +58,16 @@ export function useCreateApiKey(): UseMutationResult<
         throw new Error("No EVM address available")
       }
 
-      const response = await fetch("/api/keys", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ address: evmAddress, name }),
-      })
+      // Use authenticated fetch - no address in body
+      const response = await authenticatedFetch(
+        "/api/keys",
+        { getAccessToken },
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name }),
+        },
+      )
 
       if (!response.ok) {
         const errorData = await response.json<{ error?: string }>()
@@ -88,6 +94,7 @@ export function useUpdateApiKey(): UseMutationResult<
   { keyId: number; name?: string; enabled?: boolean }
 > {
   const { evmAddress } = useEvmAddress()
+  const { getAccessToken } = useGetAccessToken()
   const queryClient = useQueryClient()
 
   return useMutation({
@@ -104,11 +111,16 @@ export function useUpdateApiKey(): UseMutationResult<
         throw new Error("No EVM address available")
       }
 
-      const response = await fetch(`/api/keys/${keyId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ address: evmAddress, name, enabled }),
-      })
+      // Use authenticated fetch - no address in body
+      const response = await authenticatedFetch(
+        `/api/keys/${keyId}`,
+        { getAccessToken },
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name, enabled }),
+        },
+      )
 
       if (!response.ok) {
         const errorData = await response.json<{ error?: string }>()
@@ -135,6 +147,7 @@ export function useDeleteApiKey(): UseMutationResult<
   { keyId: number }
 > {
   const { evmAddress } = useEvmAddress()
+  const { getAccessToken } = useGetAccessToken()
   const queryClient = useQueryClient()
 
   return useMutation({
@@ -143,9 +156,14 @@ export function useDeleteApiKey(): UseMutationResult<
         throw new Error("No EVM address available")
       }
 
-      const response = await fetch(`/api/keys/${keyId}?address=${evmAddress}`, {
-        method: "DELETE",
-      })
+      // Use authenticated fetch - no address in query params
+      const response = await authenticatedFetch(
+        `/api/keys/${keyId}`,
+        { getAccessToken },
+        {
+          method: "DELETE",
+        },
+      )
 
       if (!response.ok) {
         const errorData = await response.json<{ error?: string }>()

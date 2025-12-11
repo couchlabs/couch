@@ -16,6 +16,7 @@ import { type Address, getAddress, isAddress } from "viem"
 
 export interface CreateAccountParams {
   address: Address
+  cdpUserId?: string
 }
 
 export interface AccountServiceDeps extends AccountRepositoryDeps {
@@ -132,6 +133,7 @@ export class AccountService {
     // Create account (subscription owner address will be set after wallet creation)
     let account = await this.accountRepository.createAccount({
       accountAddress,
+      cdpUserId: params.cdpUserId,
     })
 
     // Create subscription owner wallet with account ID
@@ -399,19 +401,35 @@ export class AccountService {
    * Returns full Account object
    * Authentication is handled by CDP at the merchant app level
    */
-  async getOrCreateAccount(params: { address: string }): Promise<Account> {
+  async getOrCreateAccount(params: {
+    address: string
+    cdpUserId: string
+  }): Promise<Account> {
     const accountAddress = this.validateAddress(params.address)
-    const log = logger.with({ accountAddress })
+    const log = logger.with({ accountAddress, cdpUserId: params.cdpUserId })
 
-    // Check if account exists
-    const existing =
-      await this.accountRepository.getAccountByAddress(accountAddress)
+    // Try to get existing account by CDP user ID
+    const existing = await this.accountRepository.getAccountByCdpUserId(
+      params.cdpUserId,
+    )
     if (existing) {
-      log.info("Account already exists")
+      log.info("Account found by CDP user ID")
       return existing
     }
 
-    log.info("Creating new account via RPC")
-    return await this.createAccount({ address: accountAddress })
+    // Create new account with CDP user ID
+    log.info("Creating new account with CDP user ID")
+    return await this.createAccount({
+      address: accountAddress,
+      cdpUserId: params.cdpUserId,
+    })
+  }
+
+  /**
+   * Gets account by CDP user ID
+   * Used by API endpoints after JWT verification
+   */
+  async getAccountByCdpUserId(cdpUserId: string): Promise<Account | null> {
+    return await this.accountRepository.getAccountByCdpUserId(cdpUserId)
   }
 }
