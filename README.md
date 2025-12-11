@@ -1,6 +1,6 @@
 # Couch
 
-Stablecoin recurring payments infrastructure.
+Stablecoin recurring payments made easy.
 
 Couch is an offchain orchestrator for SpendPermission-based recurring payments. While SpendPermissions provide onchain authorization primitives, Couch handles the coordination layer: scheduling charges, managing subscription state, processing payments and delivering webhooks to merchants.
 
@@ -35,8 +35,8 @@ Configure your environment variables
 bun dev 
 ```
 
-This will spin up locally the database, workers, durable objexts, events queues apis and rpc infrastructure, together with the merchant application to access it. 
-The merchant app should should now be available at `http://localhost:8000`
+This will spin up locally database, workers, durable objects, events queues, apis and rpc infrastructure, together with the merchant application to access it. 
+The merchant app should now be available at `http://localhost:8000`
 
 ## Stack
 
