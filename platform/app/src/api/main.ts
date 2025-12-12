@@ -8,6 +8,7 @@
 import { validateJWT } from "@app-api/middleware/cdp-jwt-validate.middleware"
 import { sameOrigin } from "@app-api/middleware/same-origin.middleware"
 import { accountRoutes } from "@app-api/routes/account.routes"
+import { balancesRoutes } from "@app-api/routes/balances.routes"
 import { keysRoutes } from "@app-api/routes/keys.routes"
 import { subscriptionsRoutes } from "@app-api/routes/subscriptions.routes"
 import { webhookRoutes } from "@app-api/routes/webhook.routes"
@@ -21,6 +22,7 @@ app.use(sameOrigin(), validateJWT())
 
 // Mount routes
 app.route("/account", accountRoutes)
+app.route("/balances", balancesRoutes)
 app.route("/keys", keysRoutes)
 app.route("/webhook", webhookRoutes)
 app.route("/subscriptions", subscriptionsRoutes)

@@ -1,3 +1,4 @@
+import { useNetwork } from "@app-client/hooks/useNetwork"
 import {
   useCreateSubscription,
   useListSubscriptions,
@@ -12,7 +13,7 @@ export function SubscriptionList({
 }: {
   subscriptionOwnerAddress?: string
 }) {
-  const [testnet, setTestnet] = useState(false)
+  const { isTestnet } = useNetwork()
   const [selectedSubscriptionId, setSelectedSubscriptionId] = useState<
     string | undefined
   >(undefined)
@@ -31,7 +32,7 @@ export function SubscriptionList({
     data: subscriptions,
     isLoading,
     error,
-  } = useListSubscriptions(testnet)
+  } = useListSubscriptions(isTestnet)
   const {
     data: subscriptionDetail,
     isLoading: isLoadingDetail,
@@ -78,7 +79,7 @@ export function SubscriptionList({
       const periodInSeconds = convertPeriodToSeconds(periodNum, periodUnit)
 
       const subscription = await subscribe(
-        testnet
+        isTestnet
           ? {
               recurringCharge: chargeAmount,
               subscriptionOwner: subscriptionOwnerAddress as `0x${string}`,
@@ -105,7 +106,7 @@ export function SubscriptionList({
       await createMutation.mutateAsync({
         subscriptionId: subscription.id,
         provider: "base",
-        testnet,
+        testnet: isTestnet,
       })
 
       // Success - reset and close
@@ -195,32 +196,6 @@ export function SubscriptionList({
       <div className="flex items-center justify-between">
         <h2 className="text-xl font-semibold">Subscriptions</h2>
         <div className="flex items-center gap-4">
-          {/* Network toggle */}
-          <div className="flex items-center gap-2 bg-gray-100 p-1 rounded">
-            <button
-              type="button"
-              onClick={() => setTestnet(false)}
-              className={`px-3 py-1 rounded text-sm transition-colors ${
-                !testnet
-                  ? "bg-white shadow text-gray-900"
-                  : "text-gray-600 hover:text-gray-900"
-              }`}
-            >
-              Mainnet
-            </button>
-            <button
-              type="button"
-              onClick={() => setTestnet(true)}
-              className={`px-3 py-1 rounded text-sm transition-colors ${
-                testnet
-                  ? "bg-white shadow text-gray-900"
-                  : "text-gray-600 hover:text-gray-900"
-              }`}
-            >
-              Testnet
-            </button>
-          </div>
-
           {/* Create button */}
           <button
             type="button"
@@ -579,7 +554,7 @@ export function SubscriptionList({
             <div className="mb-4 p-3 bg-gray-100 rounded">
               <div className="text-sm">
                 <span className="font-medium">Network:</span>{" "}
-                {testnet ? "Testnet" : "Mainnet"}
+                {isTestnet ? "Testnet" : "Mainnet"}
               </div>
               <div className="text-sm mt-1">
                 <span className="font-medium">Beneficiary:</span> Your account
