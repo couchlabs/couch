@@ -1,3 +1,4 @@
+import { NetworkProvider } from "@app-client/contexts/NetworkContext"
 import { cdpConfig } from "@app-client/lib/cdpConfig"
 import { HomePage } from "@app-client/pages/HomePage"
 import { CDPReactProvider } from "@coinbase/cdp-react"
@@ -18,7 +19,9 @@ createRoot(rootElement).render(
   <StrictMode>
     <CDPReactProvider config={cdpConfig}>
       <QueryClientProvider client={queryClient}>
-        <HomePage />
+        <NetworkProvider>
+          <HomePage />
+        </NetworkProvider>
       </QueryClientProvider>
     </CDPReactProvider>
   </StrictMode>,

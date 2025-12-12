@@ -4,7 +4,8 @@ import type {
   OrderType,
   SubscriptionStatus,
 } from "@backend/constants/subscription.constants"
-import { validateCDPJWT } from "@backend/lib/cdp-jwt"
+import { ErrorCode, HTTPError } from "@backend/errors/http.errors"
+import { createLogger } from "@backend/lib/logger"
 import type { Provider } from "@backend/providers/provider.interface"
 import {
   type Account,
@@ -14,7 +15,90 @@ import { AccountService } from "@backend/services/account.service"
 import { SubscriptionService } from "@backend/services/subscription.service"
 import { WebhookService } from "@backend/services/webhook.service"
 import type { ApiWorkerEnv } from "@backend-types/api.env"
+import { CdpClient } from "@coinbase/cdp-sdk"
 import type { Address, Hash } from "viem"
+
+const logger = createLogger("backend.rpc")
+
+// =============================================================================
+// CDP JWT Helper
+// =============================================================================
+
+interface CDPJWTPayload {
+  sub: string
+  project_id: string
+  iss: string
+  aud: string
+  exp: number
+  iat: number
+}
+
+/**
+ * Decodes JWT payload without verification (for project_id extraction)
+ */
+function decodeJWT(token: string): CDPJWTPayload {
+  const parts = token.split(".")
+  if (parts.length !== 3) {
+    throw new Error("Invalid JWT format")
+  }
+
+  const payload = parts[1]
+  const decoded = atob(payload.replace(/-/g, "+").replace(/_/g, "/"))
+  return JSON.parse(decoded)
+}
+
+/**
+ * Validates CDP JWT token and returns the CDP user ID
+ */
+async function validateCDPJWT(
+  jwt: string,
+  projectId: string,
+  apiKeyId: string,
+  apiKeySecret: string,
+): Promise<string> {
+  const cdpClient = new CdpClient({
+    apiKeyId,
+    apiKeySecret,
+  })
+
+  try {
+    // Validate token with CDP's server-side API
+    const endUser = await cdpClient.endUser.validateAccessToken({
+      accessToken: jwt,
+    })
+
+    // Extract and verify project_id from token
+    const payload = decodeJWT(jwt)
+
+    if (payload.project_id !== projectId) {
+      throw new Error(
+        `Project ID mismatch: expected ${projectId}, got ${payload.project_id}`,
+      )
+    }
+
+    // Return the verified CDP user ID
+    return endUser.userId
+  } catch (error) {
+    // Convert to Error for consistent handling
+    const originalError =
+      error instanceof Error ? error : new Error(String(error))
+
+    // Log with full context
+    logger.error("CDP JWT validation failed", {
+      error: originalError,
+      message: originalError.message,
+      stack: originalError.stack,
+    })
+
+    // Throw structured HTTP error
+    throw new HTTPError(
+      401,
+      ErrorCode.UNAUTHORIZED,
+      "Invalid or expired authentication token",
+      { originalError: originalError.message },
+    )
+  }
+}
 
 // =============================================================================
 // RPC Response Types
@@ -619,6 +703,50 @@ export class RPC extends WorkerEntrypoint<ApiWorkerEnv> {
     })
 
     return { success: true }
+  }
+
+  /**
+   * Fetches token balances for an address using CDP SDK
+   */
+  async getTokenBalances(params: {
+    network: "base" | "base-sepolia"
+    address: string
+  }): Promise<{
+    balances: Array<{
+      amount: { amount: string; decimals: number }
+      token: {
+        network: string
+        symbol: string
+        name: string
+        contractAddress: string
+      }
+    }>
+  }> {
+    const cdpClient = new CdpClient({
+      apiKeyId: this.env.CDP_API_KEY_ID,
+      apiKeySecret: this.env.CDP_API_KEY_SECRET,
+    })
+
+    const result = await cdpClient.evm.listTokenBalances({
+      address: params.address as Address,
+      network: params.network,
+    })
+
+    // Convert bigint amounts to strings for JSON serialization
+    const balances = result.balances.map((balance) => ({
+      amount: {
+        amount: balance.amount.amount.toString(),
+        decimals: balance.amount.decimals,
+      },
+      token: {
+        network: balance.token.network as string,
+        symbol: balance.token.symbol ?? "",
+        name: balance.token.name ?? "",
+        contractAddress: balance.token.contractAddress as string,
+      },
+    }))
+
+    return { balances }
   }
 }
 

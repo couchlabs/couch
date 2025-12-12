@@ -4,16 +4,17 @@ import {
   useEvmAddress,
   useGetAccessToken,
 } from "@coinbase/cdp-hooks"
-import { useMutation } from "@tanstack/react-query"
-import { useEffect, useRef } from "react"
+import { useMutation, useQueryClient } from "@tanstack/react-query"
+import { useEffect } from "react"
 
 export function useAccountSync() {
   const { currentUser } = useCurrentUser()
   const { evmAddress } = useEvmAddress()
   const { getAccessToken } = useGetAccessToken()
-  const hasTriggered = useRef(false)
+  const queryClient = useQueryClient()
 
   const mutation = useMutation({
+    mutationKey: ["account-sync", evmAddress],
     mutationFn: async () => {
       // PUT request - idempotent account setup
       // Sets wallet address for authenticated user (safe to retry)
@@ -31,26 +32,25 @@ export function useAccountSync() {
         throw new Error(`Account sync failed: ${response.statusText}`)
       }
 
-      return response.json() as Promise<{
+      const data = await response.json()
+      return data as {
         address: `0x${string}`
         subscriptionOwnerAddress: `0x${string}` | null
         createdAt: string
-      }>
+      }
+    },
+    onSuccess: (data) => {
+      // Store in query cache for persistence across re-renders
+      queryClient.setQueryData(["account", evmAddress], data)
     },
   })
 
   useEffect(() => {
-    // Only trigger once per component lifetime
-    if (
-      currentUser &&
-      evmAddress &&
-      !hasTriggered.current &&
-      !mutation.isPending
-    ) {
-      hasTriggered.current = true
-      mutation.mutate() // No need to pass evmAddress - it's from JWT
+    // Only trigger sync if user is authenticated and we don't have data yet
+    if (currentUser && evmAddress && !mutation.data) {
+      mutation.mutate()
     }
-  }, [currentUser, evmAddress, mutation])
+  }, [currentUser, evmAddress, mutation.data])
 
   return mutation
 }
