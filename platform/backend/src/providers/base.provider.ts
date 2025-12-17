@@ -36,13 +36,6 @@ export class BaseProvider implements SubscriptionProvider {
       walletSecret: deps.CDP_WALLET_SECRET,
       clientApiKey: deps.CDP_CLIENT_API_KEY,
     }
-
-    // Set RPC URLs for Base SDK to use CDP managed infrastructure
-    // This works with our patched @base-org/account package which checks RPC_URL_<CHAIN_ID>
-    // Base mainnet (chainId: 8453)
-    process.env.RPC_URL_8453 = `https://api.developer.coinbase.com/rpc/v1/base/${deps.CDP_CLIENT_API_KEY}`
-    // Base Sepolia testnet (chainId: 84532)
-    process.env.RPC_URL_84532 = `https://api.developer.coinbase.com/rpc/v1/base-sepolia/${deps.CDP_CLIENT_API_KEY}`
   }
 
   /**
@@ -55,6 +48,16 @@ export class BaseProvider implements SubscriptionProvider {
     return `https://api.developer.coinbase.com/rpc/v1/${network}/${this.cdpConfig.clientApiKey}`
   }
 
+  /**
+   * Constructs RPC URL for CDP managed infrastructure
+   * - testnet: true -> base-sepolia
+   * - testnet: false -> base (mainnet)
+   */
+  private getRpcUrl(testnet: boolean): string {
+    const network = testnet ? "base-sepolia" : "base"
+    return `https://api.developer.coinbase.com/rpc/v1/${network}/${this.cdpConfig.clientApiKey}`
+  }
+
   async chargeSubscription(params: ChargeParams): Promise<ChargeResult> {
     try {
       const result = await base.subscription.charge({
@@ -63,6 +66,7 @@ export class BaseProvider implements SubscriptionProvider {
         cdpWalletSecret: this.cdpConfig.walletSecret,
         walletName: params.walletName,
         paymasterUrl: this.getPaymasterUrl(params.testnet),
+        rpcUrl: this.getRpcUrl(params.testnet),
         id: params.subscriptionId as Hash,
         amount: params.amount,
         recipient: params.recipient,
@@ -95,6 +99,7 @@ export class BaseProvider implements SubscriptionProvider {
     const subscription = await base.subscription.getStatus({
       id: params.subscriptionId as Hash,
       testnet: params.testnet,
+      rpcUrl: this.getRpcUrl(params.testnet),
     })
 
     // Check if permission exists in indexer by validating required fields

@@ -16,6 +16,11 @@ import type { Address, Hash } from "viem"
 export type Subscription = schema.Subscription
 export type Order = schema.Order
 
+// Subscription with last order information
+export interface SubscriptionWithLastOrder extends Subscription {
+  lastOrder?: Order
+}
+
 // Custom parameter/result types (not in schema)
 export interface CreateOrderParams {
   subscriptionId: Hash
@@ -249,12 +254,12 @@ export class SubscriptionRepository {
   }
 
   /**
-   * List all subscriptions for an account
+   * List all subscriptions for an account with their last order
    * Optionally filter by testnet
    */
   async listSubscriptions(
     params: ListSubscriptionsParams,
-  ): Promise<Subscription[]> {
+  ): Promise<SubscriptionWithLastOrder[]> {
     const { accountId, testnet } = params
 
     const conditions = [eq(schema.subscriptions.accountId, accountId)]
@@ -263,18 +268,86 @@ export class SubscriptionRepository {
       conditions.push(eq(schema.subscriptions.testnet, testnet))
     }
 
-    const results = await this.db
+    // Get all subscriptions
+    const subscriptions = await this.db
       .select()
       .from(schema.subscriptions)
       .where(and(...conditions))
       .orderBy(desc(schema.subscriptions.createdAt))
       .all()
 
-    // Transform DB strings to domain types
-    return results.map((sub) => ({
+    if (subscriptions.length === 0) {
+      return []
+    }
+
+    // Get the last order for each subscription using a raw SQL query
+    // This is more efficient than N queries
+    const subscriptionIds = subscriptions.map((sub) => sub.subscriptionId)
+
+    // Use raw SQL to get last order per subscription efficiently
+    // Find orders with max orderNumber for each subscriptionId
+    const lastOrdersQuery = sql`
+      SELECT o.*
+      FROM orders o
+      INNER JOIN (
+        SELECT subscription_id, MAX(order_number) as max_order_number
+        FROM orders
+        WHERE subscription_id IN (${sql.join(
+          subscriptionIds.map((id) => sql`${id}`),
+          sql`, `,
+        )})
+        GROUP BY subscription_id
+      ) last ON o.subscription_id = last.subscription_id
+        AND o.order_number = last.max_order_number
+    `
+
+    // Raw SQL returns snake_case column names from database
+    const lastOrdersResults = await this.db.all<{
+      id: number
+      subscription_id: string
+      type: string
+      due_at: string
+      amount: string
+      status: string
+      order_number: number
+      attempts: number
+      parent_order_id: number | null
+      next_retry_at: string | null
+      failure_reason: string | null
+      raw_error: string | null
+      period_length_in_seconds: number
+      transaction_hash: string | null
+      created_at: string | null
+    }>(lastOrdersQuery)
+
+    // Create a map of subscriptionId -> lastOrder
+    const lastOrderMap = new Map<string, Order>()
+    for (const order of lastOrdersResults) {
+      lastOrderMap.set(order.subscription_id, {
+        id: order.id,
+        subscriptionId: order.subscription_id as Hash,
+        type: order.type as OrderType,
+        dueAt: order.due_at,
+        amount: order.amount,
+        status: order.status as OrderStatus,
+        orderNumber: order.order_number,
+        attempts: order.attempts,
+        parentOrderId: order.parent_order_id,
+        nextRetryAt: order.next_retry_at,
+        failureReason: order.failure_reason,
+        rawError: order.raw_error,
+        periodLengthInSeconds: order.period_length_in_seconds,
+        transactionHash: order.transaction_hash as Hash | undefined,
+        createdAt: order.created_at,
+      })
+    }
+
+    // Combine subscriptions with their last orders
+    return subscriptions.map((sub) => ({
       ...sub,
       subscriptionId: sub.subscriptionId as Hash,
       beneficiaryAddress: sub.beneficiaryAddress as Address,
+      lastOrder: lastOrderMap.get(sub.subscriptionId),
     }))
   }
 
