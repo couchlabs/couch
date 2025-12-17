@@ -9,16 +9,6 @@ import {
 } from "@tanstack/react-query"
 
 // Subscription response types (matching RPC types)
-export interface Subscription {
-  subscriptionId: string
-  status: string
-  beneficiaryAddress: string
-  provider: string
-  testnet: boolean
-  createdAt: string
-  modifiedAt: string
-}
-
 export interface Order {
   id: number
   type: string
@@ -31,6 +21,17 @@ export interface Order {
   transactionHash?: string
   failureReason?: string
   createdAt: string
+}
+
+export interface Subscription {
+  subscriptionId: string
+  status: string
+  beneficiaryAddress: string
+  provider: string
+  testnet: boolean
+  createdAt: string
+  modifiedAt: string
+  lastOrder?: Order
 }
 
 export interface SubscriptionDetail {

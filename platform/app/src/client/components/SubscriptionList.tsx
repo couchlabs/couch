@@ -151,12 +151,41 @@ export function SubscriptionList({
   }
 
   const formatPeriod = (seconds: number) => {
+    // Handle seconds and minutes
+    if (seconds < 60) {
+      return seconds === 1 ? "Every second" : `Every ${seconds} seconds`
+    }
+    if (seconds < 3600) {
+      const minutes = seconds / 60
+      return minutes === 1 ? "Every minute" : `Every ${minutes} minutes`
+    }
+
+    // Handle hours
+    if (seconds < 86400) {
+      const hours = seconds / 3600
+      return hours === 1 ? "Every hour" : `Every ${hours} hours`
+    }
+
+    // Handle days
     const days = seconds / 86400
-    if (days === 30 || days === 31) return "Monthly"
-    if (days === 7) return "Weekly"
-    if (days === 1) return "Daily"
-    if (days === 365 || days === 366) return "Yearly"
-    return `Every ${days} days`
+    if (days === 1) return "Every day"
+    if (days === 7) return "Every week"
+    if (days === 30 || days === 31) return "Every month"
+    if (days === 365 || days === 366) return "Every year"
+
+    // Fallback for custom periods
+    if (days < 30) return `Every ${days} days`
+    if (days < 365) {
+      const weeks = Math.round(days / 7)
+      return weeks === 1 ? "Every week" : `Every ${weeks} weeks`
+    }
+    const years = Math.round(days / 365)
+    return years === 1 ? "Every year" : `Every ${years} years`
+  }
+
+  const formatSubscriptionId = (id: string) => {
+    if (id.length <= 12) return id
+    return `${id.slice(0, 8)}...${id.slice(-4)}`
   }
 
   const getStatusBadgeClass = (status: string) => {
@@ -236,10 +265,12 @@ export function SubscriptionList({
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="w-[300px]">Subscription ID</TableHead>
+                <TableHead className="w-[200px]">Subscription ID</TableHead>
                 <TableHead>Status</TableHead>
+                <TableHead className="hidden lg:table-cell">Amount</TableHead>
+                <TableHead className="hidden lg:table-cell">Period</TableHead>
                 <TableHead className="hidden md:table-cell">Created</TableHead>
-                <TableHead>
+                <TableHead className="text-right w-[60px]">
                   <span className="sr-only">Actions</span>
                 </TableHead>
               </TableRow>
@@ -254,8 +285,9 @@ export function SubscriptionList({
                         setSelectedSubscriptionId(subscription.subscriptionId)
                       }
                       className="text-gray-700 hover:underline cursor-pointer text-left font-semibold"
+                      title={subscription.subscriptionId}
                     >
-                      {subscription.subscriptionId}
+                      {formatSubscriptionId(subscription.subscriptionId)}
                     </button>
                   </TableCell>
                   <TableCell>
@@ -265,12 +297,28 @@ export function SubscriptionList({
                       {subscription.status}
                     </span>
                   </TableCell>
+                  <TableCell className="hidden lg:table-cell">
+                    <div className="text-sm text-muted-foreground">
+                      {subscription.lastOrder
+                        ? formatAmount(subscription.lastOrder.amount)
+                        : "-"}
+                    </div>
+                  </TableCell>
+                  <TableCell className="hidden lg:table-cell">
+                    <div className="text-sm text-muted-foreground">
+                      {subscription.lastOrder
+                        ? formatPeriod(
+                            subscription.lastOrder.periodLengthInSeconds,
+                          )
+                        : "-"}
+                    </div>
+                  </TableCell>
                   <TableCell className="hidden md:table-cell">
                     <div className="text-sm text-muted-foreground">
                       {new Date(subscription.createdAt).toLocaleDateString()}
                     </div>
                   </TableCell>
-                  <TableCell>
+                  <TableCell className="text-right">
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <button
@@ -597,10 +645,6 @@ export function SubscriptionList({
               <div className="text-sm">
                 <span className="font-medium">Network:</span>{" "}
                 {isTestnet ? "Testnet" : "Mainnet"}
-              </div>
-              <div className="text-sm mt-1">
-                <span className="font-medium">Beneficiary:</span> Your account
-                address
               </div>
             </div>
 

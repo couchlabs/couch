@@ -164,6 +164,7 @@ export interface SubscriptionResponse {
   testnet: boolean
   createdAt: string
   modifiedAt: string
+  lastOrder?: OrderResponse
 }
 
 /**
@@ -516,6 +517,20 @@ export class RPC extends WorkerEntrypoint<ApiWorkerEnv> {
       testnet: sub.testnet,
       createdAt: sub.createdAt || "",
       modifiedAt: sub.modifiedAt || "",
+      lastOrder: sub.lastOrder
+        ? {
+            type: sub.lastOrder.type,
+            dueAt: sub.lastOrder.dueAt,
+            amount: sub.lastOrder.amount,
+            status: sub.lastOrder.status,
+            orderNumber: sub.lastOrder.orderNumber,
+            attempts: sub.lastOrder.attempts,
+            periodLengthInSeconds: sub.lastOrder.periodLengthInSeconds,
+            transactionHash: sub.lastOrder.transactionHash,
+            failureReason: sub.lastOrder.failureReason || undefined,
+            createdAt: sub.lastOrder.createdAt || "",
+          }
+        : undefined,
     }))
   }
 

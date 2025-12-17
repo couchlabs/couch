@@ -31,11 +31,11 @@
         "@cloudflare/vite-plugin": "^1.16.1"
       },
       "coinbase": {
-        "@base-org/account": "2.5.0",
-        "@coinbase/cdp-sdk": "^1.38.6",
-        "@coinbase/cdp-core": "^0.0.71",
-        "@coinbase/cdp-hooks": "^0.0.71",
-        "@coinbase/cdp-react": "^0.0.71"
+        "@base-org/account": "^2.5.1",
+        "@coinbase/cdp-sdk": "^1.40.1",
+        "@coinbase/cdp-core": "^0.0.73",
+        "@coinbase/cdp-hooks": "^0.0.73",
+        "@coinbase/cdp-react": "^0.0.73"
       },
       "crypto": {
         "viem": "^2.41.2",
@@ -68,8 +68,5 @@
     "bun": "latest",
     "@biomejs/biome": "latest"
   },
-  "packageManager": "bun@1.3.0",
-  "patchedDependencies": {
-    "@base-org/account@2.5.0": "patches/@base-org%2Faccount@2.5.0.patch"
-  }
+  "packageManager": "bun@1.3.0"
 }
