@@ -17,7 +17,7 @@ export function WalletCard({ onSendMoney }: WalletCardProps) {
 
   // Format USDC balance for display
   const formatUsdcBalance = () => {
-    if (isLoading) return "Loading..."
+    if (isLoading) return "..."
     if (!usdcBalance) return "0"
 
     const amount = Number.parseFloat(usdcBalance.amount.amount)

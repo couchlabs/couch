@@ -64,7 +64,7 @@ export function Dashboard() {
       id: "support",
       label: "Support",
       onClick: () => {
-        // Placeholder
+        window.open("https://t.me/+cZl8RfDl9b4wZDYx", "_blank")
       },
       icon: FileText,
     },
@@ -72,7 +72,10 @@ export function Dashboard() {
       id: "docs",
       label: "Docs",
       onClick: () => {
-        // Placeholder
+        window.open(
+          "https://www.notion.so/Dev-Docs-2ccaf3750d6b806b974be214c87c37e1",
+          "_blank",
+        )
       },
       icon: BookOpen,
     },
