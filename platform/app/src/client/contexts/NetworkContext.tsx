@@ -15,7 +15,7 @@ interface NetworkProviderProps {
 }
 
 export function NetworkProvider({ children }: NetworkProviderProps) {
-  const [network, setNetwork] = useState<Network>("base-sepolia")
+  const [network, setNetwork] = useState<Network>("base")
 
   const toggleNetwork = () => {
     setNetwork((prev) => (prev === "base" ? "base-sepolia" : "base"))

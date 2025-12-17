@@ -5,9 +5,7 @@ export function NetworkToggle() {
 
   return (
     <div className="flex items-center gap-3">
-      <span className="text-sm text-gray-600">
-        {isTestnet ? "Base Sepolia" : "Base Mainnet"}
-      </span>
+      <span className="text-sm text-gray-600">Testnet</span>
       <button
         type="button"
         onClick={toggleNetwork}
@@ -26,11 +24,6 @@ export function NetworkToggle() {
           `}
         />
       </button>
-      {isTestnet && (
-        <span className="px-2 py-0.5 text-xs font-medium text-blue-700 bg-blue-100 rounded">
-          Testnet
-        </span>
-      )}
     </div>
   )
 }
