@@ -632,10 +632,16 @@ export function SubscriptionList({
                   }
                   className="px-3 py-2 border rounded bg-white"
                 >
-                  <option value="seconds">Seconds</option>
-                  <option value="minutes">Minutes</option>
-                  <option value="hours">Hours</option>
-                  <option value="days">Days</option>
+                  {isTestnet ? (
+                    <>
+                      <option value="seconds">Seconds</option>
+                      <option value="minutes">Minutes</option>
+                      <option value="hours">Hours</option>
+                      <option value="days">Days</option>
+                    </>
+                  ) : (
+                    <option value="days">Days</option>
+                  )}
                 </select>
               </div>
             </div>
