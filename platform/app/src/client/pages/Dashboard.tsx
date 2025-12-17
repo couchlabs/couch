@@ -8,12 +8,14 @@ import { NetworkToggle } from "@app-client/components/NetworkToggle"
 import { SubscriptionList } from "@app-client/components/SubscriptionList"
 import { WalletCard } from "@app-client/components/WalletCard"
 import { useAccountSync } from "@app-client/hooks/useAccountSync"
-import { useEvmAddress } from "@coinbase/cdp-hooks"
+import { useEvmAddress, useSignOut } from "@coinbase/cdp-hooks"
+import { BookOpen, FileText, Key, Link, LogOut, Webhook } from "lucide-react"
 import { useState } from "react"
 
 export function Dashboard() {
   const { data: account } = useAccountSync()
   const { evmAddress } = useEvmAddress()
+  const { signOut } = useSignOut()
 
   // Modal state
   const [isWebhookModalOpen, setIsWebhookModalOpen] = useState(false)
@@ -28,6 +30,19 @@ export function Dashboard() {
       id: "link-profile",
       label: "Link a Profile",
       onClick: () => setIsLinkProfileModalOpen(true),
+      icon: Link,
+    },
+    {
+      id: "export-keys",
+      label: "Export Keys",
+      onClick: () => setIsExportKeysModalOpen(true),
+      icon: Key,
+    },
+    {
+      id: "sign-out",
+      label: "Sign Out",
+      onClick: signOut,
+      icon: LogOut,
     },
   ]
 
@@ -37,11 +52,29 @@ export function Dashboard() {
       id: "webhooks",
       label: "Webhooks",
       onClick: () => setIsWebhookModalOpen(true),
+      icon: Webhook,
     },
     {
       id: "api-keys",
       label: "API Keys",
       onClick: () => setIsApiKeyModalOpen(true),
+      icon: Key,
+    },
+    {
+      id: "support",
+      label: "Support",
+      onClick: () => {
+        // Placeholder
+      },
+      icon: FileText,
+    },
+    {
+      id: "docs",
+      label: "Docs",
+      onClick: () => {
+        // Placeholder
+      },
+      icon: BookOpen,
     },
   ]
 
@@ -53,19 +86,24 @@ export function Dashboard() {
           <NetworkToggle />
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-6">
           {/* Left column - Wallet + Navigation */}
           <div className="space-y-4">
-            <WalletCard
-              onSendMoney={() => setIsSendMoneyModalOpen(true)}
-              onExportKeys={() => setIsExportKeysModalOpen(true)}
-            />
-            <Navigation items={profileNavigationItems} />
-            <Navigation items={managementNavigationItems} />
+            {/* Connected wallet card + profile nav */}
+            <div>
+              <WalletCard onSendMoney={() => setIsSendMoneyModalOpen(true)} />
+              <Navigation
+                items={profileNavigationItems}
+                variant="light"
+                roundedTop={false}
+                roundedBottom={true}
+              />
+            </div>
+            <Navigation items={managementNavigationItems} variant="dark" />
           </div>
 
           {/* Right column - Subscriptions */}
-          <div className="bg-white rounded-lg border border-gray-200 p-6">
+          <div className="bg-white rounded-xl border border-gray-200 p-6">
             <SubscriptionList
               subscriptionOwnerAddress={
                 account?.subscriptionOwnerAddress ?? undefined
