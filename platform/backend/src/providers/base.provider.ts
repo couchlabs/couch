@@ -59,6 +59,10 @@ export class BaseProvider implements SubscriptionProvider {
   }
 
   async chargeSubscription(params: ChargeParams): Promise<ChargeResult> {
+    // CRITICAL FIX: Base SDK checks process.env in addition to parameters
+    // In Cloudflare Workers, we need to set process.env manually
+    process.env.CDP_WALLET_SECRET = this.cdpConfig.walletSecret
+
     try {
       const result = await base.subscription.charge({
         cdpApiKeyId: this.cdpConfig.apiKeyId,
@@ -130,6 +134,10 @@ export class BaseProvider implements SubscriptionProvider {
   }
 
   async revokeSubscription(params: RevokeParams): Promise<RevokeResult> {
+    // CRITICAL FIX: Base SDK checks process.env in addition to parameters
+    // In Cloudflare Workers, we need to set process.env manually
+    process.env.CDP_WALLET_SECRET = this.cdpConfig.walletSecret
+
     const result = await base.subscription.revoke({
       cdpApiKeyId: this.cdpConfig.apiKeyId,
       cdpApiKeySecret: this.cdpConfig.apiKeySecret,
