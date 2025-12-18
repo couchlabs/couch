@@ -6,7 +6,8 @@
       "**/*.json",
       "**/*.tsx",
       "!**/.alchemy",
-      "!**/.turbo"
+      "!**/.turbo",
+      "!**/dist"
     ]
   },
   "formatter": {

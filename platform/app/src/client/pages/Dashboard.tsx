@@ -72,10 +72,7 @@ export function Dashboard() {
       id: "docs",
       label: "Docs",
       onClick: () => {
-        window.open(
-          "https://www.notion.so/Dev-Docs-2ccaf3750d6b806b974be214c87c37e1",
-          "_blank",
-        )
+        window.open("https://docs.cou.ch", "_blank")
       },
       icon: BookOpen,
     },

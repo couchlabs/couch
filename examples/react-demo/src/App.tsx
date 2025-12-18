@@ -3,11 +3,15 @@ import { useState } from "react"
 import "./App.css"
 
 // Configure SDK for local development
-configure({ apiUrl: "http://localhost:3000/v1" })
+if (import.meta.env.DEV) {
+  configure({ apiUrl: "http://localhost:3000/v1" })
+}
 
 // Configuration
 const merchantAddress = import.meta.env.VITE_REACT_DEMO_MERCHANT_ADDRESS
-const testnet = true // Set to true for testnet
+const testnet = true
+const amount = "0.0001" // USDC
+const period = 1 // Days
 
 function App() {
   const [status, setStatus] = useState<string>("")
@@ -15,8 +19,8 @@ function App() {
   const [loading, setLoading] = useState(false)
 
   // Form inputs
-  const [recurringCharge] = useState("0.0001")
-  const [periodInDays] = useState(1)
+  const [recurringCharge] = useState(amount)
+  const [periodInDays] = useState(period)
 
   const handleSubscribe = async () => {
     try {
