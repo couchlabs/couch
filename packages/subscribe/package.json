@@ -1,0 +1,38 @@
+{
+  "name": "@couch/subscribe",
+  "version": "0.1.0",
+  "publishConfig": {
+    "access": "public"
+  },
+  "description": "Simple SDK to accept stablecoin subscription on a client",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "prepublishOnly": "bun run build"
+  },
+  "keywords": [
+    "couch",
+    "subscriptions",
+    "crypto",
+    "payments",
+    "base",
+    "usdc"
+  ],
+  "author": "CouchLabs",
+  "license": "MIT",
+  "peerDependencies": {
+    "@base-org/account": "^2.5.1"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3"
+  }
+}

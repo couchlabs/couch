@@ -1,8 +1,9 @@
 // Main API entry point for Couch subscription service
 
+// import { subscriptionRoutes } from "@backend/api/routes/subscriptions.routes"
+// import { webhookRoutes } from "@backend/api/routes/webhook.routes"
 import { healthRoutes } from "@backend/api/routes/health.routes"
-import { subscriptionRoutes } from "@backend/api/routes/subscriptions.routes"
-import { webhookRoutes } from "@backend/api/routes/webhook.routes"
+import { merchantRoutes } from "@backend/api/routes/merchant.routes"
 import { ErrorCode } from "@backend/errors/http.errors"
 import { logger } from "@backend/lib/logger"
 import type { ApiWorkerEnv } from "@backend-types/api.env"
@@ -41,8 +42,10 @@ app.onError((error, ctx) => {
 
 // Mount routes
 app.route("/health", healthRoutes)
-app.route("/webhook", webhookRoutes)
-app.route("/subscriptions", subscriptionRoutes)
+app.route("/merchant", merchantRoutes)
+// Disabled routes for now
+// app.route("/webhook", webhookRoutes)
+// app.route("/subscriptions", subscriptionRoutes)
 
 export default app
 

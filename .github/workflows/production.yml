@@ -19,8 +19,29 @@ env:
   DO_NOT_TRACK: 1
 
 jobs:
+  security-check:
+    name: "Security check"
+    runs-on: ubuntu-latest
+    outputs:
+      is-authorized: ${{ steps.check.outputs.is-authorized }}
+    steps:
+      - id: check
+        run: |
+          ALLOWED_DEPLOYERS=("nickbalestra")
+          ACTOR="${{ github.actor }}"
+
+          if [[ " ${ALLOWED_DEPLOYERS[@]} " =~ " ${ACTOR} " ]]; then
+            echo "is-authorized=true" >> $GITHUB_OUTPUT
+            echo "✅ User $ACTOR is authorized to deploy to production"
+          else
+            echo "is-authorized=false" >> $GITHUB_OUTPUT
+            echo "::error::User $ACTOR is NOT authorized to deploy to production"
+            exit 1
+          fi
+
   lint:
     name: "Lint"
+    needs: security-check
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -36,6 +57,7 @@ jobs:
 
   format:
     name: "Format"
+    needs: security-check
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -51,6 +73,7 @@ jobs:
 
   typecheck:
     name: "Type Check"
+    needs: security-check
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -66,6 +89,7 @@ jobs:
 
   test:
     name: "Tests"
+    needs: security-check
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -81,7 +105,8 @@ jobs:
 
   deploy:
     name: "Production Deployment"
-    needs: [lint, format, typecheck, test]
+    needs: [security-check, lint, format, typecheck, test]
+    if: ${{ needs.security-check.outputs.is-authorized == 'true' }}
     runs-on: ubuntu-latest
     environment: prod
     permissions:

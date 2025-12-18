@@ -10,6 +10,7 @@ import {
   D1Database,
   DurableObjectNamespace,
   Queue,
+  RateLimit,
   Vite,
   Worker,
 } from "alchemy/cloudflare"
@@ -164,6 +165,13 @@ export const api = await Worker(API_NAME, {
     // STAGE CONFIGS:
     LOGGING,
     DUNNING_MODE,
+    OPEN_RATE_LIMIT: RateLimit({
+      namespace_id: 1001,
+      simple: {
+        limit: 100,
+        period: 60,
+      },
+    }),
     // RESOURCES:
     DB: db,
     ORDER_QUEUE: orderQueue,
