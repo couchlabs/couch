@@ -11,6 +11,8 @@ couch/
 ├── platform/ 
 │ ├── backend/  Offchain orchestrator for recurring payments 
 │ └── app/      Main apps for merchants to manage their accounts and subscriptions
+├── packages/   SDK 
+├── examples/   Usage examples 
 ```
 
 ## Getting started

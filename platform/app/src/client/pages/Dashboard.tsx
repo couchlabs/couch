@@ -1,4 +1,4 @@
-import { ApiKeyModal } from "@app-client/components/modals/ApiKeyModal"
+// import { ApiKeyModal } from "@app-client/components/modals/ApiKeyModal"
 import { ExportKeysModal } from "@app-client/components/modals/ExportKeysModal"
 import { LinkProfileModal } from "@app-client/components/modals/LinkProfileModal"
 import { SendMoneyModal } from "@app-client/components/modals/SendMoneyModal"
@@ -18,8 +18,8 @@ export function Dashboard() {
   const { signOut } = useSignOut()
 
   // Modal state
+  // const [isApiKeyModalOpen, setIsApiKeyModalOpen] = useState(false)
   const [isWebhookModalOpen, setIsWebhookModalOpen] = useState(false)
-  const [isApiKeyModalOpen, setIsApiKeyModalOpen] = useState(false)
   const [isLinkProfileModalOpen, setIsLinkProfileModalOpen] = useState(false)
   const [isSendMoneyModalOpen, setIsSendMoneyModalOpen] = useState(false)
   const [isExportKeysModalOpen, setIsExportKeysModalOpen] = useState(false)
@@ -54,12 +54,12 @@ export function Dashboard() {
       onClick: () => setIsWebhookModalOpen(true),
       icon: Webhook,
     },
-    {
-      id: "api-keys",
-      label: "API Keys",
-      onClick: () => setIsApiKeyModalOpen(true),
-      icon: Key,
-    },
+    // {
+    //   id: "api-keys",
+    //   label: "API Keys",
+    //   onClick: () => setIsApiKeyModalOpen(true),
+    //   icon: Key,
+    // },
     {
       id: "support",
       label: "Support",
@@ -120,10 +120,10 @@ export function Dashboard() {
           isOpen={isWebhookModalOpen}
           onClose={() => setIsWebhookModalOpen(false)}
         />
-        <ApiKeyModal
+        {/* <ApiKeyModal
           isOpen={isApiKeyModalOpen}
           onClose={() => setIsApiKeyModalOpen(false)}
-        />
+        /> */}
         <LinkProfileModal
           isOpen={isLinkProfileModalOpen}
           onClose={() => setIsLinkProfileModalOpen(false)}
