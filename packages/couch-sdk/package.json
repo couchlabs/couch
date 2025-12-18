@@ -1,7 +1,7 @@
 {
   "name": "@couchlabs/couch-sdk",
   "version": "0.1.0",
-  "description": "Simple SDK for creating Couch subscriptions",
+  "description": "Simple SDK to accept stablecoin subscription on a client",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
