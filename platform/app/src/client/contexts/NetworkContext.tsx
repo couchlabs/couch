@@ -14,16 +14,40 @@ interface NetworkProviderProps {
   children: ReactNode
 }
 
+const STORAGE_KEY = "couch:testnet"
+
+/**
+ * Load testnet preference from localStorage
+ */
+function getInitialTestnet(): boolean {
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY)
+    return stored === "true"
+  } catch {
+    // localStorage not available or error reading
+  }
+  return false
+}
+
 export function NetworkProvider({ children }: NetworkProviderProps) {
-  const [network, setNetwork] = useState<Network>("base")
+  const [isTestnet, setIsTestnet] = useState<boolean>(getInitialTestnet)
 
   const toggleNetwork = () => {
-    setNetwork((prev) => (prev === "base" ? "base-sepolia" : "base"))
+    setIsTestnet((prev) => {
+      const next = !prev
+      // Persist to localStorage
+      try {
+        localStorage.setItem(STORAGE_KEY, String(next))
+      } catch {
+        // Silently fail if localStorage unavailable
+      }
+      return next
+    })
   }
 
   const value: NetworkContextValue = {
-    network,
-    isTestnet: network === "base-sepolia",
+    network: isTestnet ? "base-sepolia" : "base",
+    isTestnet,
     toggleNetwork,
   }
 

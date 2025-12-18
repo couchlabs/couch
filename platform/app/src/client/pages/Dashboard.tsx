@@ -61,20 +61,20 @@ export function Dashboard() {
     //   icon: Key,
     // },
     {
-      id: "support",
-      label: "Support",
-      onClick: () => {
-        window.open("https://t.me/+cZl8RfDl9b4wZDYx", "_blank")
-      },
-      icon: FileText,
-    },
-    {
       id: "docs",
       label: "Docs",
       onClick: () => {
         window.open("https://docs.cou.ch", "_blank")
       },
       icon: BookOpen,
+    },
+    {
+      id: "support",
+      label: "Support",
+      onClick: () => {
+        window.open("https://t.me/+cZl8RfDl9b4wZDYx", "_blank")
+      },
+      icon: FileText,
     },
   ]
 
