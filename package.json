@@ -21,7 +21,7 @@
       "packages/*"
     ],
     "catalog": {
-      "alchemy": "^0.79.0",
+      "alchemy": "^0.81.4",
       "typescript": "^5.9.3"
     },
     "catalogs": {
