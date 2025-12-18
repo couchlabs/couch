@@ -97,8 +97,8 @@ export function configure(options: CouchSDKConfig): void {
 /**
  * Create a recurring subscription
  *
- * This is a thin wrapper around Base SDK's subscribe() that:
- * 1. Fetches the merchant's subscription owner address from Couch backend
+ * This is a thin wrapper around Base SDK's subscribe() that
+ * 1. Fetches merchant connfiguration from couch api
  * 2. Creates the subscription onchain using Base SDK
  * 3. Activates the subscription with Couch backend for processing
  *

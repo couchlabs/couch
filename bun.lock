@@ -14,7 +14,7 @@
       "version": "0.0.0",
       "dependencies": {
         "@base-org/account": "^2.5.1",
-        "@couchlabs/sdk": "*",
+        "@couch/subscribe": "workspace:*",
         "react": "^19.2.0",
         "react-dom": "^19.2.0",
       },
@@ -33,8 +33,8 @@
         "vite": "^7.2.4",
       },
     },
-    "packages/couch-sdk": {
-      "name": "@couchlabs/sdk",
+    "packages/subscribe": {
+      "name": "@couch/subscribe",
       "version": "0.1.0",
       "devDependencies": {
         "typescript": "^5.9.3",
@@ -284,7 +284,7 @@
 
     "@coinbase/cdp-sdk": ["@coinbase/cdp-sdk@1.40.1", "", { "dependencies": { "@solana-program/system": "^0.8.0", "@solana-program/token": "^0.6.0", "@solana/kit": "^3.0.3", "@solana/web3.js": "^1.98.1", "abitype": "1.0.6", "axios": "^1.12.2", "axios-retry": "^4.5.0", "jose": "^6.0.8", "md5": "^2.3.0", "uncrypto": "^0.1.3", "viem": "^2.21.26", "zod": "^3.24.4" } }, "sha512-VZxAUYvWbqM4gw/ZHyr9fKBlCAKdMbBQzJxpV9rMUNkdulHIrj0cko2Mw3dyVyw+gdT62jAVxzVkPuQTRnECLw=="],
 
-    "@couchlabs/sdk": ["@couchlabs/sdk@workspace:packages/couch-sdk"],
+    "@couch/subscribe": ["@couch/subscribe@workspace:packages/subscribe"],
 
     "@cspotcode/source-map-support": ["@cspotcode/source-map-support@0.8.1", "", { "dependencies": { "@jridgewell/trace-mapping": "0.3.9" } }, "sha512-IchNf6dN4tHoMFIn/7OE8LWZ19Y6q/67Bmf6vnGREv8RSbBVb9LPJxEcnwrcwX6ixSvaiGoomAUvu4YSxXrVgw=="],
 

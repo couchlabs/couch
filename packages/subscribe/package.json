@@ -1,6 +1,9 @@
 {
-  "name": "@couchlabs/couch-sdk",
+  "name": "@couch/subscribe",
   "version": "0.1.0",
+  "publishConfig": {
+    "access": "public"
+  },
   "description": "Simple SDK to accept stablecoin subscription on a client",
   "type": "module",
   "main": "./dist/index.js",
@@ -24,7 +27,7 @@
     "base",
     "usdc"
   ],
-  "author": "Couch Labs",
+  "author": "CouchLabs",
   "license": "MIT",
   "peerDependencies": {
     "@base-org/account": "^2.5.1"

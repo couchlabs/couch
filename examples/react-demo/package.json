@@ -11,7 +11,7 @@
   },
   "dependencies": {
     "@base-org/account": "^2.5.1",
-    "@couchlabs/couch-sdk": "workspace:*",
+    "@couch/subscribe": "workspace:*",
     "react": "^19.2.0",
     "react-dom": "^19.2.0"
   },

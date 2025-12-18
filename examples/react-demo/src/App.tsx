@@ -1,4 +1,4 @@
-import { configure, subscribe } from "@couchlabs/sdk"
+import { configure, subscribe } from "@couch/subscribe"
 import { useState } from "react"
 import "./App.css"
 
