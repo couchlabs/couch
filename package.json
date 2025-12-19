@@ -21,7 +21,7 @@
       "packages/*"
     ],
     "catalog": {
-      "alchemy": "https://pkg.pr.new/alchemy-run/alchemy@1254",
+      "alchemy": "https://pkg.pr.new/alchemy-run/alchemy@1278",
       "typescript": "^5.9.3"
     },
     "catalogs": {

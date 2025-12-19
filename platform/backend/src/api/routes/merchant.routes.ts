@@ -18,6 +18,7 @@ merchantRoutes.use(
     keyGenerator: (c) => c.req.header("cf-connecting-ip") ?? "",
   }),
 )
+
 /**
  * GET /v1/merchant/:id/config
  * Returns the subscriptionOwnerAddress given an account address
