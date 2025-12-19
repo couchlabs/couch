@@ -11,58 +11,14 @@ import { type Address, getAddress, isAddress, keccak256, toHex } from "viem"
 
 export const merchantRoutes = new Hono<{ Bindings: ApiWorkerEnv }>()
 
-/**
- * GET /v1/merchant/test-rate-limit
- * TEMPORARY TEST ENDPOINT - Direct test of rate limiting binding
- * TODO: Remove this before production deployment
- */
-merchantRoutes.get("/test-rate-limit", async (ctx) => {
-  try {
-    const ip = ctx.req.header("cf-connecting-ip") ?? "no-ip"
-    const testKey = "direct-test-key"
-
-    console.log("[TEST] Direct binding test - IP:", ip)
-    console.log("[TEST] Binding exists:", !!ctx.env.OPEN_RATE_LIMIT)
-
-    const result = await ctx.env.OPEN_RATE_LIMIT.limit({ key: testKey })
-
-    console.log("[TEST] Result:", result)
-
-    return ctx.json({
-      success: result.success,
-      ip,
-      testKey,
-      bindingExists: !!ctx.env.OPEN_RATE_LIMIT,
-      message: result.success ? "Request allowed" : "Rate limited!",
-    })
-  } catch (error) {
-    console.error("[TEST] Error:", error)
-    return ctx.json(
-      {
-        error: String(error),
-        stack: error instanceof Error ? error.stack : undefined,
-      },
-      500,
-    )
-  }
-})
-
 // Rate limiting
 merchantRoutes.use(
   rateLimiter<{ Bindings: ApiWorkerEnv }>({
-    binding: (c) => {
-      console.log("[DEBUG] Rate limiter binding:", !!c.env.OPEN_RATE_LIMIT)
-      return c.env.OPEN_RATE_LIMIT
-    },
-    keyGenerator: (c) => {
-      const ip = c.req.header("cf-connecting-ip") ?? ""
-      // TODO: TEMPORARY - Using hardcoded key for testing
-      const key = "test-key-hardcoded"
-      console.log("[DEBUG] Rate limit key - IP:", ip, "Using:", key)
-      return key
-    },
+    binding: (c) => c.env.OPEN_RATE_LIMIT,
+    keyGenerator: (c) => c.req.header("cf-connecting-ip") ?? "",
   }),
 )
+
 /**
  * GET /v1/merchant/:id/config
  * Returns the subscriptionOwnerAddress given an account address
