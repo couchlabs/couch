@@ -5,6 +5,7 @@ import {
   useUpdateWebhookUrl,
   useWebhook,
 } from "@app-client/hooks/useWebhook"
+import { formatDateTime } from "@app-client/lib/utils"
 import { useState } from "react"
 
 export function WebhookManager() {
@@ -283,14 +284,9 @@ export function WebhookManager() {
 
             <div className="flex items-center justify-between pt-2 border-t">
               <div className="text-sm text-gray-600">
-                <p>
-                  Created {new Date(webhook.createdAt).toLocaleDateString()}
-                </p>
+                <p>Created {formatDateTime(webhook.createdAt)}</p>
                 {webhook.lastUsedAt && (
-                  <p>
-                    Last used{" "}
-                    {new Date(webhook.lastUsedAt).toLocaleDateString()}
-                  </p>
+                  <p>Last used {formatDateTime(webhook.lastUsedAt)}</p>
                 )}
               </div>
               <button

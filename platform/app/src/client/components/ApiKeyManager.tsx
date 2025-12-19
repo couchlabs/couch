@@ -4,6 +4,7 @@ import {
   useDeleteApiKey,
   useUpdateApiKey,
 } from "@app-client/hooks/useApiKeys"
+import { formatDateTime } from "@app-client/lib/utils"
 import type { ApiKeyResponse, CreateApiKeyResponse } from "@backend/rpc/main"
 import { useState } from "react"
 
@@ -260,14 +261,9 @@ export function ApiKeyManager() {
                     >
                       {key.enabled ? "Enabled" : "Disabled"}
                     </span>
-                    <span>
-                      Created {new Date(key.createdAt).toLocaleDateString()}
-                    </span>
+                    <span>Created {formatDateTime(key.createdAt)}</span>
                     {key.lastUsedAt && (
-                      <span>
-                        Last used{" "}
-                        {new Date(key.lastUsedAt).toLocaleDateString()}
-                      </span>
+                      <span>Last used {formatDateTime(key.lastUsedAt)}</span>
                     )}
                   </div>
                 </div>

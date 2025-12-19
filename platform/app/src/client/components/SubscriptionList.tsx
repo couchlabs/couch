@@ -26,6 +26,7 @@ import {
   useRevokeSubscription,
   useSubscription,
 } from "@app-client/hooks/useSubscriptions"
+import { formatDate, formatDateTime } from "@app-client/lib/utils"
 import { subscribe } from "@base-org/account/browser"
 import { MoreVertical } from "lucide-react"
 import { useState } from "react"
@@ -315,7 +316,7 @@ export function SubscriptionList({
                   </TableCell>
                   <TableCell className="hidden md:table-cell">
                     <div className="text-sm text-muted-foreground">
-                      {new Date(subscription.createdAt).toLocaleDateString()}
+                      {formatDate(subscription.createdAt)}
                     </div>
                   </TableCell>
                   <TableCell className="text-right">
@@ -444,15 +445,11 @@ export function SubscriptionList({
                 <div className="grid grid-cols-2 gap-4 text-sm">
                   <div>
                     <span className="text-gray-600">Created:</span>{" "}
-                    {new Date(
-                      subscriptionDetail.subscription.createdAt,
-                    ).toLocaleString()}
+                    {formatDateTime(subscriptionDetail.subscription.createdAt)}
                   </div>
                   <div>
                     <span className="text-gray-600">Modified:</span>{" "}
-                    {new Date(
-                      subscriptionDetail.subscription.modifiedAt,
-                    ).toLocaleString()}
+                    {formatDateTime(subscriptionDetail.subscription.modifiedAt)}
                   </div>
                 </div>
               </div>
@@ -517,9 +514,7 @@ export function SubscriptionList({
                             </p>
                           </div>
                           <div className="text-right text-sm text-gray-600">
-                            <p>
-                              Due: {new Date(order.dueAt).toLocaleDateString()}
-                            </p>
+                            <p>Due: {formatDateTime(order.dueAt)}</p>
                             {order.attempts > 0 && (
                               <p className="text-xs">
                                 Attempts: {order.attempts}
@@ -548,7 +543,7 @@ export function SubscriptionList({
                         )}
 
                         <p className="text-xs text-gray-500 mt-2">
-                          Created {new Date(order.createdAt).toLocaleString()}
+                          Created {formatDateTime(order.createdAt)}
                         </p>
                       </div>
                     ))}
