@@ -88,7 +88,8 @@ const url = GH_ENVIRONMENT === "dev"
 const DB_NAME = "db"
 const db = await D1Database(DB_NAME, {
   name: `${NAME_PREFIX}-${DB_NAME}`,
-  migrationsDir: drizzleConfig.out,
+  // biome-ignore lint/style/noNonNullAssertion: we defined it in drizzle.config.ts
+  migrationsDir: path.join(import.meta.dirname, drizzleConfig.out!),
   migrationsTable: drizzleConfig.migrations?.table,
   primaryLocationHint: "wnam",
   readReplication: {
