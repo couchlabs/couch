@@ -28,10 +28,10 @@
     "@tanstack/react-query": "catalog:react",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
-    "drizzle-orm": "^0.44.7",
+    "drizzle-orm": "^0.45.1",
     "hono": "catalog:cloudflare",
-    "hono-rate-limiter": "^0.5.0",
-    "lucide-react": "^0.555.0",
+    "hono-rate-limiter": "^0.5.1",
+    "lucide-react": "^0.562.0",
     "react": "catalog:react",
     "react-dom": "catalog:react",
     "react-router-dom": "catalog:react",
@@ -55,6 +55,6 @@
     "vite-tsconfig-paths": "catalog:vite",
     "@tailwindcss/vite": "catalog:vite",
     "tw-animate-css": "catalog:tailwind",
-    "drizzle-kit": "^0.31.7"
+    "drizzle-kit": "^0.31.8"
   }
 }
